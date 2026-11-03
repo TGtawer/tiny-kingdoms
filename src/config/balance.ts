@@ -3,6 +3,7 @@
 export type NodeSize = 'small' | 'medium' | 'large';
 export type BuildingType = 'mine' | 'barracks' | 'tower';
 export type SpellId = 'fireball' | 'reinforcement';
+export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement'];
 
 /** Simulation fixed timestep. */
 export const TICK_MS = 100;
@@ -30,6 +31,7 @@ export const BUILDINGS = {
     /** Damage dealt once to each arriving enemy army, before combat. */
     damage: [4, 8, 14] as PerLevel<number>,
   },
+  maxLevel: 3,
   /** Levels lost by a building when its node is captured; level 1 is destroyed. */
   captureLevelLoss: 1,
 } as const;
