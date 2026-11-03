@@ -30,6 +30,8 @@ export const COLORS = {
   button: 0xffb53d,
   buttonPressed: 0xe8962a,
   buttonDisabled: 0xc9bfae,
+  /** Secondary buttons next to a main one (result panel). */
+  buttonSecondary: 0xf2dcae,
   dim: 0x000000,
   select: 0xffffff,
   fireball: 0xff6a1a,
@@ -62,6 +64,14 @@ export const NODE_RADIUS_MAX_PX = 58;
 export const NODE_HIT_SLOP_PX = 8;
 
 export const ARMY_RADIUS_PX = 13;
+
+/** Marching army look: scale bob and trail dots behind it (CSS px, ms). */
+export const ARMY_FX = {
+  bob: 0.07,
+  bobPeriodMs: 110,
+  trailDots: 3,
+  trailSpacing: 10,
+} as const;
 
 export const HUD = {
   /** Top bar height, CSS px. */
@@ -104,6 +114,31 @@ export const BUILD_MENU = {
   padding: 12,
   /** Min vertical space between a button and the bar edges. */
   barInset: 6,
+} as const;
+
+/** Victory/defeat panel, CSS px and ms. */
+export const RESULT_PANEL = {
+  primaryButtonHeight: 68,
+  /** At most this many crystal icons fly to the counter. */
+  flyingCrystals: 8,
+  flyDelayMs: 450,
+  flyStaggerMs: 90,
+  flyDurationMs: 520,
+} as const;
+
+/** Sound and haptics. */
+export const SFX = {
+  /** Master volume, 0..1. */
+  volume: 0.5,
+} as const;
+export const HAPTICS = {
+  /** Own node captured or lost, ms. */
+  short: 35,
+  /** Victory pattern, ms (vibrate, pause, vibrate). */
+  victory: [90, 60, 180],
+  /** Camera shake on a fireball or an enemy capital captured. */
+  shakeMs: 150,
+  shakeIntensity: 0.004,
 } as const;
 
 /** Pointer travel (CSS px) after which a press becomes a swipe. */

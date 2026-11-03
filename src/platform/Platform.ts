@@ -37,4 +37,7 @@ export interface Platform {
   save(data: string): Promise<void>;
 
   lang(): Lang;
+
+  /** Short haptic feedback, ms or a pattern; does nothing where unsupported (e.g. iOS). */
+  vibrate(pattern: number | readonly number[]): void;
 }

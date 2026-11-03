@@ -64,5 +64,7 @@
   "build.next.barracks": "×{mult} troops, +{cap} room",
   "build.next.tower": "Damage {damage}",
   "build.needMore": "{n} more",
-  "hud.goldRate": "+{rate}/s"
+  "hud.goldRate": "+{rate}/s",
+  "pause.soundOn": "Sound: on",
+  "pause.soundOff": "Sound: off"
 }

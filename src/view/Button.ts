@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS, MIN_TOUCH_PX } from '../config/game';
 import { px } from './layout';
+import { playSfx } from './sound';
 
 export interface ButtonOptions {
   width: number;
@@ -50,7 +51,9 @@ export class Button extends Phaser.GameObjects.Container {
       if (!this.pressed) return;
       this.pressed = false;
       this.redraw();
-      if (this.enabled) options.onClick();
+      if (!this.enabled) return;
+      playSfx('click');
+      options.onClick();
     });
 
     scene.add.existing(this);

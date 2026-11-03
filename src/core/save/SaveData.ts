@@ -2,23 +2,37 @@ import { BONUSES, SPELL_IDS, SPELL_UPGRADES, type SpellId } from '../../config/b
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface SaveData {
   version: number;
   /** ms since epoch; the newer of cloud/local wins on load. */
   updatedAt: number;
   progress: Progress;
-  // TODO(stage-6): purchases (remove_ads); TODO(stage-7): settings (sound, music, language).
+  settings: Settings;
+  // TODO(stage-6): purchases (remove_ads); TODO(stage-7): music and language settings.
+}
+
+/** Player settings kept between sessions. */
+export interface Settings {
+  /** Sound effects and vibration. */
+  sound: boolean;
+}
+
+export function defaultSettings(): Settings {
+  return { sound: true };
 }
 
 export function defaultSave(now = 0): SaveData {
-  return { version: SAVE_VERSION, updatedAt: now, progress: defaultProgress() };
+  return { version: SAVE_VERSION, updatedAt: now, progress: defaultProgress(), settings: defaultSettings() };
 }
 
 /** Migrations by source version: MIGRATIONS[n] turns a version-n object into version n+1. */
 export type Migration = (data: Record<string, unknown>) => Record<string, unknown>;
-export const MIGRATIONS: Record<number, Migration> = {};
+export const MIGRATIONS: Record<number, Migration> = {
+  // v2 added settings; v1 saves start with the defaults.
+  1: (d) => ({ ...d, version: 2, settings: defaultSettings() }),
+};
 
 /**
  * Turns anything read from storage into valid SaveData: runs migrations, fills missing fields
@@ -47,7 +61,14 @@ export function parseSave(raw: unknown, migrations: Record<number, Migration> = 
     version: SAVE_VERSION,
     updatedAt: num(obj.updatedAt, 0),
     progress: sanitizeProgress(obj.progress),
+    settings: sanitizeSettings(obj.settings),
   };
+}
+
+function sanitizeSettings(raw: unknown): Settings {
+  const settings = defaultSettings();
+  if (isObject(raw) && typeof raw.sound === 'boolean') settings.sound = raw.sound;
+  return settings;
 }
 
 function sanitizeProgress(raw: unknown): Progress {

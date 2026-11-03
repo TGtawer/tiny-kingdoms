@@ -15,9 +15,12 @@ export function armyLevelPosition(world: World, army: ArmyState): Point {
 export class ArmyView extends Phaser.GameObjects.Container {
   private readonly countText: Phaser.GameObjects.Text;
   private drawnCount = -1;
+  /** Phase offset of the marching bob, so armies don't pulse in sync. */
+  readonly phase: number;
 
-  constructor(scene: Phaser.Scene, owner: Side) {
+  constructor(scene: Phaser.Scene, owner: Side, phase = 0) {
     super(scene, 0, 0);
+    this.phase = phase;
     const r = px(ARMY_RADIUS_PX);
     const g = scene.add.graphics();
     g.fillStyle(0x000000, 0.2).fillEllipse(0, r * 0.9, r * 2, r * 0.6);

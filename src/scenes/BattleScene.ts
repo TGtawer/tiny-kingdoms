@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
-import { COLORS, DRAG_THRESHOLD_PX, HUD, MAX_FRAME_DELTA_MS } from '../config/game';
+import { ARMY_FX, COLORS, DRAG_THRESHOLD_PX, HAPTICS, HUD, MAX_FRAME_DELTA_MS } from '../config/game';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
 import { sendAmount, type Command, type SendMode } from '../core/sim/commands';
@@ -8,7 +8,7 @@ import { armyPath, blockingNode } from '../core/sim/pathfinding';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
-import { createWorld, ownedShare, type NodeState, type World } from '../core/sim/World';
+import { createWorld, ownedShare, type NodeState, type Owner, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
 import { playerSetupFrom } from '../core/meta/upgrades';
@@ -21,6 +21,7 @@ import { explosion, floatText, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, textStyle, type Point } from '../view/layout';
 import { NodeView, type Highlight } from '../view/NodeView';
 import { RoadView } from '../view/RoadView';
+import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
 import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
 import { getPlatform, getStore } from './registry';
@@ -54,6 +55,11 @@ export class BattleScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
   private roads!: RoadView;
   private dragLines!: Phaser.GameObjects.Graphics;
+  /** Fading dots behind marching armies; one Graphics for all of them. */
+  private trails!: Phaser.GameObjects.Graphics;
+  /** Node owners before the current tick, to tell "captured" from "lost" in arrival events. */
+  private ownersBefore = new Map<string, Owner>();
+  private capitals = new Set<string>();
   /** "How many will leave" badge for a swipe or a selected node; one reused Text. */
   private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
@@ -113,10 +119,11 @@ export class BattleScene extends Phaser.Scene {
 
     this.background = this.add.graphics();
     this.roads = new RoadView(this);
-    const capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
+    this.capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
     for (const node of Object.values(this.world.nodes)) {
-      this.nodeViews.set(node.id, new NodeView(this, node, capitals.has(node.id)));
+      this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id)));
     }
+    this.trails = this.add.graphics().setDepth(39);
     this.dragLines = this.add.graphics().setDepth(50);
     this.sendBadge = this.add.text(0, 0, '', textStyle(20)).setOrigin(0.5).setStroke('#1f2937', px(5)).setDepth(60);
     this.sendBadge.setVisible(false);
@@ -166,6 +173,7 @@ export class BattleScene extends Phaser.Scene {
 
   private tickOnce(): void {
     this.prevArmyPos.clear();
+    for (const node of Object.values(this.world.nodes)) this.ownersBefore.set(node.id, node.owner);
     for (const army of this.world.armies) this.prevArmyPos.set(army.id, armyLevelPosition(this.world, army));
 
     // Player input and the enemy AI go through the same command queue and rules.
@@ -189,7 +197,9 @@ export class BattleScene extends Phaser.Scene {
           // A new army starts its interpolation at the source node.
           const from = this.world.nodes[cmd.from]!;
           this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
+          if (cmd.side === 'player') playSfx('send');
         } else if (cmd.type === 'build' || cmd.type === 'upgrade') {
+          if (cmd.side === 'player') playSfx('build');
           const view = this.nodeViews.get(cmd.nodeId)!;
           pop(this, view);
           ringBurst(this, view.x, view.y, view.radius, COLORS.gold);
@@ -197,6 +207,8 @@ export class BattleScene extends Phaser.Scene {
           const view = this.nodeViews.get(cmd.nodeId)!;
           if (cmd.spell === 'fireball') {
             explosion(this, view.x, view.y, view.radius * 1.3);
+            playSfx('fireball');
+            this.shake();
           } else {
             ringBurst(this, view.x, view.y, view.radius, COLORS.reinforcement);
             pop(this, view);
@@ -212,6 +224,17 @@ export class BattleScene extends Phaser.Scene {
           pop(this, view);
           ringBurst(this, view.x, view.y, view.radius, owner === 'neutral' ? COLORS.faction.neutral : COLORS.faction[owner]);
           if (this.selected === event.nodeId) this.deselect();
+          const before = this.ownersBefore.get(event.nodeId);
+          if (owner === 'player') {
+            playSfx('capture');
+            this.vibrate(HAPTICS.short);
+            if (before === 'enemy' && this.capitals.has(event.nodeId)) this.shake();
+          } else if (before === 'player') {
+            playSfx('lost');
+            this.vibrate(HAPTICS.short);
+          }
+          // Later arrivals in the same tick compare against the new owner.
+          this.ownersBefore.set(event.nodeId, owner);
         } else if (event.outcome === 'repelled' || event.outcome === 'destroyedByTower') {
           ringBurst(this, view.x, view.y, view.radius * 0.9, COLORS.select);
         }
@@ -273,25 +296,28 @@ export class BattleScene extends Phaser.Scene {
     const store = getStore(this);
     const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
     store.commit();
+    playSfx(winner === 'player' ? 'victory' : 'defeat');
+    if (winner === 'player') this.vibrate(HAPTICS.victory);
     this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reward.crystals));
   }
 
   private showResult(winner: 'player' | 'enemy', crystals: number): void {
     const replay = { label: t('result.playAgain'), onClick: () => this.scene.restart({ levelId: this.level.id }) };
     const toMap = { label: t('result.toMap'), onClick: () => this.toMap() };
+    const total = getStore(this).progress.crystals;
     if (winner === 'enemy') {
-      this.hud.showResult(t('result.defeat'), false, crystals, [replay, toMap]);
+      this.hud.showResult(t('result.defeat'), false, crystals, total, [replay, toMap]);
       return;
     }
     const next = nextLevel(this.level.id);
     if (next) {
-      this.hud.showResult(t('result.victory'), true, crystals, [
+      this.hud.showResult(t('result.victory'), true, crystals, total, [
         { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
         replay,
         toMap,
       ]);
     } else {
-      this.hud.showResult(t('result.chapterDone'), true, crystals, [toMap, replay]);
+      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay]);
     }
   }
 
@@ -328,13 +354,15 @@ export class BattleScene extends Phaser.Scene {
       view.setHighlight(this.highlightFor(node));
     }
 
-    // Armies: create/remove views, interpolate between ticks.
+    // Armies: create/remove views, interpolate between ticks; a light bob and a fading trail while marching.
     const alive = new Set<string>();
+    const now = this.time.now;
+    this.trails.clear();
     for (const army of world.armies) {
       alive.add(army.id);
       let view = this.armyViews.get(army.id);
       if (!view) {
-        view = new ArmyView(this, army.owner).setDepth(40);
+        view = new ArmyView(this, army.owner, Number(army.id.slice(1)) * 1.7).setDepth(40);
         this.armyViews.set(army.id, view);
       }
       view.setCount(army.count);
@@ -342,6 +370,8 @@ export class BattleScene extends Phaser.Scene {
       const prev = this.prevArmyPos.get(army.id) ?? cur;
       const p = this.layoutField.toScreen(prev.x + (cur.x - prev.x) * alpha, prev.y + (cur.y - prev.y) * alpha);
       view.setPosition(p.x, p.y);
+      view.setScale(1 + ARMY_FX.bob * Math.sin(now / ARMY_FX.bobPeriodMs + view.phase));
+      this.drawTrail(army.owner, army.path[army.segment]!, army.path[army.segment + 1], p);
     }
     for (const [id, view] of this.armyViews) {
       if (!alive.has(id)) {
@@ -558,6 +588,41 @@ export class BattleScene extends Phaser.Scene {
     this.deselect();
   }
 
+  /** 2–3 fading dots behind an army, along its current road. */
+  private drawTrail(owner: 'player' | 'enemy', fromId: string, toId: string | undefined, at: Point): void {
+    if (!toId) return;
+    const a = this.nodeViews.get(fromId)!;
+    const b = this.nodeViews.get(toId)!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 1) return;
+    const dx = (b.x - a.x) / len;
+    const dy = (b.y - a.y) / len;
+    const travelled = Math.hypot(at.x - a.x, at.y - a.y);
+    const step = px(ARMY_FX.trailSpacing);
+    for (let i = 1; i <= ARMY_FX.trailDots; i++) {
+      // No dots behind the start node: the trail grows as the army leaves.
+      if (i * step > travelled) break;
+      const fade = 1 - i / (ARMY_FX.trailDots + 1);
+      this.trails.fillStyle(COLORS.faction[owner], 0.55 * fade).fillCircle(at.x - dx * step * i, at.y - dy * step * i, px(5) * fade);
+    }
+  }
+
+  private shake(): void {
+    this.cameras.main.shake(HAPTICS.shakeMs, HAPTICS.shakeIntensity);
+  }
+
+  /** Vibration follows the sound setting. */
+  private vibrate(pattern: number | readonly number[]): void {
+    if (isSoundEnabled()) this.platform.vibrate(pattern);
+  }
+
+  private toggleSound(): void {
+    const store = getStore(this);
+    store.settings.sound = !store.settings.sound;
+    setSoundEnabled(store.settings.sound);
+    store.commit();
+  }
+
   // ---- Speed-up ---------------------------------------------------------------------------------
 
   /** The speed-up is offered only while the player holds more than SPEED_UP.unlockShare of all nodes. */
@@ -596,6 +661,7 @@ export class BattleScene extends Phaser.Scene {
       () => this.resume(),
       () => this.scene.restart({ levelId: this.level.id }),
       () => this.toMap(),
+      { on: isSoundEnabled(), toggle: () => this.toggleSound() },
     );
   }
 

@@ -73,6 +73,14 @@ export class MockPlatform implements Platform {
     return resolveLang(typeof navigator === 'undefined' ? '' : navigator.language);
   }
 
+  vibrate(pattern: number | readonly number[]): void {
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate([...[pattern].flat()]);
+    } catch {
+      // Not allowed (no user gesture yet, iframe policy): haptics are optional.
+    }
+  }
+
   private fakeAd(kind: string, result: AdResult): Promise<AdResult> {
     log(`ad:${kind} open`);
     this.pauseHandlers?.pause();

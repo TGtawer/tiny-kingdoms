@@ -11,6 +11,7 @@ import { registerServices } from './scenes/registry';
 import { UpgradesScene } from './scenes/UpgradesScene';
 import { SaveStore } from './save/SaveStore';
 import { display } from './view/layout';
+import { setSoundEnabled, setSoundSuspended } from './view/sound';
 
 // No browser context menu or long-press menu anywhere in the game.
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
   await platform.init();
   const store = await SaveStore.load(platform);
   initI18n(platform.lang());
+  setSoundEnabled(store.settings.sound);
 
   const host = document.getElementById('game')!;
   display.dpr = currentDpr();
@@ -66,12 +68,14 @@ async function main(): Promise<void> {
   window.addEventListener('orientationchange', resize);
 
   const pauseGame = (): void => {
+    setSoundSuspended(true);
     game.sound.pauseAll();
     game.loop.sleep();
   };
   const resumeGame = (): void => {
     game.loop.wake();
     game.sound.resumeAll();
+    setSoundSuspended(false);
   };
   platform.setPauseHandlers({ pause: pauseGame, resume: resumeGame });
 
