@@ -1,0 +1,451 @@
+import * as Phaser from 'phaser';
+import { TICK_MS, type SpellId } from '../config/balance';
+import { COLORS, DRAG_THRESHOLD_PX, MAX_FRAME_DELTA_MS } from '../config/game';
+import type { LevelData } from '../core/level/schema';
+import type { Command } from '../core/sim/commands';
+import { step, type TickEvent } from '../core/sim/tick';
+import { createWorld, type NodeState, type World } from '../core/sim/World';
+import { TEST_LEVEL } from '../levels';
+import type { Platform } from '../platform/Platform';
+import { ArmyView, armyLevelPosition } from '../view/ArmyView';
+import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
+import { explosion, floatText, pop, ringBurst } from '../view/effects';
+import { FieldLayout, fieldArea, px, type Point } from '../view/layout';
+import { NodeView, type Highlight } from '../view/NodeView';
+import { RoadView } from '../view/RoadView';
+import { BattleHUD } from './BattleHUD';
+import { getPlatform } from './registry';
+
+// TODO(stage-5): spells come from meta progression (fireball after chapter 1, reinforcement after chapter 2).
+// Both are unlocked on the test level so the HUD and spells can be checked.
+const DEV_UNLOCKED_SPELLS: SpellId[] = ['fireball', 'reinforcement'];
+
+/** Delay before the result panel, so the final capture is visible. */
+const RESULT_DELAY_MS = 700;
+
+interface DragState {
+  pointerId: number;
+  sources: string[];
+  startX: number;
+  startY: number;
+  x: number;
+  y: number;
+  moved: boolean;
+  downNode: string;
+}
+
+export interface BattleSceneData {
+  level?: LevelData;
+}
+
+/** Renders the World and turns input into commands. All rules live in src/core. */
+export class BattleScene extends Phaser.Scene {
+  private platform!: Platform;
+  private level!: LevelData;
+  private world!: World;
+  private layoutField!: FieldLayout;
+
+  private background!: Phaser.GameObjects.Graphics;
+  private roads!: RoadView;
+  private dragLines!: Phaser.GameObjects.Graphics;
+  private hud!: BattleHUD;
+  private nodeViews = new Map<string, NodeView>();
+  private armyViews = new Map<string, ArmyView>();
+  /** Army positions (level coords) at the previous tick, for interpolation. */
+  private prevArmyPos = new Map<string, Point>();
+
+  private queue: Command[] = [];
+  private accumulator = 0;
+  private paused = false;
+  private ended = false;
+  private selected: string | null = null;
+  private menu: BuildMenu | null = null;
+  private drag: DragState | null = null;
+  private armed: SpellId | null = null;
+
+  constructor() {
+    super('BattleScene');
+  }
+
+  init(data: BattleSceneData): void {
+    this.level = data.level ?? TEST_LEVEL;
+  }
+
+  create(): void {
+    // The scene instance is reused on restart: reset all state.
+    this.nodeViews = new Map();
+    this.armyViews = new Map();
+    this.prevArmyPos = new Map();
+    this.queue = [];
+    this.accumulator = 0;
+    this.paused = false;
+    this.ended = false;
+    this.selected = null;
+    this.menu = null;
+    this.drag = null;
+    this.armed = null;
+
+    this.platform = getPlatform(this);
+    this.world = createWorld(this.level, { seed: 1, player: { unlockedSpells: DEV_UNLOCKED_SPELLS } });
+
+    this.background = this.add.graphics();
+    this.roads = new RoadView(this);
+    for (const node of Object.values(this.world.nodes)) {
+      this.nodeViews.set(node.id, new NodeView(this, node));
+    }
+    this.dragLines = this.add.graphics().setDepth(50);
+    this.hud = new BattleHUD(this, this.world.sides.player.unlockedSpells, {
+      onPause: () => this.pause(),
+      onSpell: (spell) => this.toggleSpell(spell),
+    });
+
+    this.relayout();
+
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
+    this.input.on(Phaser.Input.Events.POINTER_UP, this.onPointerUp, this);
+    this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onPointerUp, this);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.relayout, this);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, this.onHidden, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.relayout, this);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, this.onHidden, this);
+      this.hud.destroy();
+    });
+
+    this.platform.gameplayStart();
+  }
+
+  override update(_time: number, delta: number): void {
+    if (!this.paused && !this.ended) {
+      this.accumulator += Math.min(delta, MAX_FRAME_DELTA_MS);
+      while (this.accumulator >= TICK_MS && !this.ended) {
+        this.tickOnce();
+        this.accumulator -= TICK_MS;
+      }
+    }
+    this.render(this.ended ? 1 : this.accumulator / TICK_MS);
+  }
+
+  // ---- Simulation -------------------------------------------------------------------------------
+
+  private tickOnce(): void {
+    this.prevArmyPos.clear();
+    for (const army of this.world.armies) this.prevArmyPos.set(army.id, armyLevelPosition(this.world, army));
+
+    const events = step(this.world, this.queue);
+    this.queue = [];
+    for (const event of events) this.handleEvent(event);
+  }
+
+  private handleEvent(event: TickEvent): void {
+    switch (event.type) {
+      case 'applied': {
+        const cmd = event.command;
+        if (cmd.type === 'send' && event.armyId) {
+          // A new army starts its interpolation at the source node.
+          const from = this.world.nodes[cmd.from]!;
+          this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
+        } else if (cmd.type === 'build' || cmd.type === 'upgrade') {
+          const view = this.nodeViews.get(cmd.nodeId)!;
+          pop(this, view);
+          ringBurst(this, view.x, view.y, view.radius, COLORS.gold);
+        } else if (cmd.type === 'cast') {
+          const view = this.nodeViews.get(cmd.nodeId)!;
+          if (cmd.spell === 'fireball') {
+            explosion(this, view.x, view.y, view.radius * 1.3);
+          } else {
+            ringBurst(this, view.x, view.y, view.radius, COLORS.reinforcement);
+            pop(this, view);
+          }
+        }
+        break;
+      }
+      case 'arrived': {
+        const view = this.nodeViews.get(event.nodeId)!;
+        if (event.towerDamage > 0) floatText(this, view.x, view.y - view.radius, `-${event.towerDamage}`, COLORS.fireball);
+        if (event.outcome === 'captured') {
+          const owner = this.world.nodes[event.nodeId]!.owner;
+          pop(this, view);
+          ringBurst(this, view.x, view.y, view.radius, owner === 'neutral' ? COLORS.faction.neutral : COLORS.faction[owner]);
+          if (this.selected === event.nodeId) this.deselect();
+        } else if (event.outcome === 'repelled' || event.outcome === 'destroyedByTower') {
+          ringBurst(this, view.x, view.y, view.radius * 0.9, COLORS.select);
+        }
+        break;
+      }
+      case 'gameOver':
+        this.endBattle(event.winner);
+        break;
+      case 'rejected':
+        break;
+    }
+  }
+
+  private endBattle(winner: 'player' | 'enemy'): void {
+    this.ended = true;
+    this.deselect();
+    this.drag = null;
+    this.armed = null;
+    this.platform.gameplayStop();
+    this.time.delayedCall(RESULT_DELAY_MS, () => this.hud.showResult(winner, () => this.scene.restart()));
+  }
+
+  // ---- Rendering --------------------------------------------------------------------------------
+
+  private relayout(): void {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    this.cameras.main.setSize(w, h);
+    this.deselect();
+
+    const nodes = Object.values(this.world.nodes);
+    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, this.hud.hasSpellBar));
+    this.drawBackground(w, h);
+    this.roads.draw(this.world, this.layoutField);
+    for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
+    this.hud.layout();
+  }
+
+  private drawBackground(w: number, h: number): void {
+    const g = this.background;
+    g.clear();
+    g.fillStyle(COLORS.background, 1).fillRect(0, 0, w, h);
+    // Deterministic grass tufts, so the meadow does not look flat.
+    let seed = 12345;
+    const rnd = (): number => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    const count = Math.round((w * h) / (px(70) * px(70)));
+    g.lineStyle(px(2), COLORS.backgroundDark, 0.8);
+    for (let i = 0; i < count; i++) {
+      const x = rnd() * w;
+      const y = rnd() * h;
+      const s = px(4 + rnd() * 3);
+      g.lineBetween(x - s, y, x - s * 0.4, y - s * 1.2);
+      g.lineBetween(x, y, x, y - s * 1.5);
+      g.lineBetween(x + s, y, x + s * 0.4, y - s * 1.2);
+    }
+  }
+
+  private render(alpha: number): void {
+    const world = this.world;
+
+    for (const node of Object.values(world.nodes)) {
+      const view = this.nodeViews.get(node.id)!;
+      view.sync(node);
+      view.setHighlight(this.highlightFor(node));
+    }
+
+    // Armies: create/remove views, interpolate between ticks.
+    const alive = new Set<string>();
+    for (const army of world.armies) {
+      alive.add(army.id);
+      let view = this.armyViews.get(army.id);
+      if (!view) {
+        view = new ArmyView(this, army.owner).setDepth(40);
+        this.armyViews.set(army.id, view);
+      }
+      view.setCount(army.count);
+      const cur = armyLevelPosition(world, army);
+      const prev = this.prevArmyPos.get(army.id) ?? cur;
+      const p = this.layoutField.toScreen(prev.x + (cur.x - prev.x) * alpha, prev.y + (cur.y - prev.y) * alpha);
+      view.setPosition(p.x, p.y);
+    }
+    for (const [id, view] of this.armyViews) {
+      if (!alive.has(id)) {
+        view.destroy();
+        this.armyViews.delete(id);
+      }
+    }
+
+    this.drawDragLines();
+    this.hud.update(world, 'player', this.armed);
+    if (this.menu) {
+      if (world.nodes[this.menu.nodeId]!.owner !== 'player') this.deselect();
+      else this.menu.refresh(world.sides.player.gold);
+    }
+  }
+
+  private highlightFor(node: NodeState): Highlight {
+    if (this.armed) {
+      const valid = this.armed === 'fireball' ? node.owner === 'enemy' : node.owner === 'player';
+      return valid ? this.armed : 'none';
+    }
+    if (this.drag?.moved) {
+      if (this.drag.sources.includes(node.id)) return 'selected';
+      const hover = this.nodeAt(this.drag.x, this.drag.y);
+      return hover?.id === node.id ? 'target' : 'none';
+    }
+    return this.selected === node.id ? 'selected' : 'none';
+  }
+
+  private drawDragLines(): void {
+    const g = this.dragLines;
+    g.clear();
+    const drag = this.drag;
+    if (!drag?.moved) return;
+    const hover = this.nodeAt(drag.x, drag.y);
+    const end = hover ? this.nodeViews.get(hover.id)! : { x: drag.x, y: drag.y };
+    for (const id of drag.sources) {
+      if (id === hover?.id) continue;
+      const from = this.nodeViews.get(id)!;
+      g.lineStyle(px(9), COLORS.outline, 0.35).lineBetween(from.x, from.y, end.x, end.y);
+      g.lineStyle(px(5), COLORS.select, 0.9).lineBetween(from.x, from.y, end.x, end.y);
+    }
+    g.fillStyle(COLORS.select, 0.9).fillCircle(end.x, end.y, px(7));
+  }
+
+  // ---- Input ------------------------------------------------------------------------------------
+
+  /** Nearest node whose hit circle contains the point. */
+  private nodeAt(x: number, y: number): NodeState | null {
+    let best: NodeState | null = null;
+    let bestDist = Infinity;
+    for (const view of this.nodeViews.values()) {
+      const d = Math.hypot(view.x - x, view.y - y);
+      if (d <= view.hitRadius && d < bestDist) {
+        bestDist = d;
+        best = this.world.nodes[view.nodeId]!;
+      }
+    }
+    return best;
+  }
+
+  private onPointerDown(pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]): void {
+    if (over.length > 0 || this.paused || this.ended || this.drag) return;
+    const node = this.nodeAt(pointer.x, pointer.y);
+
+    if (this.armed) {
+      if (node && this.highlightFor(node) !== 'none') {
+        this.queue.push({ type: 'cast', side: 'player', spell: this.armed, nodeId: node.id });
+      }
+      this.armed = null;
+      return;
+    }
+
+    if (node?.owner === 'player') {
+      this.drag = {
+        pointerId: pointer.id,
+        sources: [node.id],
+        startX: pointer.x,
+        startY: pointer.y,
+        x: pointer.x,
+        y: pointer.y,
+        moved: false,
+        downNode: node.id,
+      };
+      return;
+    }
+
+    // Tap-tap: a node is selected, the second tap on a foreign node sends the army.
+    if (node && this.selected) this.sendFrom([this.selected], node.id);
+    this.deselect();
+  }
+
+  private onPointerMove(pointer: Phaser.Input.Pointer): void {
+    const drag = this.drag;
+    if (!drag || pointer.id !== drag.pointerId) return;
+    drag.x = pointer.x;
+    drag.y = pointer.y;
+    if (!drag.moved && Math.hypot(pointer.x - drag.startX, pointer.y - drag.startY) > px(DRAG_THRESHOLD_PX)) {
+      drag.moved = true;
+      this.deselect();
+    }
+    if (drag.moved) {
+      // Sliding over more own nodes adds them as sources (multi-select).
+      const node = this.nodeAt(pointer.x, pointer.y);
+      if (node?.owner === 'player' && !drag.sources.includes(node.id)) drag.sources.push(node.id);
+    }
+  }
+
+  private onPointerUp(pointer: Phaser.Input.Pointer): void {
+    const drag = this.drag;
+    if (!drag || pointer.id !== drag.pointerId) return;
+    this.drag = null;
+    if (this.paused || this.ended) return;
+
+    if (drag.moved) {
+      const target = this.nodeAt(pointer.x, pointer.y);
+      if (target) this.sendFrom(drag.sources, target.id);
+      return;
+    }
+
+    // A tap on an own node.
+    if (this.selected && this.selected !== drag.downNode) {
+      this.sendFrom([this.selected], drag.downNode);
+      this.deselect();
+    } else if (this.selected === drag.downNode) {
+      this.deselect();
+    } else {
+      this.select(drag.downNode);
+    }
+  }
+
+  private sendFrom(sources: readonly string[], target: string): void {
+    for (const from of sources) {
+      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target });
+    }
+  }
+
+  private select(nodeId: string): void {
+    this.deselect();
+    this.selected = nodeId;
+    const view = this.nodeViews.get(nodeId)!;
+    this.menu = new BuildMenu(
+      this,
+      this.world.nodes[nodeId]!,
+      { x: view.x, y: view.y, radius: view.radius },
+      (choice) => this.onBuild(nodeId, choice),
+    ).setDepth(90);
+    this.menu.refresh(this.world.sides.player.gold);
+  }
+
+  private deselect(): void {
+    this.selected = null;
+    this.menu?.destroy();
+    this.menu = null;
+  }
+
+  private onBuild(nodeId: string, choice: BuildChoice): void {
+    this.queue.push(
+      choice.kind === 'build'
+        ? { type: 'build', side: 'player', nodeId, building: choice.building }
+        : { type: 'upgrade', side: 'player', nodeId },
+    );
+    this.deselect();
+  }
+
+  private toggleSpell(spell: SpellId): void {
+    if (this.paused || this.ended) return;
+    this.deselect();
+    this.armed = this.armed === spell ? null : spell;
+  }
+
+  // ---- Pause ------------------------------------------------------------------------------------
+
+  private pause(): void {
+    if (this.paused || this.ended) return;
+    this.paused = true;
+    this.deselect();
+    this.drag = null;
+    this.armed = null;
+    this.platform.gameplayStop();
+    this.hud.showPause(
+      () => this.resume(),
+      () => this.scene.restart(),
+    );
+  }
+
+  private resume(): void {
+    this.paused = false;
+    this.hud.hideOverlay();
+    this.platform.gameplayStart();
+  }
+
+  /** Tab hidden: show the pause panel, so the player comes back to a paused battle. */
+  private onHidden(): void {
+    this.pause();
+  }
+}
