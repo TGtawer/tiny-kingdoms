@@ -59,6 +59,35 @@ export const START_GOLD = {
   // Enemy start gold is defined per level.
 } as const;
 
+/**
+ * Enemy AI tuning. Difficulty per level comes from LevelData.enemy (productionMult, aiThinkMs, aggression 0..1).
+ * Not in BALANCE.md yet: starting guesses, to be tuned in playtests.
+ */
+export const AI = {
+  /** Random spread of the think interval, ±share. */
+  thinkJitter: 0.2,
+  /** Required troops = defense × (1 + margin) + flatMargin; margin goes from max (aggression 0) to min (aggression 1). */
+  attackMarginMax: 0.6,
+  attackMarginMin: 0.1,
+  flatMargin: 2,
+  /** Attacks launched per decision: 1 at aggression 0, up to this at aggression 1. */
+  maxAttacksPerThink: 2,
+  /** Weight of a target node by size. */
+  sizeValue: { small: 1, medium: 1.5, large: 2 },
+  goldVeinValue: 0.6,
+  buildingLevelValue: 0.4,
+  /** Opponent nodes are worth (1 + aggression × this) times more than neutrals. */
+  opponentTargetBonus: 1,
+  /** Each field unit of travel counts as this many troops of cost when scoring targets. */
+  distanceCost: 12,
+  /** Hostile armies arriving within this time count as a threat. */
+  defendLookaheadSec: 8,
+  /** Rear nodes push troops to the front once they reach this share of capacity. */
+  consolidateAt: 0.85,
+  /** Below this aggression the AI prefers towers on the front line, above it barracks. */
+  towerAggressionThreshold: 0.5,
+} as const;
+
 export const CRYSTALS = {
   /** Victory reward: base + perChapter * chapter. */
   base: 20,

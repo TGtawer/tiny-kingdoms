@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { TICK_MS, type SpellId } from '../config/balance';
 import { COLORS, DRAG_THRESHOLD_PX, MAX_FRAME_DELTA_MS } from '../config/game';
+import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
 import type { Command } from '../core/sim/commands';
 import { step, type TickEvent } from '../core/sim/tick';
@@ -43,6 +44,7 @@ export class BattleScene extends Phaser.Scene {
   private platform!: Platform;
   private level!: LevelData;
   private world!: World;
+  private ai!: AiState;
   private layoutField!: FieldLayout;
 
   private background!: Phaser.GameObjects.Graphics;
@@ -86,7 +88,9 @@ export class BattleScene extends Phaser.Scene {
     this.armed = null;
 
     this.platform = getPlatform(this);
+    // TODO(stage-4): per-level or per-attempt seed.
     this.world = createWorld(this.level, { seed: 1, player: { unlockedSpells: DEV_UNLOCKED_SPELLS } });
+    this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy));
 
     this.background = this.add.graphics();
     this.roads = new RoadView(this);
@@ -133,8 +137,10 @@ export class BattleScene extends Phaser.Scene {
     this.prevArmyPos.clear();
     for (const army of this.world.armies) this.prevArmyPos.set(army.id, armyLevelPosition(this.world, army));
 
-    const events = step(this.world, this.queue);
+    // Player input and the enemy AI go through the same command queue and rules.
+    const commands = [...this.queue, ...aiStep(this.world, this.ai)];
     this.queue = [];
+    const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
   }
 
