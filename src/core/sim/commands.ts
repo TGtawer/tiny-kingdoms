@@ -47,6 +47,7 @@ export type RejectReason =
   | 'noPath'
   | 'occupied'
   | 'noGoldVein'
+  | 'notBuildable'
   | 'noBuilding'
   | 'maxLevel'
   | 'notEnoughGold'
@@ -94,6 +95,7 @@ export function validate(world: World, cmd: Command): RejectReason | null {
       const node = world.nodes[cmd.nodeId];
       if (!node) return 'unknownNode';
       if (node.owner !== cmd.side) return 'notOwner';
+      if (node.kind === 'temple') return 'notBuildable';
       if (node.building) return 'occupied';
       if (cmd.building === 'mine' && !node.hasGoldVein) return 'noGoldVein';
       if (side.gold < buildCost(0)!) return 'notEnoughGold';

@@ -3,6 +3,9 @@
 export type NodeSize = 'small' | 'medium' | 'large';
 export type BuildingType = 'mine' | 'barracks' | 'tower';
 export type SpellId = 'fireball' | 'reinforcement';
+/** Special node kinds (GDD 3.12); 'normal' is the default. */
+export type NodeKind = 'normal' | 'temple' | 'fortress' | 'chest' | 'portal' | 'bandits';
+export const NODE_KINDS: readonly NodeKind[] = ['normal', 'temple', 'fortress', 'chest', 'portal', 'bandits'];
 export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement'];
 
 /** GDD 3.8: a spell becomes available after completing this chapter. */
@@ -52,6 +55,20 @@ export const ARMY = {
   minTroopsToSend: 2,
 } as const;
 
+/** Special nodes (GDD 3.12, CONTENT.md C-1). Starting values, tuned in playtests. */
+export const SPECIAL_NODES = {
+  /** Owner's whole gold income +50% per temple (two temples: +100%). Temples produce nothing themselves. */
+  temple: { goldBonus: 0.5 },
+  /** Each defender counts this many times (after the tower hits, together with unit strength). */
+  fortress: { defenseMult: 2 },
+  /** Gold given once to whoever captures the chest; then it is a normal small node. */
+  chest: { gold: 60 },
+  /** Travel time through a portal pair, ms (no clashes inside). */
+  portal: { delayMs: 1000 },
+  /** Bandit camp: produces like a small node and raids the nearest non-neutral neighbour. */
+  bandits: { raidEveryMs: 20000 },
+} as const;
+
 /** Battle speed-up button (GDD 3.11): offered while the player owns more than `unlockShare` of all nodes. */
 export const SPEED_UP = {
   unlockShare: 0.65,
@@ -99,6 +116,9 @@ export const AI = {
   consolidateAt: 0.85,
   /** Below this aggression the AI prefers towers on the front line, above it barracks. */
   towerAggressionThreshold: 0.5,
+  /** Extra target value of special nodes. */
+  templeValue: 1.5,
+  chestValue: 2.5,
 } as const;
 
 /** Star rating of a won level (GDD 4.2). */

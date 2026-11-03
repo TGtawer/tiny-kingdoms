@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import type { BuildingType, SpellId } from '../config/balance';
+import type { BuildingType, NodeKind, SpellId } from '../config/balance';
 import { COLORS } from '../config/game';
 
 // Simple cartoon icons drawn with Graphics, centered at (x, y), fitting in a box of `size`.
@@ -122,6 +122,68 @@ export function drawCheck(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   g.lineStyle(Math.max(2, size * 0.16), 0xffffff, 1);
   g.lineBetween(x - s * 0.45, y, x - s * 0.1, y + s * 0.35);
   g.lineBetween(x - s * 0.1, y + s * 0.35, x + s * 0.5, y - s * 0.35);
+}
+
+/** Icon of a special node kind (GDD 3.12), centered at (x, y). */
+export function drawKind(g: Phaser.GameObjects.Graphics, kind: NodeKind, x: number, y: number, size: number): void {
+  const s = size / 2;
+  const line = Math.max(1, size * 0.08);
+  g.lineStyle(line, COLORS.outline, 1);
+  switch (kind) {
+    case 'temple': {
+      // Roof and three columns.
+      g.fillStyle(0xf4efe2, 1);
+      g.fillTriangle(x - s * 0.95, y - s * 0.35, x + s * 0.95, y - s * 0.35, x, y - s * 0.95);
+      g.strokeTriangle(x - s * 0.95, y - s * 0.35, x + s * 0.95, y - s * 0.35, x, y - s * 0.95);
+      for (const dx of [-0.6, 0, 0.6]) {
+        g.fillRect(x + s * (dx - 0.13), y - s * 0.3, s * 0.26, s * 0.95);
+        g.strokeRect(x + s * (dx - 0.13), y - s * 0.3, s * 0.26, s * 0.95);
+      }
+      g.fillRect(x - s * 0.95, y + s * 0.65, s * 1.9, s * 0.25);
+      g.strokeRect(x - s * 0.95, y + s * 0.65, s * 1.9, s * 0.25);
+      break;
+    }
+    case 'fortress': {
+      // Shield.
+      g.fillStyle(0x9aa3ad, 1);
+      g.fillRoundedRect(x - s * 0.75, y - s * 0.85, s * 1.5, s * 1.0, s * 0.15);
+      g.fillTriangle(x - s * 0.75, y + s * 0.1, x + s * 0.75, y + s * 0.1, x, y + s * 0.95);
+      g.strokeRoundedRect(x - s * 0.75, y - s * 0.85, s * 1.5, s * 1.0, s * 0.15);
+      g.lineBetween(x - s * 0.75, y + s * 0.1, x, y + s * 0.95);
+      g.lineBetween(x + s * 0.75, y + s * 0.1, x, y + s * 0.95);
+      g.fillStyle(COLORS.outline, 1).fillRect(x - s * 0.08, y - s * 0.6, s * 0.16, s * 1.1);
+      break;
+    }
+    case 'chest': {
+      g.fillStyle(0xa86a32, 1);
+      g.fillRoundedRect(x - s * 0.9, y - s * 0.55, s * 1.8, s * 0.6, { tl: s * 0.4, tr: s * 0.4, bl: 0, br: 0 });
+      g.fillRect(x - s * 0.9, y + s * 0.05, s * 1.8, s * 0.8);
+      g.strokeRoundedRect(x - s * 0.9, y - s * 0.55, s * 1.8, s * 0.6, { tl: s * 0.4, tr: s * 0.4, bl: 0, br: 0 });
+      g.strokeRect(x - s * 0.9, y + s * 0.05, s * 1.8, s * 0.8);
+      g.fillStyle(COLORS.gold, 1).fillRect(x - s * 0.18, y - s * 0.1, s * 0.36, s * 0.4);
+      g.strokeRect(x - s * 0.18, y - s * 0.1, s * 0.36, s * 0.4);
+      break;
+    }
+    case 'portal': {
+      g.lineStyle(Math.max(2, size * 0.14), COLORS.portal, 1);
+      g.beginPath().arc(x, y, s * 0.85, 0, Math.PI * 1.6).strokePath();
+      g.beginPath().arc(x, y, s * 0.45, Math.PI, Math.PI * 2.6).strokePath();
+      g.fillStyle(COLORS.portal, 1).fillCircle(x, y, s * 0.15);
+      break;
+    }
+    case 'bandits': {
+      // Crossed swords.
+      g.lineStyle(Math.max(2, size * 0.14), 0xd8dde3, 1);
+      g.lineBetween(x - s * 0.8, y + s * 0.8, x + s * 0.7, y - s * 0.7);
+      g.lineBetween(x + s * 0.8, y + s * 0.8, x - s * 0.7, y - s * 0.7);
+      g.lineStyle(Math.max(2, size * 0.16), 0x6b4a2b, 1);
+      g.lineBetween(x - s * 0.85, y + s * 0.45, x - s * 0.45, y + s * 0.85);
+      g.lineBetween(x + s * 0.85, y + s * 0.45, x + s * 0.45, y + s * 0.85);
+      break;
+    }
+    case 'normal':
+      break;
+  }
 }
 
 /** Five-point star: gold when earned, dim when not. */

@@ -1,4 +1,4 @@
-import { SPELL_IDS, type BuildingType, type NodeSize, type SpellId } from '../../config/balance';
+import { SPECIAL_NODES, SPELL_IDS, TICK_MS, type BuildingType, type NodeKind, type NodeSize, type SpellId } from '../../config/balance';
 import type { LevelData } from '../level/schema';
 import { nextRandom, seedState } from './rng';
 
@@ -22,11 +22,17 @@ export interface NodeState {
   troops: number;
   hasGoldVein: boolean;
   building: Building | null;
+  kind: NodeKind;
+  /** Portal pair id (portals only). */
+  portalPair: string | null;
+  /** Bandit camps: tick of the next raid. */
+  raidTick: number | null;
 }
 
 export interface ArmyState {
   id: string;
-  owner: Side;
+  /** 'neutral' for bandit raids. */
+  owner: Owner;
   count: number;
   /** Node ids from source to target. */
   path: string[];
@@ -63,6 +69,8 @@ export interface World {
   tick: number;
   nodes: Record<string, NodeState>;
   roads: Array<[string, string]>;
+  /** Portal links (invisible roads between the two nodes of a pair). */
+  portals: Array<[string, string]>;
   armies: ArmyState[];
   sides: Record<Side, SideState>;
   nextArmyId: number;
@@ -113,8 +121,14 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
       troops: n.troops + (n.owner === 'player' ? startArmyBonus : 0),
       hasGoldVein: n.hasGoldVein,
       building: n.building ? { ...n.building } : null,
+      kind: n.kind ?? 'normal',
+      portalPair: n.portalPair ?? null,
+      raidTick: n.kind === 'bandits' ? Math.round(SPECIAL_NODES.bandits.raidEveryMs / TICK_MS) : null,
     };
   }
+  const pairs = new Map<string, string[]>();
+  for (const n of level.nodes) if (n.portalPair) pairs.set(n.portalPair, [...(pairs.get(n.portalPair) ?? []), n.id]);
+  const portals = [...pairs.values()].filter((ids) => ids.length === 2).map(([a, b]) => [a!, b!] as [string, string]);
 
   const enemyModifiers = defaultModifiers();
   enemyModifiers.troopProductionMult = level.enemy.productionMult;
@@ -123,6 +137,7 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
     tick: 0,
     nodes,
     roads: level.roads.map(([a, b]) => [a, b]),
+    portals,
     armies: [],
     sides: {
       player: {
@@ -151,6 +166,16 @@ export function opponentOf(side: Side): Side {
 
 export function nodesOf(world: World, owner: Owner): NodeState[] {
   return Object.values(world.nodes).filter((n) => n.owner === owner);
+}
+
+/** Unit strength of an owner in combat (neutrals and bandits: 1). */
+export function strengthOf(world: World, owner: Owner): number {
+  return owner === 'neutral' ? 1 : world.sides[owner].modifiers.unitStrengthMult;
+}
+
+/** How much one defender of `node` is worth: unit strength times the fortress bonus. */
+export function defenseStrength(world: World, node: NodeState): number {
+  return strengthOf(world, node.owner) * (node.kind === 'fortress' ? SPECIAL_NODES.fortress.defenseMult : 1);
 }
 
 /** Share of all nodes (neutrals included) owned by `owner`, 0..1. */

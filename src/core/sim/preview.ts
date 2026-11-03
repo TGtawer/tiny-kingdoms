@@ -1,7 +1,7 @@
 import { resolveBattle, towerDamage } from './combat';
 import { sendAmount, visibleTroops, type SendMode } from './commands';
 import { armyPath } from './pathfinding';
-import type { Side, World } from './World';
+import { defenseStrength, strengthOf, type Side, type World } from './World';
 
 export interface AttackPreview {
   /** Troops that would leave: only sources with a route to the target. */
@@ -14,7 +14,7 @@ export interface AttackPreview {
 
 /**
  * Outcome hint for sending from `sources` to `targetId`, with the same rules as an arrival (combat.ts):
- * the tower hits each arriving army once, then units trade 1:1 scaled by unit strength.
+ * the tower hits each arriving army once, then units trade 1:1 scaled by unit strength (fortress defenders ×2).
  * Not a guarantee: production at the target and clashes on the way are ignored.
  */
 export function previewAttack(
@@ -39,8 +39,7 @@ export function previewAttack(
 
   const damage = towerDamage(target);
   const attackers = armies.reduce((sum, n) => sum + Math.max(0, n - damage), 0);
-  const attackerStrength = world.sides[side].modifiers.unitStrengthMult;
-  const defenderStrength = target.owner === 'neutral' ? 1 : world.sides[target.owner].modifiers.unitStrengthMult;
-  const wins = attackers > 0 && resolveBattle(attackers, attackerStrength, target.troops, defenderStrength).attackersLeft > 0;
+  const wins =
+    attackers > 0 && resolveBattle(attackers, strengthOf(world, side), target.troops, defenseStrength(world, target)).attackersLeft > 0;
   return { sent, defenders: visibleTroops(target.troops), wins };
 }

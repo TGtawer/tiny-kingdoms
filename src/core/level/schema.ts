@@ -1,4 +1,4 @@
-import type { BuildingType, NodeSize } from '../../config/balance';
+import { NODE_KINDS, type BuildingType, type NodeKind, type NodeSize } from '../../config/balance';
 
 export type LevelOwner = 'player' | 'enemy' | 'neutral';
 
@@ -18,6 +18,10 @@ export interface LevelNode {
    * TODO(design): capitals are visual only; GDD does not give them a gameplay meaning yet.
    */
   capital?: boolean;
+  /** Special node (GDD 3.12); default 'normal'. */
+  kind?: NodeKind;
+  /** Portals only: the two nodes with the same value are linked by an invisible road. */
+  portalPair?: string;
 }
 
 export interface EnemyParams {
@@ -128,6 +132,11 @@ export function validateLevel(data: unknown): ValidationResult {
         at(`${where}: mine without gold vein`);
       }
     }
+    if (n.kind !== undefined && !NODE_KINDS.includes(n.kind as NodeKind)) at(`${where}: bad kind`);
+    if ((n.kind === 'chest' || n.kind === 'bandits') && n.owner !== 'neutral') at(`${where}: ${String(n.kind)} must start neutral`);
+    if (n.kind === 'temple' && n.building !== null) at(`${where}: temple cannot have a building`);
+    if ((n.kind === 'portal') !== (n.portalPair !== undefined)) at(`${where}: portal needs portalPair and vice versa`);
+    if (n.portalPair !== undefined && (typeof n.portalPair !== 'string' || !n.portalPair)) at(`${where}: bad portalPair`);
     if (n.capital !== undefined) {
       if (typeof n.capital !== 'boolean') at(`${where}: capital must be boolean`);
       else if (n.capital && n.owner !== 'player' && n.owner !== 'enemy') at(`${where}: capital must start as player or enemy`);
@@ -142,6 +151,16 @@ export function validateLevel(data: unknown): ValidationResult {
     const capitals = nodes.filter((n) => isObject(n) && n.capital === true && n.owner === side).length;
     if (capitals > 1) at(`more than one ${side} capital`);
   }
+
+  // Portals come in pairs.
+  const pairs = new Map<string, string[]>();
+  for (const n of nodes) {
+    if (isObject(n) && typeof n.portalPair === 'string' && typeof n.id === 'string') {
+      pairs.set(n.portalPair, [...(pairs.get(n.portalPair) ?? []), n.id]);
+    }
+  }
+  for (const [pair, ids] of pairs) if (ids.length !== 2) at(`portal pair ${pair} must have exactly 2 nodes`);
+  const portalLinks = [...pairs.values()].filter((ids) => ids.length === 2) as Array<[string, string]>;
 
   // Nodes must not overlap.
   const points = [...byId.entries()];
@@ -168,6 +187,9 @@ export function validateLevel(data: unknown): ValidationResult {
     const [a, b] = r as [string, string];
     if (!byId.has(a) || !byId.has(b)) return at(`road ${a}-${b}: unknown node`);
     if (a === b) return at(`road ${a}-${b}: loop`);
+    if (portalLinks.some(([p, q]) => (p === a && q === b) || (p === b && q === a))) {
+      return at(`road ${a}-${b}: portals of a pair are linked already`);
+    }
     const key = a < b ? `${a}|${b}` : `${b}|${a}`;
     if (seen.has(key)) return at(`road ${a}-${b}: duplicate`);
     seen.add(key);
@@ -194,7 +216,7 @@ export function validateLevel(data: unknown): ValidationResult {
   // Connectivity over all roads (owners don't matter here).
   if (byId.size > 0) {
     const adjacency = new Map<string, string[]>([...byId.keys()].map((k) => [k, []]));
-    for (const [a, b] of valid) {
+    for (const [a, b] of [...valid, ...portalLinks]) {
       adjacency.get(a)!.push(b);
       adjacency.get(b)!.push(a);
     }

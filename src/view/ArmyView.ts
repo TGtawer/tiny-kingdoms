@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { ARMY_RADIUS_PX, COLORS } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
-import type { ArmyState, Side, World } from '../core/sim/World';
+import type { ArmyState, Owner, World } from '../core/sim/World';
 import { px, textStyle, type Point } from './layout';
 
 /** Army position in level coordinates (along its current road segment). */
@@ -18,7 +18,7 @@ export class ArmyView extends Phaser.GameObjects.Container {
   /** Phase offset of the marching bob, so armies don't pulse in sync. */
   readonly phase: number;
 
-  constructor(scene: Phaser.Scene, owner: Side, phase = 0) {
+  constructor(scene: Phaser.Scene, owner: Owner, phase = 0) {
     super(scene, 0, 0);
     this.phase = phase;
     const r = px(ARMY_RADIUS_PX);

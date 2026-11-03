@@ -33,6 +33,8 @@ export const COLORS = {
   /** Secondary buttons next to a main one (result panel). */
   buttonSecondary: 0xf2dcae,
   starEmpty: 0x8b8578,
+  portal: 0xa855f7,
+  bandits: 0x3f3f46,
   dim: 0x000000,
   select: 0xffffff,
   fireball: 0xff6a1a,
@@ -147,6 +149,9 @@ export const HAPTICS = {
   shakeMs: 150,
   shakeIntensity: 0.004,
 } as const;
+
+/** How long the special node info label stays, ms. */
+export const INFO_LABEL_MS = 2500;
 
 /** Pointer travel (CSS px) after which a press becomes a swipe. */
 export const DRAG_THRESHOLD_PX = 12;

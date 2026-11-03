@@ -3,7 +3,7 @@ import { COLORS } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
 import type { NodeState } from '../core/sim/World';
-import { drawBuilding, drawCrown } from './icons';
+import { drawBuilding, drawCrown, drawKind } from './icons';
 import { px, textStyle, type FieldLayout } from './layout';
 
 export type Highlight = 'none' | 'selected' | 'target' | 'fireball' | 'reinforcement' | 'hint';
@@ -67,7 +67,7 @@ export class NodeView extends Phaser.GameObjects.Container {
 
   /** Updates visuals from state; cheap when nothing changed. */
   sync(node: NodeState): void {
-    const key = `${node.owner}|${node.building?.type ?? '-'}|${node.building?.level ?? 0}|${node.hasGoldVein}|${this.radius}`;
+    const key = `${node.owner}|${node.kind}|${node.size}|${node.building?.type ?? '-'}|${node.building?.level ?? 0}|${node.hasGoldVein}|${this.radius}`;
     if (key !== this.drawnKey) {
       this.drawnKey = key;
       this.drawBody(node);
@@ -127,7 +127,20 @@ export class NodeView extends Phaser.GameObjects.Container {
 
     // Shadow, rim, face, highlight crescent.
     g.fillStyle(0x000000, 0.18).fillEllipse(0, r * 0.82, r * 1.9, r * 0.6);
-    g.fillStyle(COLORS.factionDark[owner], 1).fillCircle(0, r * 0.1, r);
+    // Fortress: battlements around the rim.
+    if (node.kind === 'fortress') {
+      const merlon = r * 0.34;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const mx = Math.cos(a) * r * 1.02;
+        const my = Math.sin(a) * r * 1.02;
+        g.fillStyle(COLORS.factionDark[owner], 1).fillRect(mx - merlon / 2, my - merlon / 2, merlon, merlon);
+        g.lineStyle(Math.max(1.5, r * 0.06), COLORS.outline, 1).strokeRect(mx - merlon / 2, my - merlon / 2, merlon, merlon);
+      }
+    }
+    // Bandit camp: dark rim instead of the neutral one.
+    const rim = node.kind === 'bandits' ? COLORS.bandits : COLORS.factionDark[owner];
+    g.fillStyle(rim, 1).fillCircle(0, r * 0.1, r);
     g.fillStyle(COLORS.faction[owner], 1).fillCircle(0, 0, r * 0.92);
     g.lineStyle(Math.max(2, r * 0.09), COLORS.outline, 1).strokeCircle(0, 0, r);
     g.fillStyle(0xffffff, 0.28).fillEllipse(-r * 0.3, -r * 0.45, r * 0.8, r * 0.38);
@@ -139,6 +152,16 @@ export class NodeView extends Phaser.GameObjects.Container {
       g.fillStyle(COLORS.goldDark, 1).fillCircle(vx, vy, r * 0.24);
       g.fillStyle(COLORS.gold, 1).fillCircle(vx - r * 0.05, vy - r * 0.04, r * 0.19);
       g.fillStyle(COLORS.gold, 1).fillCircle(vx + r * 0.2, vy + r * 0.1, r * 0.12);
+    }
+
+    // Special node badge at the bottom right.
+    if (node.kind !== 'normal') {
+      const kx = r * 0.74;
+      const ky = r * 0.7;
+      const kr = Math.max(px(12), r * 0.42);
+      g.fillStyle(COLORS.panel, 1).fillCircle(kx, ky, kr);
+      g.lineStyle(Math.max(1.5, kr * 0.14), node.kind === 'portal' ? COLORS.portal : COLORS.outline, 1).strokeCircle(kx, ky, kr);
+      drawKind(g, node.kind, kx, ky, kr * 1.3);
     }
 
     // Capital crown at the top left (mirrors the building badge).

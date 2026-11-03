@@ -3,7 +3,8 @@ import { resolveClashes, type ClashResult } from './clash';
 import { arrive, type ArrivalResult } from './combat';
 import { apply, validate, type Command, type RejectReason } from './commands';
 import { produce } from './economy';
-import { distance } from './pathfinding';
+import { segmentLength } from './pathfinding';
+import { stepBandits, type BanditRaid } from './bandits';
 import { checkWinner } from './victory';
 import type { ArmyState, Side, World } from './World';
 
@@ -14,6 +15,7 @@ export type TickEvent =
   | { type: 'applied'; command: Command; armyId?: string }
   | ({ type: 'arrived' } & ArrivalResult)
   | ({ type: 'clash' } & ClashResult)
+  | ({ type: 'raid' } & BanditRaid)
   | { type: 'gameOver'; winner: Side };
 
 /**
@@ -24,9 +26,7 @@ export type TickEvent =
 function moveArmy(world: World, army: ArmyState, distanceLeft: number): boolean {
   let remaining = distanceLeft;
   while (army.segment < army.path.length - 1) {
-    const a = world.nodes[army.path[army.segment]!]!;
-    const b = world.nodes[army.path[army.segment + 1]!]!;
-    const length = distance(a, b);
+    const length = segmentLength(world, army.path[army.segment]!, army.path[army.segment + 1]!);
     const toEnd = (1 - army.progress) * length;
     if (remaining < toEnd) {
       army.progress += remaining / length;
@@ -65,6 +65,7 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
   }
 
   produce(world, TICK_SEC);
+  for (const raid of stepBandits(world)) events.push({ type: 'raid', ...raid });
 
   for (const side of Object.values(world.sides)) {
     for (const spell of SPELL_IDS) {

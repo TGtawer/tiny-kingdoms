@@ -60,7 +60,8 @@
       "owner": "neutral",
       "troops": 7,
       "hasGoldVein": true,
-      "building": null
+      "building": null,
+      "kind": "chest"
     },
     {
       "id": "b2",

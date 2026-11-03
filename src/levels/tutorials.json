@@ -64,5 +64,8 @@
       },
       { "hint": "tut.tower", "until": { "type": "time", "sec": 7 } }
     ]
+  },
+  "c01_l06": {
+    "steps": [{ "hint": "tut.chest", "highlight": [{ "node": "c" }], "until": { "type": "time", "sec": 10 } }]
   }
 }

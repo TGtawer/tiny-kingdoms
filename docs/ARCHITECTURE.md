@@ -20,7 +20,9 @@ src/
       combat.ts           # бой при прибытии армии, башни
       economy.ts          # производство войск и золота
       capture.ts          # смена владельца, понижение постройки
-      pathfinding.ts      # кратчайший путь по графу дорог
+      pathfinding.ts      # кратчайший путь по графу дорог (и порталам), узел-преграда
+      preview.ts          # превью исхода атаки для UI
+      bandits.ts          # набеги лагерей разбойников
       victory.ts          # проверка победы/поражения
     ai/
       EnemyAI.ts          # выдаёт commands на основе World и параметров уровня
@@ -32,12 +34,14 @@ src/
       Progress.ts         # открытые уровни, кристаллы, прокачки
       upgrades.ts         # постоянные бонусы, улучшения приёмов
       rewards.ts          # награды за победу/поражение
+      stars.ts            # звёзды за уровень
+      tips.ts             # совет на экране поражения
     save/
       SaveData.ts         # схема сохранения + версия + миграции
   platform/
     Platform.ts           # интерфейс: init, ready, gameplayStart/Stop,
                           #   showInterstitial, showRewarded, purchase,
-                          #   getPurchases, consume, load, save, lang
+                          #   getPurchases, consume, load, save, lang, vibrate
     YandexPlatform.ts     # реализация через ysdk
     MockPlatform.ts       # для dev: реклама = таймер, покупки = мгновенный успех
   scenes/

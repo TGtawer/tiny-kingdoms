@@ -2,8 +2,8 @@ import { AI, ARMY, BUILDINGS, TICK_MS, type BuildingType } from '../../config/ba
 import { towerDamage } from '../sim/combat';
 import { buildCost, sendAmount, validate, type Command, type SendMode } from '../sim/commands';
 import { nodeCapacity, troopRate } from '../sim/economy';
-import { armyPath, pathLength } from '../sim/pathfinding';
-import { opponentOf, random, type NodeState, type Side, type World } from '../sim/World';
+import { armyPath, routeLength, segmentLength } from '../sim/pathfinding';
+import { defenseStrength, opponentOf, random, strengthOf, type NodeState, type Side, type World } from '../sim/World';
 import type { EnemyParams } from '../level/schema';
 
 /** AI params from level data. */
@@ -56,7 +56,7 @@ class Distances {
     const key = from < to ? `${from}|${to}` : `${to}|${from}`;
     if (!this.cache.has(key)) {
       const path = armyPath(this.world, this.side, from, to);
-      this.cache.set(key, path ? pathLength(this.world.nodes, path) : null);
+      this.cache.set(key, path ? routeLength(this.world, path) : null);
     }
     return this.cache.get(key)!;
   }
@@ -109,10 +109,9 @@ function etaSec(distance: number): number {
   return distance / ARMY.speed;
 }
 
-/** Troop strength ratio: how many own troops one defender is worth. */
+/** Troop strength ratio: how many own troops one defender is worth (fortresses count double). */
 function strengthRatio(world: World, attacker: Side, defender: NodeState): number {
-  const defStrength = defender.owner === 'neutral' ? 1 : world.sides[defender.owner].modifiers.unitStrengthMult;
-  return defStrength / world.sides[attacker].modifiers.unitStrengthMult;
+  return defenseStrength(world, defender) / strengthOf(world, attacker);
 }
 
 // ---- Defense ------------------------------------------------------------------------------------
@@ -120,10 +119,10 @@ function strengthRatio(world: World, attacker: Side, defender: NodeState): numbe
 /** Reinforces own nodes that incoming hostile armies would capture. Returns ids of threatened nodes. */
 function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<string> {
   const threatened = new Set<string>();
-  const enemy = opponentOf(side);
 
   for (const node of own(world, side)) {
-    const incoming = world.armies.filter((a) => a.owner === enemy && a.targetId === node.id);
+    // Any hostile army counts: the opponent's and bandit raids.
+    const incoming = world.armies.filter((a) => a.owner !== side && a.targetId === node.id);
     if (incoming.length === 0) continue;
 
     let hostile = 0;
@@ -131,7 +130,7 @@ function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<stri
     for (const army of incoming) {
       const eta = armyEtaSec(world, army.path, army.segment, army.progress);
       if (eta > AI.defendLookaheadSec) continue;
-      hostile += Math.max(0, army.count - towerDamage(node)) * (1 / strengthRatio(world, enemy, node));
+      hostile += (Math.max(0, army.count - towerDamage(node)) * strengthOf(world, army.owner)) / defenseStrength(world, node);
       soonest = Math.min(soonest, eta);
     }
     if (hostile === 0) continue;
@@ -161,9 +160,7 @@ function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<stri
 function armyEtaSec(world: World, path: readonly string[], segment: number, progress: number): number {
   let remaining = 0;
   for (let i = segment; i + 1 < path.length; i++) {
-    const a = world.nodes[path[i]!]!;
-    const b = world.nodes[path[i + 1]!]!;
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const len = segmentLength(world, path[i]!, path[i + 1]!);
     remaining += i === segment ? len * (1 - progress) : len;
   }
   return etaSec(remaining);
@@ -181,7 +178,8 @@ function isFrontier(world: World, node: NodeState, side: Side): boolean {
 /** One build or upgrade per decision, by priority: mines, front-line defense, barracks, upgrades. */
 function spendGold(world: World, side: Side, aggression: number, threatened: Set<string>, plan: Plan): void {
   const nodes = own(world, side);
-  const empty = nodes.filter((n) => !n.building);
+  // Temples can't hold buildings.
+  const empty = nodes.filter((n) => !n.building && n.kind !== 'temple');
   const buildPrice = buildCost(0)!;
 
   const tryBuild = (node: NodeState | undefined, building: BuildingType): boolean => {
@@ -283,6 +281,8 @@ function targetValue(side: Side, target: NodeState, aggression: number): number 
   let value = AI.sizeValue[target.size];
   if (target.hasGoldVein) value += AI.goldVeinValue;
   if (target.building) value += AI.buildingLevelValue * target.building.level;
+  if (target.kind === 'temple') value += AI.templeValue;
+  if (target.kind === 'chest') value += AI.chestValue;
   if (target.owner === opponentOf(side)) value *= 1 + aggression * AI.opponentTargetBonus;
   return value;
 }

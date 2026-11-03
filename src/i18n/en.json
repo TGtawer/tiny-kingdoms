@@ -69,5 +69,17 @@
   "pause.soundOff": "Sound: off",
   "tip.barracks": "Tip: build barracks, they make troops faster",
   "tip.mine": "Tip: build a mine on a gold-vein node",
-  "tip.upgrades": "Tip: you have enough crystals for an upgrade"
+  "tip.upgrades": "Tip: you have enough crystals for an upgrade",
+  "battle.chestGold": "+{gold}",
+  "kind.temple": "Temple",
+  "kind.temple.desc": "+50% to all of the owner's gold",
+  "kind.fortress": "Fortress",
+  "kind.fortress.desc": "Defenders fight for two",
+  "kind.chest": "Chest",
+  "kind.chest.desc": "Capture it to get 60 gold",
+  "kind.portal": "Portal",
+  "kind.portal.desc": "Troops reach the other portal in a second",
+  "kind.bandits": "Bandit camp",
+  "kind.bandits.desc": "Grows on its own and raids its neighbours",
+  "tut.chest": "A chest of gold! Capture it to get 60 gold at once"
 }

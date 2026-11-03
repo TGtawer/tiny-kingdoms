@@ -1,6 +1,6 @@
-import { BUILDINGS } from '../../config/balance';
+import { BUILDINGS, SPECIAL_NODES } from '../../config/balance';
 import { captureNode } from './capture';
-import type { ArmyState, NodeState, World } from './World';
+import { defenseStrength, strengthOf, type ArmyState, type NodeState, type World } from './World';
 
 /** Below this, a remainder counts as zero (guards against float noise). */
 const EPSILON = 1e-9;
@@ -12,6 +12,8 @@ export interface ArrivalResult {
   nodeId: string;
   outcome: ArrivalOutcome;
   towerDamage: number;
+  /** Gold the capturer got from a chest (0 otherwise). */
+  chestGold: number;
 }
 
 export function towerDamage(node: NodeState): number {
@@ -40,7 +42,7 @@ export function resolveBattle(
 /** Applies an army arriving at its target node. Uses the node's owner at the moment of arrival. */
 export function arrive(world: World, army: ArmyState): ArrivalResult {
   const node = world.nodes[army.targetId]!;
-  const base = { armyId: army.id, nodeId: node.id };
+  const base = { armyId: army.id, nodeId: node.id, chestGold: 0 };
 
   if (node.owner === army.owner) {
     // Reinforcing may exceed capacity; production just stops.
@@ -54,13 +56,14 @@ export function arrive(world: World, army: ArmyState): ArrivalResult {
     return { ...base, outcome: 'destroyedByTower', towerDamage: damage };
   }
 
-  const attackerStrength = world.sides[army.owner].modifiers.unitStrengthMult;
-  const defenderStrength = node.owner === 'neutral' ? 1 : world.sides[node.owner].modifiers.unitStrengthMult;
-  const { attackersLeft, defendersLeft } = resolveBattle(attackers, attackerStrength, node.troops, defenderStrength);
+  const attackerStrength = strengthOf(world, army.owner);
+  const { attackersLeft, defendersLeft } = resolveBattle(attackers, attackerStrength, node.troops, defenseStrength(world, node));
 
   if (attackersLeft > 0) {
+    const chest = node.kind === 'chest' && army.owner !== 'neutral' ? SPECIAL_NODES.chest.gold : 0;
     captureNode(node, army.owner, attackersLeft);
-    return { ...base, outcome: 'captured', towerDamage: damage };
+    if (chest > 0 && army.owner !== 'neutral') world.sides[army.owner].gold += chest;
+    return { ...base, outcome: 'captured', towerDamage: damage, chestGold: chest };
   }
   node.troops = defendersLeft;
   return { ...base, outcome: 'repelled', towerDamage: damage };

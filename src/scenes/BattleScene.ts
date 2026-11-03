@@ -1,10 +1,10 @@
 import * as Phaser from 'phaser';
 import { SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
-import { ARMY_FX, COLORS, DRAG_THRESHOLD_PX, HAPTICS, HUD, MAX_FRAME_DELTA_MS } from '../config/game';
+import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS } from '../config/game';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
 import { sendAmount, type Command, type SendMode } from '../core/sim/commands';
-import { armyPath, blockingNode } from '../core/sim/pathfinding';
+import { armyPath, blockingNode, isPortalLink } from '../core/sim/pathfinding';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
@@ -62,6 +62,10 @@ export class BattleScene extends Phaser.Scene {
   /** Node owners before the current tick, to tell "captured" from "lost" in arrival events. */
   private ownersBefore = new Map<string, Owner>();
   private capitals = new Set<string>();
+  /** Short info label for a special node (shown on tap). */
+  private infoLabel: Phaser.GameObjects.Text | null = null;
+  /** Armies currently inside a portal (hidden). */
+  private inPortal = new Set<string>();
   /** Battle facts for the star rating and the defeat tip. */
   private stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
   /** "How many will leave" badge for a swipe or a selected node; one reused Text. */
@@ -109,6 +113,8 @@ export class BattleScene extends Phaser.Scene {
     this.armed = null;
     this.uiEvents = [];
     this.speed = 1;
+    this.infoLabel = null;
+    this.inPortal = new Set();
     this.stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
 
     this.platform = getPlatform(this);
@@ -233,6 +239,10 @@ export class BattleScene extends Phaser.Scene {
       case 'arrived': {
         const view = this.nodeViews.get(event.nodeId)!;
         if (event.towerDamage > 0) floatText(this, view.x, view.y - view.radius, `-${event.towerDamage}`, COLORS.fireball);
+        if (event.chestGold > 0) {
+          floatText(this, view.x, view.y - view.radius * 1.4, t('battle.chestGold', { gold: event.chestGold }), COLORS.gold);
+          ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.gold);
+        }
         if (event.outcome === 'captured') {
           const owner = this.world.nodes[event.nodeId]!.owner;
           pop(this, view);
@@ -262,6 +272,14 @@ export class BattleScene extends Phaser.Scene {
         const lost = Math.min(...event.armies.map((id) => this.armyViews.get(id)?.shownCount ?? 0));
         ringBurst(this, p.x, p.y, px(18), survivor ? COLORS.faction[survivor.owner] : COLORS.faction.neutral);
         if (lost > 0) floatText(this, p.x, p.y - px(18), `-${lost}`, COLORS.select);
+        break;
+      }
+      case 'raid': {
+        // Bandits leave their camp.
+        const from = this.world.nodes[event.from]!;
+        this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
+        const view = this.nodeViews.get(event.from)!;
+        ringBurst(this, view.x, view.y, view.radius, COLORS.bandits);
         break;
       }
       case 'gameOver':
@@ -393,12 +411,23 @@ export class BattleScene extends Phaser.Scene {
       const p = this.layoutField.toScreen(prev.x + (cur.x - prev.x) * alpha, prev.y + (cur.y - prev.y) * alpha);
       view.setPosition(p.x, p.y);
       view.setScale(1 + ARMY_FX.bob * Math.sin(now / ARMY_FX.bobPeriodMs + view.phase));
-      this.drawTrail(army.owner, army.path[army.segment]!, army.path[army.segment + 1], p);
+      // Inside a portal the army is invisible; a flash marks entering and leaving.
+      const next = army.path[army.segment + 1];
+      const portal = next !== undefined && isPortalLink(world, army.path[army.segment]!, next);
+      if (portal !== this.inPortal.has(army.id)) {
+        const at = this.nodeViews.get(portal ? army.path[army.segment]! : next ?? army.targetId)!;
+        ringBurst(this, at.x, at.y, at.radius * 0.8, COLORS.portal);
+        if (portal) this.inPortal.add(army.id);
+        else this.inPortal.delete(army.id);
+      }
+      view.setVisible(!portal);
+      if (!portal) this.drawTrail(army.owner, army.path[army.segment]!, next, p);
     }
     for (const [id, view] of this.armyViews) {
       if (!alive.has(id)) {
         view.destroy();
         this.armyViews.delete(id);
+        this.inPortal.delete(id);
       }
     }
 
@@ -535,6 +564,7 @@ export class BattleScene extends Phaser.Scene {
 
     // Tap-tap: a node is selected, the second tap on a foreign node sends the army.
     if (node && this.selected) this.sendFrom([this.selected], node.id, 'tap');
+    else if (node) this.showInfo(node);
     this.deselect();
   }
 
@@ -587,6 +617,10 @@ export class BattleScene extends Phaser.Scene {
     this.deselect();
     this.selected = nodeId;
     this.uiEvents.push({ type: 'select', node: nodeId });
+    const node = this.world.nodes[nodeId]!;
+    this.showInfo(node);
+    // Temples hold no buildings: no build menu, the info label explains why.
+    if (node.kind === 'temple') return;
     this.menu = new BuildMenu(this, this.world.nodes[nodeId]!, (choice) => this.onBuild(nodeId, choice)).setDepth(90);
     this.menu.refresh(this.world.sides.player.gold);
     this.hud.setSpellBarVisible(false);
@@ -611,7 +645,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** 2–3 fading dots behind an army, along its current road. */
-  private drawTrail(owner: 'player' | 'enemy', fromId: string, toId: string | undefined, at: Point): void {
+  private drawTrail(owner: Owner, fromId: string, toId: string | undefined, at: Point): void {
     if (!toId) return;
     const a = this.nodeViews.get(fromId)!;
     const b = this.nodeViews.get(toId)!;
@@ -627,6 +661,25 @@ export class BattleScene extends Phaser.Scene {
       const fade = 1 - i / (ARMY_FX.trailDots + 1);
       this.trails.fillStyle(COLORS.faction[owner], 0.55 * fade).fillCircle(at.x - dx * step * i, at.y - dy * step * i, px(5) * fade);
     }
+  }
+
+  /** Name and effect of a special node, above it for a few seconds. */
+  private showInfo(node: NodeState): void {
+    this.infoLabel?.destroy();
+    this.infoLabel = null;
+    if (node.kind === 'normal') return;
+    const view = this.nodeViews.get(node.id)!;
+    const label = this.add
+      .text(view.x, view.y - view.radius * 1.5 - px(24), `${t(`kind.${node.kind}`)}\n${t(`kind.${node.kind}.desc`)}`, textStyle(14, COLORS.textDark))
+      .setOrigin(0.5, 1)
+      .setAlign('center')
+      .setBackgroundColor(cssColor(COLORS.panel))
+      .setPadding(px(8), px(5), px(8), px(5))
+      .setDepth(95);
+    label.setX(Math.min(Math.max(view.x, label.width / 2 + px(4)), this.scale.width - label.width / 2 - px(4)));
+    label.setY(Math.max(label.y, px(HUD.topBar) + label.height + px(4)));
+    this.infoLabel = label;
+    this.tweens.add({ targets: label, alpha: 0, delay: INFO_LABEL_MS, duration: 300, onComplete: () => label.destroy() });
   }
 
   private shake(): void {
