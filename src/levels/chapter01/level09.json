@@ -7,7 +7,8 @@
     "productionMult": 0.7,
     "aiThinkMs": 1500,
     "aggression": 0.75,
-    "startGold": 20
+    "startGold": 20,
+    "leader": "king"
   },
   "nodes": [
     {

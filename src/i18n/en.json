@@ -81,5 +81,13 @@
   "kind.portal.desc": "Troops reach the other portal in a second",
   "kind.bandits": "Bandit camp",
   "kind.bandits.desc": "Grows on its own and raids its neighbours",
-  "tut.chest": "A chest of gold! Capture it to get 60 gold at once"
+  "tut.chest": "A chest of gold! Capture it to get 60 gold at once",
+  "leader.king": "King Steadfast",
+  "leader.king.quote": "\"My walls will hold. Will yours?\"",
+  "leader.baron": "Baron Brawler",
+  "leader.baron.quote": "\"Charge! We can build later!\"",
+  "leader.dwarf": "Dwarf Miser",
+  "leader.dwarf.quote": "\"Gold first. Then your kingdom.\"",
+  "leader.witch": "Sly Witch",
+  "leader.witch.quote": "\"Leave a castle empty and I will be there\""
 }

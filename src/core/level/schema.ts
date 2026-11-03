@@ -1,4 +1,4 @@
-import { NODE_KINDS, type BuildingType, type NodeKind, type NodeSize } from '../../config/balance';
+import { LEADER_IDS, NODE_KINDS, type BuildingType, type LeaderId, type NodeKind, type NodeSize } from '../../config/balance';
 
 export type LevelOwner = 'player' | 'enemy' | 'neutral';
 
@@ -26,9 +26,12 @@ export interface LevelNode {
 
 export interface EnemyParams {
   productionMult: number;
-  aiThinkMs: number;
-  /** 0 = cautious, 1 = reckless. */
-  aggression: number;
+  /** Optional with a leader (the preset's value is used), required otherwise. */
+  aiThinkMs?: number;
+  /** 0 = cautious, 1 = reckless. Optional with a leader. */
+  aggression?: number;
+  /** Enemy leader (GDD 3.10): AI character preset; aggression/aiThinkMs above override it. */
+  leader?: LeaderId;
   startGold: number;
   /** AI makes no decisions before this time (used on tutorial levels). */
   aiStartDelayMs?: number;
@@ -94,8 +97,17 @@ export function validateLevel(data: unknown): ValidationResult {
     at('enemy params missing');
   } else {
     if (!isNum(enemy.productionMult) || enemy.productionMult <= 0) at('enemy.productionMult must be > 0');
-    if (!isNum(enemy.aiThinkMs) || enemy.aiThinkMs <= 0) at('enemy.aiThinkMs must be > 0');
-    if (!isNum(enemy.aggression) || enemy.aggression < 0 || enemy.aggression > 1) at('enemy.aggression must be in 0..1');
+    if (enemy.leader !== undefined && !LEADER_IDS.includes(enemy.leader as LeaderId)) at('enemy.leader is unknown');
+    const hasLeader = enemy.leader !== undefined;
+    if (!(hasLeader && enemy.aiThinkMs === undefined) && (!isNum(enemy.aiThinkMs) || enemy.aiThinkMs <= 0)) {
+      at('enemy.aiThinkMs must be > 0');
+    }
+    if (
+      !(hasLeader && enemy.aggression === undefined) &&
+      (!isNum(enemy.aggression) || enemy.aggression < 0 || enemy.aggression > 1)
+    ) {
+      at('enemy.aggression must be in 0..1');
+    }
     if (!isNum(enemy.startGold) || enemy.startGold < 0) at('enemy.startGold must be >= 0');
     if (enemy.aiStartDelayMs !== undefined && (!isNum(enemy.aiStartDelayMs) || enemy.aiStartDelayMs < 0)) {
       at('enemy.aiStartDelayMs must be >= 0');

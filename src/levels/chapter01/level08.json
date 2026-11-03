@@ -5,9 +5,8 @@
   "playerStartGold": 20,
   "enemy": {
     "productionMult": 0.7,
-    "aiThinkMs": 1500,
-    "aggression": 0.75,
-    "startGold": 60
+    "startGold": 60,
+    "leader": "baron"
   },
   "nodes": [
     {

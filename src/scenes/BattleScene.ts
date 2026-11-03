@@ -163,6 +163,16 @@ export class BattleScene extends Phaser.Scene {
     });
 
     this.platform.gameplayStart();
+
+    // Enemy leader: portrait in the HUD and a short card before the battle (the battle waits for it).
+    const leader = this.level.enemy.leader ?? null;
+    this.hud.setLeader(leader);
+    if (leader) {
+      this.paused = true;
+      this.hud.showLeaderCard(leader, () => {
+        if (!this.ended) this.paused = false;
+      });
+    }
   }
 
   override update(time: number, delta: number): void {

@@ -150,6 +150,13 @@ export const HAPTICS = {
   shakeIntensity: 0.004,
 } as const;
 
+/** Enemy leader card before the battle and the HUD portrait, CSS px / ms. */
+export const LEADER_CARD = {
+  autoCloseMs: 2500,
+  portrait: 96,
+  hudPortrait: 34,
+} as const;
+
 /** How long the special node info label stays, ms. */
 export const INFO_LABEL_MS = 2500;
 
