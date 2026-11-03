@@ -5,9 +5,9 @@
   "playerStartGold": 20,
   "enemy": {
     "productionMult": 0.7,
-    "aiThinkMs": 2600,
-    "aggression": 0.25,
-    "startGold": 20
+    "aiThinkMs": 1500,
+    "aggression": 0.5,
+    "startGold": 60
   },
   "nodes": [
     {

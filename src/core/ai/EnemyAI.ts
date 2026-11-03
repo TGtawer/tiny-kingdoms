@@ -1,6 +1,6 @@
 import { AI, ARMY, BUILDINGS, TICK_MS, type BuildingType } from '../../config/balance';
 import { towerDamage } from '../sim/combat';
-import { buildCost, sendAmount, validate, type Command } from '../sim/commands';
+import { buildCost, sendAmount, validate, type Command, type SendMode } from '../sim/commands';
 import { nodeCapacity, troopRate } from '../sim/economy';
 import { armyPath, pathLength } from '../sim/pathfinding';
 import { opponentOf, random, type NodeState, type Side, type World } from '../sim/World';
@@ -88,16 +88,20 @@ function own(world: World, side: Side): NodeState[] {
   return Object.values(world.nodes).filter((n) => n.owner === side);
 }
 
-/** Troops a node can still send in this decision (one send per node per decision). */
-function available(node: NodeState, plan: Plan): number {
-  return plan.sent.has(node.id) ? 0 : sendAmount(node.troops);
+/**
+ * Troops a node can still send in this decision (one send per node per decision).
+ * Same rules as the player: attacks and defense are swipes (75%), pushing troops to the front is a tap (50%),
+ * so the rear is never emptied.
+ */
+function available(node: NodeState, plan: Plan, mode: SendMode = 'swipe'): number {
+  return plan.sent.has(node.id) ? 0 : sendAmount(node.troops, mode);
 }
 
-function send(plan: Plan, side: Side, from: NodeState, to: string): number {
-  const count = available(from, plan);
+function send(plan: Plan, side: Side, from: NodeState, to: string, mode: SendMode = 'swipe'): number {
+  const count = available(from, plan, mode);
   if (count <= 0 || from.id === to) return 0;
   plan.sent.set(from.id, count);
-  plan.commands.push({ type: 'send', side, from: from.id, to });
+  plan.commands.push({ type: 'send', side, from: from.id, to, mode });
   return count;
 }
 
@@ -294,7 +298,7 @@ function consolidate(world: World, side: Side, threatened: Set<string>, dist: Di
 
   for (const node of own(world, side)) {
     if (threatened.has(node.id) || isFrontier(world, node, side)) continue;
-    if (node.troops < nodeCapacity(node) * AI.consolidateAt || available(node, plan) === 0) continue;
+    if (node.troops < nodeCapacity(node) * AI.consolidateAt || available(node, plan, 'tap') === 0) continue;
 
     const here = frontDistance(node.id);
     const next = world.roads
@@ -303,6 +307,6 @@ function consolidate(world: World, side: Side, threatened: Set<string>, dist: Di
       .map((id) => ({ id, d: frontDistance(id) }))
       .filter((c) => c.d < here)
       .sort((a, b) => a.d - b.d)[0];
-    if (next) send(plan, side, node, next.id);
+    if (next) send(plan, side, node, next.id, 'tap');
   }
 }

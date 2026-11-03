@@ -5,8 +5,8 @@
   "playerStartGold": 20,
   "enemy": {
     "productionMult": 0.7,
-    "aiThinkMs": 1900,
-    "aggression": 0.4,
+    "aiThinkMs": 1000,
+    "aggression": 0.75,
     "startGold": 20
   },
   "nodes": [
@@ -26,7 +26,7 @@
       "y": 0.482,
       "size": "large",
       "owner": "enemy",
-      "troops": 20,
+      "troops": 35,
       "hasGoldVein": false,
       "building": null
     },

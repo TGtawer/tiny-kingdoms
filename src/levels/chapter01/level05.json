@@ -6,8 +6,8 @@
   "enemy": {
     "productionMult": 0.7,
     "startGold": 20,
-    "aiThinkMs": 2500,
-    "aggression": 0.35,
+    "aiThinkMs": 1500,
+    "aggression": 0.75,
     "aiStartDelayMs": 8000
   },
   "tutorial": "c01_l05",
@@ -78,7 +78,7 @@
       "y": 0.5,
       "size": "large",
       "owner": "enemy",
-      "troops": 20,
+      "troops": 35,
       "hasGoldVein": false,
       "building": null
     }

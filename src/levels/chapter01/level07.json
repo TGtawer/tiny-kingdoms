@@ -5,15 +5,15 @@
   "playerStartGold": 20,
   "enemy": {
     "productionMult": 0.7,
-    "aiThinkMs": 2400,
-    "aggression": 0.3,
-    "startGold": 20
+    "aiThinkMs": 1000,
+    "aggression": 0.75,
+    "startGold": 40
   },
   "nodes": [
     {
       "id": "player",
-      "x": 0.094,
-      "y": 0.494,
+      "x": 0.06,
+      "y": 0.524,
       "size": "large",
       "owner": "player",
       "troops": 20,
@@ -22,71 +22,71 @@
     },
     {
       "id": "enemy",
-      "x": 0.906,
-      "y": 0.506,
+      "x": 0.94,
+      "y": 0.476,
       "size": "large",
       "owner": "enemy",
-      "troops": 20,
+      "troops": 35,
       "hasGoldVein": false,
       "building": null
     },
     {
       "id": "a1",
-      "x": 0.319,
-      "y": 0.183,
+      "x": 0.359,
+      "y": 0.687,
       "size": "large",
       "owner": "neutral",
-      "troops": 11,
-      "hasGoldVein": true,
+      "troops": 13,
+      "hasGoldVein": false,
       "building": null
     },
     {
       "id": "b1",
-      "x": 0.681,
-      "y": 0.817,
+      "x": 0.641,
+      "y": 0.313,
       "size": "large",
       "owner": "neutral",
-      "troops": 11,
-      "hasGoldVein": true,
+      "troops": 13,
+      "hasGoldVein": false,
       "building": null
     },
     {
       "id": "a2",
-      "x": 0.187,
-      "y": 0.787,
+      "x": 0.392,
+      "y": 0.172,
       "size": "small",
       "owner": "neutral",
-      "troops": 6,
-      "hasGoldVein": false,
+      "troops": 7,
+      "hasGoldVein": true,
       "building": null
     },
     {
       "id": "b2",
-      "x": 0.813,
-      "y": 0.213,
+      "x": 0.608,
+      "y": 0.828,
       "size": "small",
       "owner": "neutral",
-      "troops": 6,
-      "hasGoldVein": false,
+      "troops": 7,
+      "hasGoldVein": true,
       "building": null
     },
     {
       "id": "a3",
-      "x": 0.317,
-      "y": 0.438,
-      "size": "medium",
+      "x": 0.278,
+      "y": 0.478,
+      "size": "large",
       "owner": "neutral",
-      "troops": 13,
+      "troops": 12,
       "hasGoldVein": false,
       "building": null
     },
     {
       "id": "b3",
-      "x": 0.683,
-      "y": 0.562,
-      "size": "medium",
+      "x": 0.722,
+      "y": 0.522,
+      "size": "large",
       "owner": "neutral",
-      "troops": 13,
+      "troops": 12,
       "hasGoldVein": false,
       "building": null
     }
@@ -109,24 +109,20 @@
       "a3"
     ],
     [
-      "player",
-      "a2"
-    ],
-    [
-      "enemy",
+      "a1",
       "b2"
     ],
     [
-      "a3",
+      "b1",
+      "a2"
+    ],
+    [
+      "b2",
       "b3"
     ],
     [
       "a2",
       "a3"
-    ],
-    [
-      "b2",
-      "b3"
     ],
     [
       "enemy",

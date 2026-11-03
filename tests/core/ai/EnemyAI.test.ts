@@ -51,7 +51,7 @@ describe('decision timing', () => {
 describe('attack', () => {
   it('attacks a weak neutral when its armies beat the defense with margin', () => {
     const world = freezeEconomy(lineWorld({ E: { troops: 30 }, N: { troops: 5 } }));
-    expect(sends(decide(world))).toEqual([{ type: 'send', side: 'enemy', from: 'E', to: 'N' }]);
+    expect(sends(decide(world))).toEqual([{ type: 'send', side: 'enemy', from: 'E', to: 'N', mode: 'swipe' }]);
   });
 
   it('does not attack when it cannot win', () => {
@@ -60,9 +60,9 @@ describe('attack', () => {
   });
 
   it('cautious AI needs a bigger advantage than an aggressive one', () => {
-    // E sends 15. N = 9: cautious needs 9 × 1.6 + 2 = 16.4, aggressive 9 × 1.1 + 2 = 11.9.
-    const cautious = freezeEconomy(lineWorld({ E: { troops: 30 }, N: { troops: 9 } }));
-    const aggressive = freezeEconomy(lineWorld({ E: { troops: 30 }, N: { troops: 9 } }));
+    // E (20 troops) swipes 15. N = 9: cautious needs 9 × 1.6 + 2 = 16.4, aggressive 9 × 1.1 + 2 = 11.9.
+    const cautious = freezeEconomy(lineWorld({ E: { troops: 20 }, N: { troops: 9 } }));
+    const aggressive = freezeEconomy(lineWorld({ E: { troops: 20 }, N: { troops: 9 } }));
     expect(sends(decide(cautious, params(0)))).toEqual([]);
     expect(sends(decide(aggressive, params(1)))).toHaveLength(1);
   });
@@ -131,7 +131,7 @@ describe('defense', () => {
       ),
     );
     step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N' }]);
-    expect(sends(decide(world))).toContainEqual({ type: 'send', side: 'enemy', from: 'E', to: 'N' });
+    expect(sends(decide(world))).toContainEqual({ type: 'send', side: 'enemy', from: 'E', to: 'N', mode: 'swipe' });
   });
 });
 
