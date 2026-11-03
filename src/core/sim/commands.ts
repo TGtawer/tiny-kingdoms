@@ -1,7 +1,7 @@
 import { ARMY, BUILDINGS, type BuildingType, type SpellId } from '../../config/balance';
 import { armyPath } from './pathfinding';
 import { fireballKill, reinforcementTroops, spellCooldownMs, spellCost } from './spells';
-import type { ArmyState, BuildingLevel, Side, World } from './World';
+import { isRival, type ArmyState, type BuildingLevel, type Side, type World } from './World';
 
 /** How the order was given: a swipe sends 75% of the troops, tap-tap sends 50% (GDD 3.5). */
 export type SendMode = 'swipe' | 'tap';
@@ -118,8 +118,8 @@ export function validate(world: World, cmd: Command): RejectReason | null {
       if (side.spellCooldowns[cmd.spell] > 0) return 'cooldown';
       // Fireball hits the opponent's node; reinforcement targets an own node.
       // TODO(design): can fireball target neutral nodes? GDD says "enemy node", so not for now.
-      const expectedOwner = cmd.spell === 'fireball' ? (cmd.side === 'player' ? 'enemy' : 'player') : cmd.side;
-      if (node.owner !== expectedOwner) return 'invalidTarget';
+      const valid = cmd.spell === 'fireball' ? isRival(cmd.side, node.owner) : node.owner === cmd.side;
+      if (!valid) return 'invalidTarget';
       if (side.gold < spellCost(cmd.spell)) return 'notEnoughGold';
       return null;
     }

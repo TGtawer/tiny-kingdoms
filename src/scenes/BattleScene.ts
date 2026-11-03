@@ -9,7 +9,7 @@ import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
 import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
-import { createWorld, ownedShare, type NodeState, type Owner, type World } from '../core/sim/World';
+import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
 import { recordStars, starsFor } from '../core/meta/stars';
@@ -53,6 +53,8 @@ export class BattleScene extends Phaser.Scene {
   private level!: LevelData;
   private world!: World;
   private ai!: AiState;
+  /** Second enemy (three-side levels), null otherwise. */
+  private ai2: AiState | null = null;
   private layoutField!: FieldLayout;
 
   private background!: Phaser.GameObjects.Graphics;
@@ -128,6 +130,8 @@ export class BattleScene extends Phaser.Scene {
       player: playerSetupFrom(getStore(this).progress, ALL_LEVELS),
     });
     this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy, this.world.goal, this.world.capitals.player));
+    const enemy2 = this.level.enemy2;
+    this.ai2 = enemy2 && this.level.nodes.some((n) => n.owner === 'enemy2') ? createAi('enemy2', aiParamsFromLevel(enemy2)) : null;
     const script = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
     this.tutorial = script ? startTutorial(script, this.world.tick) : null;
 
@@ -202,7 +206,7 @@ export class BattleScene extends Phaser.Scene {
     for (const army of this.world.armies) this.prevArmyPos.set(army.id, armyLevelPosition(this.world, army));
 
     // Player input and the enemy AI go through the same command queue and rules.
-    const commands = [...this.queue, ...aiStep(this.world, this.ai)];
+    const commands = [...this.queue, ...aiStep(this.world, this.ai), ...(this.ai2 ? aiStep(this.world, this.ai2) : [])];
     this.queue = [];
     const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
@@ -266,7 +270,7 @@ export class BattleScene extends Phaser.Scene {
           if (owner === 'player') {
             playSfx('capture');
             this.vibrate(HAPTICS.short);
-            if (before === 'enemy' && this.capitals.has(event.nodeId)) this.shake();
+            if (before !== undefined && isRival('player', before) && this.capitals.has(event.nodeId)) this.shake();
           } else if (before === 'player') {
             this.stats.lostOwnNode = true;
             playSfx('lost');
@@ -349,7 +353,7 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private endBattle(winner: 'player' | 'enemy', reason: OutcomeReason): void {
+  private endBattle(winner: Side, reason: OutcomeReason): void {
     this.ended = true;
     this.deselect();
     this.drag = null;
@@ -368,13 +372,13 @@ export class BattleScene extends Phaser.Scene {
     this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reason, reward.crystals, stars));
   }
 
-  private showResult(winner: 'player' | 'enemy', reason: OutcomeReason, crystals: number, stars: number): void {
+  private showResult(winner: Side, reason: OutcomeReason, crystals: number, stars: number): void {
     // Which goal was met (or why the battle was lost), plus the defeat tip.
     const why = t(`goal.reason.${reason}`);
     const replay = { label: t('result.playAgain'), onClick: () => this.scene.restart({ levelId: this.level.id }) };
     const toMap = { label: t('result.toMap'), onClick: () => this.toMap() };
     const total = getStore(this).progress.crystals;
-    if (winner === 'enemy') {
+    if (winner !== 'player') {
       const tip = defeatTip(this.stats, getStore(this).progress);
       const buttons = [replay, toMap];
       if (tip === 'upgrades') {
@@ -479,7 +483,7 @@ export class BattleScene extends Phaser.Scene {
 
   private highlightFor(node: NodeState): Highlight {
     if (this.armed) {
-      const valid = this.armed === 'fireball' ? node.owner === 'enemy' : node.owner === 'player';
+      const valid = this.armed === 'fireball' ? isRival('player', node.owner) : node.owner === 'player';
       return valid ? this.armed : 'none';
     }
     if (this.drag?.moved) {

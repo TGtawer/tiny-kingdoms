@@ -46,11 +46,14 @@ export const COLORS = {
   faction: {
     player: 0x3b82f6,
     enemy: 0xef4444,
+    /** Second enemy: green, contrasts with blue, red and grey. */
+    enemy2: 0x22c55e,
     neutral: 0x9ca3af,
   },
   factionDark: {
     player: 0x1e4fb8,
     enemy: 0xa82020,
+    enemy2: 0x15803d,
     neutral: 0x5f6672,
   },
 } as const;

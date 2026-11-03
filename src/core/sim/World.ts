@@ -5,8 +5,16 @@ import { createCitadel, type CitadelState } from './specials/citadel';
 import { createDragon, type DragonState } from './specials/dragon';
 import { nextRandom, seedState } from './rng';
 
-export type Owner = 'player' | 'enemy' | 'neutral';
+export type Owner = 'player' | 'enemy' | 'enemy2' | 'neutral';
 export type Side = Exclude<Owner, 'neutral'>;
+/** All sides; 'enemy2' is the optional second enemy (GDD 3.2) and stays inert without nodes. */
+export const SIDES: readonly Side[] = ['player', 'enemy', 'enemy2'];
+export const ENEMY_SIDES: readonly Side[] = ['enemy', 'enemy2'];
+
+/** Whether `owner` is a hostile side for `side` (another non-neutral side). */
+export function isRival(side: Side, owner: Owner): boolean {
+  return owner !== 'neutral' && owner !== side;
+}
 export type BuildingLevel = 1 | 2 | 3;
 
 export interface Building {
@@ -140,8 +148,12 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
   for (const n of level.nodes) if (n.portalPair) pairs.set(n.portalPair, [...(pairs.get(n.portalPair) ?? []), n.id]);
   const portals = [...pairs.values()].filter((ids) => ids.length === 2).map(([a, b]) => [a!, b!] as [string, string]);
 
-  const enemyModifiers = defaultModifiers();
-  enemyModifiers.troopProductionMult = level.enemy.productionMult;
+  const enemySide = (params: LevelData['enemy'] | undefined): SideState => {
+    const modifiers = defaultModifiers();
+    modifiers.troopProductionMult = params?.productionMult ?? 1;
+    // TODO(design): GDD does not say whether the enemy AI uses spells; it has none for now.
+    return { gold: params?.startGold ?? 0, unlockedSpells: [], spellCooldowns: zeroCooldowns(), modifiers };
+  };
 
   return {
     tick: 0,
@@ -156,13 +168,8 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
         spellCooldowns: zeroCooldowns(),
         modifiers: structuredClone(player.modifiers ?? defaultModifiers()),
       },
-      enemy: {
-        gold: level.enemy.startGold,
-        // TODO(design): GDD does not say whether the enemy AI uses spells; it has none for now.
-        unlockedSpells: [],
-        spellCooldowns: zeroCooldowns(),
-        modifiers: enemyModifiers,
-      },
+      enemy: enemySide(level.enemy),
+      enemy2: enemySide(level.enemy2),
     },
     nextArmyId: 1,
     rngState: seedState(options.seed ?? 1),
@@ -172,6 +179,7 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
     capitals: {
       player: level.nodes.find((n) => n.capital && n.owner === 'player')?.id ?? null,
       enemy: level.nodes.find((n) => n.capital && n.owner === 'enemy')?.id ?? null,
+      enemy2: level.nodes.find((n) => n.capital && n.owner === 'enemy2')?.id ?? null,
     },
     boss:
       level.special?.type === 'dragon'
@@ -182,9 +190,6 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
   };
 }
 
-export function opponentOf(side: Side): Side {
-  return side === 'player' ? 'enemy' : 'player';
-}
 
 export function nodesOf(world: World, owner: Owner): NodeState[] {
   return Object.values(world.nodes).filter((n) => n.owner === owner);

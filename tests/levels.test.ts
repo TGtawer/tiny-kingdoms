@@ -3,7 +3,7 @@ import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
 import { validateLevel } from '../src/core/level/schema';
 import { step } from '../src/core/sim/tick';
 import { createWorld } from '../src/core/sim/World';
-import { CHAPTERS, getLevel, nextLevel } from '../src/levels';
+import { CHAPTERS, DEV_LEVELS, getLevel, nextLevel } from '../src/levels';
 
 describe('chapter 1', () => {
   const chapter = CHAPTERS[0]!;
@@ -44,6 +44,18 @@ describe('chapter 1', () => {
  * - Saw-tooth (BALANCE.md): levels 7–9 must not be a walkover: at most 8/10.
  * - Battles end within 10 minutes of game time.
  */
+describe('dev sandbox levels', () => {
+  it.each(DEV_LEVELS.map((l) => [l.id, l] as const))('%s is valid and AI vs AI ends', (_id, lvl) => {
+    expect(getLevel(lvl.id)).toBe(lvl);
+    const world = createWorld(lvl, { seed: 1 });
+    const player = createAi('player', { thinkMs: 1200, aggression: 0.6 });
+    const enemies = [createAi('enemy', aiParamsFromLevel(lvl.enemy, world.goal, world.capitals.player))];
+    if (lvl.enemy2) enemies.push(createAi('enemy2', aiParamsFromLevel(lvl.enemy2)));
+    while (!world.winner && world.tick < 9000) step(world, [...aiStep(world, player), ...enemies.flatMap((e) => aiStep(world, e))]);
+    expect(world.winner).not.toBeNull();
+  });
+});
+
 describe('chapter 1 difficulty curve', () => {
   it.each(CHAPTERS[0]!.map((l) => [l.id, l] as const))('%s', (_id, level) => {
     let wins = 0;

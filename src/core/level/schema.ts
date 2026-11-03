@@ -1,7 +1,7 @@
 import type { Goal } from '../sim/victory';
 import { LEADER_IDS, NODE_KINDS, type BuildingType, type LeaderId, type NodeKind, type NodeSize } from '../../config/balance';
 
-export type LevelOwner = 'player' | 'enemy' | 'neutral';
+export type LevelOwner = 'player' | 'enemy' | 'enemy2' | 'neutral';
 
 export interface LevelNode {
   id: string;
@@ -46,6 +46,8 @@ export interface LevelData {
   nodes: LevelNode[];
   roads: Array<[string, string]>;
   enemy: EnemyParams;
+  /** Second enemy (GDD 3.2, three sides); required when the level has 'enemy2' nodes. */
+  enemy2?: EnemyParams;
   playerStartGold: number;
   /**
    * Boss mechanic of 10th levels (GDD 4.1): 'dragon' (no params) or 'citadel' ({ nodeId }: the enemy citadel).
@@ -71,7 +73,7 @@ export const LEVEL_LIMITS = {
 } as const;
 
 const SIZES: readonly NodeSize[] = ['small', 'medium', 'large'];
-const OWNERS: readonly LevelOwner[] = ['player', 'enemy', 'neutral'];
+const OWNERS: readonly LevelOwner[] = ['player', 'enemy', 'enemy2', 'neutral'];
 const BUILDINGS: readonly BuildingType[] = ['mine', 'barracks', 'tower'];
 
 export type ValidationResult = { ok: true; level: LevelData } | { ok: false; errors: string[] };
@@ -98,10 +100,19 @@ export function validateLevel(data: unknown): ValidationResult {
   if (data.tutorial !== undefined && typeof data.tutorial !== 'string') at('tutorial must be a string');
   if (data.starTimeSec !== undefined && (!isNum(data.starTimeSec) || data.starTimeSec <= 0)) at('starTimeSec must be > 0');
 
-  const enemy = data.enemy;
-  if (!isObject(enemy)) {
-    at('enemy params missing');
-  } else {
+  const checkEnemy = (enemy: unknown, name: string): void => {
+    if (!isObject(enemy)) {
+      at(`${name} params missing`);
+      return;
+    }
+    const at2 = (msg: string): void => at(msg.replace(/^enemy\./, `${name}.`));
+    validateEnemy(enemy, at2);
+  };
+  checkEnemy(data.enemy, 'enemy');
+  const hasEnemy2 = Array.isArray(data.nodes) && data.nodes.some((n) => isObject(n) && n.owner === 'enemy2');
+  if (hasEnemy2 || data.enemy2 !== undefined) checkEnemy(data.enemy2, 'enemy2');
+
+  function validateEnemy(enemy: Record<string, unknown>, at: (msg: string) => void): void {
     if (!isNum(enemy.productionMult) || enemy.productionMult <= 0) at('enemy.productionMult must be > 0');
     if (enemy.leader !== undefined && !LEADER_IDS.includes(enemy.leader as LeaderId)) at('enemy.leader is unknown');
     const hasLeader = enemy.leader !== undefined;
@@ -157,7 +168,7 @@ export function validateLevel(data: unknown): ValidationResult {
     if (n.portalPair !== undefined && (typeof n.portalPair !== 'string' || !n.portalPair)) at(`${where}: bad portalPair`);
     if (n.capital !== undefined) {
       if (typeof n.capital !== 'boolean') at(`${where}: capital must be boolean`);
-      else if (n.capital && n.owner !== 'player' && n.owner !== 'enemy') at(`${where}: capital must start as player or enemy`);
+      else if (n.capital && n.owner === 'neutral') at(`${where}: capital must start as player or enemy`);
     }
     if (isNum(n.x) && isNum(n.y)) byId.set(n.id, { x: n.x, y: n.y });
   });
@@ -190,7 +201,7 @@ export function validateLevel(data: unknown): ValidationResult {
   const owners = nodes.filter(isObject).map((n) => n.owner);
   if (!owners.includes('player')) at('no player start node');
   if (!owners.includes('enemy')) at('no enemy start node');
-  for (const side of ['player', 'enemy'] as const) {
+  for (const side of ['player', 'enemy', 'enemy2'] as const) {
     const capitals = nodes.filter((n) => isObject(n) && n.capital === true && n.owner === side).length;
     if (capitals > 1) at(`more than one ${side} capital`);
   }

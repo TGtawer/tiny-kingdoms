@@ -1,0 +1,124 @@
+{
+  "id": "dev_three",
+  "chapter": 0,
+  "index": 5,
+  "playerStartGold": 20,
+  "enemy": {
+    "productionMult": 0.7,
+    "aiThinkMs": 1500,
+    "aggression": 0.6,
+    "startGold": 0,
+    "leader": "baron"
+  },
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.1,
+      "y": 0.9,
+      "size": "large",
+      "owner": "player",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "a",
+      "x": 0.3,
+      "y": 0.7,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 4,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "enemy",
+      "x": 0.9,
+      "y": 0.5,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "b",
+      "x": 0.7,
+      "y": 0.5,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 4,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "green",
+      "x": 0.1,
+      "y": 0.1,
+      "size": "large",
+      "owner": "enemy2",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "c",
+      "x": 0.3,
+      "y": 0.3,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 4,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "m",
+      "x": 0.5,
+      "y": 0.35,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 2,
+      "hasGoldVein": false,
+      "building": null
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "a"
+    ],
+    [
+      "a",
+      "b"
+    ],
+    [
+      "b",
+      "enemy"
+    ],
+    [
+      "green",
+      "c"
+    ],
+    [
+      "c",
+      "m"
+    ],
+    [
+      "m",
+      "b"
+    ],
+    [
+      "a",
+      "c"
+    ]
+  ],
+  "enemy2": {
+    "productionMult": 0.7,
+    "aiThinkMs": 1500,
+    "aggression": 0.6,
+    "startGold": 0
+  }
+}

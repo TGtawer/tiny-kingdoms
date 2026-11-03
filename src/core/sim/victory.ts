@@ -1,5 +1,5 @@
 import { TICK_MS } from '../../config/balance';
-import type { Side, World } from './World';
+import { ENEMY_SIDES, type Side, type World } from './World';
 
 /**
  * Level goal (GDD 3.9). Every goal also wins by plain conquest, and the player always loses with no nodes left.
@@ -38,23 +38,23 @@ export function goalProgressSec(world: World): number {
 }
 
 /**
- * Result of the battle, or null while it goes on. Armies still on the road don't count.
+ * Result of the battle, or null while it goes on. With a second enemy the player wins only when both are gone. Armies still on the road don't count.
  * Both sides can't be eliminated on the same tick, because every capture gives the attacker a node.
  */
 export function checkOutcome(world: World): Outcome | null {
-  let player = false;
-  let enemy = false;
-  for (const node of Object.values(world.nodes)) {
-    if (node.owner === 'player') player = true;
-    else if (node.owner === 'enemy') enemy = true;
-  }
-  if (!player) return { winner: 'enemy', reason: 'eliminated' };
+  const count: Record<Side, number> = { player: 0, enemy: 0, enemy2: 0 };
+  for (const node of Object.values(world.nodes)) if (node.owner !== 'neutral') count[node.owner] += 1;
+  // With two enemies the one holding more nodes is named the winner (both count as a defeat for the player).
+  const strongestEnemy: Side = count.enemy2 > count.enemy ? 'enemy2' : 'enemy';
+  if (count.player === 0) return { winner: strongestEnemy, reason: 'eliminated' };
+  const enemy = ENEMY_SIDES.some((s) => count[s] > 0);
 
   const goal = world.goal;
   if (goal.type === 'capital') {
     const own = world.capitals.player;
     const theirs = world.capitals.enemy;
-    if (own && world.nodes[own]!.owner !== 'player') return { winner: 'enemy', reason: 'capitalLost' };
+    const ownOwner = own ? world.nodes[own]!.owner : 'player';
+    if (ownOwner !== 'player') return { winner: ownOwner === 'neutral' ? strongestEnemy : ownOwner, reason: 'capitalLost' };
     if (theirs && world.nodes[theirs]!.owner === 'player') return { winner: 'player', reason: 'capital' };
   }
   if (!enemy) return { winner: 'player', reason: 'conquer' };

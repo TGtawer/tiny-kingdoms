@@ -23,6 +23,7 @@ src/
       pathfinding.ts      # кратчайший путь по графу дорог (и порталам), узел-преграда
       preview.ts          # превью исхода атаки для UI
       bandits.ts          # набеги лагерей разбойников
+      specials/           # боссы 10-х уровней: dragon.ts, citadel.ts
       victory.ts          # проверка победы/поражения
     ai/
       EnemyAI.ts          # выдаёт commands на основе World и параметров уровня

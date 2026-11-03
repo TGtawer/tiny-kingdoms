@@ -50,7 +50,11 @@ export function sideGoldRate(world: World, side: Side): number {
 
 /** Produces troops (stopping at capacity, never reducing an overfilled node) and gold. */
 export function produce(world: World, dtSec: number): void {
-  const incomeMult = { player: templeIncomeMult(world, 'player'), enemy: templeIncomeMult(world, 'enemy') };
+  const incomeMult = {
+    player: templeIncomeMult(world, 'player'),
+    enemy: templeIncomeMult(world, 'enemy'),
+    enemy2: templeIncomeMult(world, 'enemy2'),
+  };
   for (const node of Object.values(world.nodes)) {
     if (node.owner === 'neutral') {
       // Bandit camps grow their garrison; other neutrals don't produce.

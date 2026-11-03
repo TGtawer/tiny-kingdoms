@@ -3,7 +3,7 @@ import { towerDamage } from '../sim/combat';
 import { buildCost, sendAmount, validate, type Command, type SendMode } from '../sim/commands';
 import { nodeCapacity, troopRate } from '../sim/economy';
 import { armyPath, routeLength, segmentLength } from '../sim/pathfinding';
-import { defenseStrength, opponentOf, random, strengthOf, type NodeState, type Side, type World } from '../sim/World';
+import { defenseStrength, isRival, random, strengthOf, type NodeState, type Side, type World } from '../sim/World';
 import type { EnemyParams } from '../level/schema';
 import type { Goal } from '../sim/victory';
 
@@ -351,7 +351,7 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
       let force = alreadyComing;
       let required = Infinity;
       let farthest = 0;
-      const margin = target.owner === opponentOf(side) ? opponentMargin : baseMargin;
+      const margin = isRival(side, target.owner) ? opponentMargin : baseMargin;
       for (const { n, d } of reachable) {
         picks.push(n);
         force += available(n, plan);
@@ -364,7 +364,7 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
       let value = targetValue(side, target, aggression);
       if (ai.params.goalTargets?.includes(target.id)) value += AI.goalTargetValue;
       // Opportunists (witch) go for opponent nodes that just sent their troops away.
-      if (style.weakenedBonus > 0 && target.owner === opponentOf(side) && recentDrop(ai.snapshots, target.id, target.troops) > 0) {
+      if (style.weakenedBonus > 0 && isRival(side, target.owner) && recentDrop(ai.snapshots, target.id, target.troops) > 0) {
         value *= 1 + style.weakenedBonus;
       }
       const score = value / (required + farthest * AI.distanceCost);
@@ -391,7 +391,8 @@ function targetValue(side: Side, target: NodeState, aggression: number): number 
   if (target.building) value += AI.buildingLevelValue * target.building.level;
   if (target.kind === 'temple') value += AI.templeValue;
   if (target.kind === 'chest') value += AI.chestValue;
-  if (target.owner === opponentOf(side)) value *= 1 + aggression * AI.opponentTargetBonus;
+  // The player and a second enemy are equal targets (GDD 3.2).
+  if (isRival(side, target.owner)) value *= 1 + aggression * AI.opponentTargetBonus;
   return value;
 }
 
