@@ -78,6 +78,27 @@ describe('send army', () => {
     expect(world.nodes.E!.troops).toBe(19);
   });
 
+  it('cannot pass through neutral or enemy nodes', () => {
+    const world = lineWorld({ P: { troops: 40 } });
+    // N is neutral and stands between P and E.
+    expect(validate(world, send('P', 'E'))).toBe('noPath');
+    // An adjacent foreign node is a valid target.
+    expect(validate(world, send('P', 'N'))).toBeNull();
+    world.nodes.N!.owner = 'enemy';
+    expect(validate(world, send('P', 'E'))).toBe('noPath');
+  });
+
+  it('if a stop on the way is captured, the army attacks it instead', () => {
+    const world = freezeEconomy(lineWorld({ P: { troops: 40 }, N: { owner: 'player', troops: 0 }, E: { troops: 1 } }));
+    run(world, 10, [send('P', 'E')]); // army of 20 is on the P–N road
+    world.nodes.N!.owner = 'enemy';
+    world.nodes.N!.troops = 5;
+    run(world, 30);
+    expect(world.armies).toHaveLength(0);
+    expect(world.nodes.N).toMatchObject({ owner: 'player', troops: 15 });
+    expect(world.nodes.E).toMatchObject({ owner: 'enemy', troops: 1 });
+  });
+
   it('several nodes can send in one tick (multi-select)', () => {
     const world = freezeEconomy(lineWorld({ N: { owner: 'player', troops: 8 } }));
     step(world, [send('P', 'E'), send('N', 'E')]);

@@ -14,7 +14,11 @@ export type TickEvent =
   | ({ type: 'arrived' } & ArrivalResult)
   | { type: 'gameOver'; winner: Side };
 
-/** Moves an army along its path. Returns true when it reaches the target. */
+/**
+ * Moves an army along its path. Returns true when it reaches the target.
+ * Armies only travel through their own nodes: if a stop on the way has been captured meanwhile,
+ * the army ends its march there and attacks that node instead.
+ */
 function moveArmy(world: World, army: ArmyState, distanceLeft: number): boolean {
   let remaining = distanceLeft;
   while (army.segment < army.path.length - 1) {
@@ -29,6 +33,13 @@ function moveArmy(world: World, army: ArmyState, distanceLeft: number): boolean 
     remaining -= toEnd;
     army.segment += 1;
     army.progress = 0;
+
+    const reached = army.path[army.segment]!;
+    if (army.segment < army.path.length - 1 && world.nodes[reached]!.owner !== army.owner) {
+      army.targetId = reached;
+      army.path = army.path.slice(0, army.segment + 1);
+      return true;
+    }
   }
   return true;
 }

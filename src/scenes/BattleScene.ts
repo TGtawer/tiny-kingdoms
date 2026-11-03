@@ -4,6 +4,7 @@ import { COLORS, DRAG_THRESHOLD_PX, MAX_FRAME_DELTA_MS } from '../config/game';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
 import type { Command } from '../core/sim/commands';
+import { armyPath } from '../core/sim/pathfinding';
 import { step, type TickEvent } from '../core/sim/tick';
 import { createWorld, type NodeState, type World } from '../core/sim/World';
 import { TEST_LEVEL } from '../levels';
@@ -183,8 +184,15 @@ export class BattleScene extends Phaser.Scene {
       case 'gameOver':
         this.endBattle(event.winner);
         break;
-      case 'rejected':
+      case 'rejected': {
+        // Feedback for a player send without a route (e.g. a neutral node in the way).
+        const cmd = event.command;
+        if (cmd.type === 'send' && cmd.side === 'player' && event.reason === 'noPath') {
+          const view = this.nodeViews.get(cmd.to);
+          if (view) ringBurst(this, view.x, view.y, view.radius, COLORS.faction.enemy);
+        }
         break;
+      }
     }
   }
 
@@ -282,7 +290,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.drag?.moved) {
       if (this.drag.sources.includes(node.id)) return 'selected';
       const hover = this.nodeAt(this.drag.x, this.drag.y);
-      return hover?.id === node.id ? 'target' : 'none';
+      return hover?.id === node.id && this.drag.sources.some((s) => this.canReach(s, node.id)) ? 'target' : 'none';
     }
     return this.selected === node.id ? 'selected' : 'none';
   }
@@ -297,10 +305,17 @@ export class BattleScene extends Phaser.Scene {
     for (const id of drag.sources) {
       if (id === hover?.id) continue;
       const from = this.nodeViews.get(id)!;
+      // Red line: no route through own nodes to the hovered target.
+      const color = hover && !this.canReach(id, hover.id) ? COLORS.faction.enemy : COLORS.select;
       g.lineStyle(px(9), COLORS.outline, 0.35).lineBetween(from.x, from.y, end.x, end.y);
-      g.lineStyle(px(5), COLORS.select, 0.9).lineBetween(from.x, from.y, end.x, end.y);
+      g.lineStyle(px(5), color, 0.9).lineBetween(from.x, from.y, end.x, end.y);
     }
     g.fillStyle(COLORS.select, 0.9).fillCircle(end.x, end.y, px(7));
+  }
+
+  /** Whether a player army from `from` has a route to `to` (only through own nodes). */
+  private canReach(from: string, to: string): boolean {
+    return from !== to && armyPath(this.world, 'player', from, to) !== null;
   }
 
   // ---- Input ------------------------------------------------------------------------------------

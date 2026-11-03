@@ -2,7 +2,7 @@ import { AI, ARMY, BUILDINGS, TICK_MS, type BuildingType } from '../../config/ba
 import { towerDamage } from '../sim/combat';
 import { buildCost, sendAmount, validate, type Command } from '../sim/commands';
 import { nodeCapacity, troopRate } from '../sim/economy';
-import { findPath, pathLength } from '../sim/pathfinding';
+import { armyPath, pathLength } from '../sim/pathfinding';
 import { opponentOf, random, type NodeState, type Side, type World } from '../sim/World';
 import type { EnemyParams } from '../level/schema';
 
@@ -41,15 +41,18 @@ export function aiStep(world: World, ai: AiState): Command[] {
   return think(world, ai);
 }
 
-/** Path distances between nodes, cached per decision. */
+/** Army route lengths for this AI's side (own nodes only as stops), cached per decision. */
 class Distances {
   private readonly cache = new Map<string, number | null>();
-  constructor(private readonly world: World) {}
+  constructor(
+    private readonly world: World,
+    private readonly side: Side,
+  ) {}
 
   get(from: string, to: string): number | null {
     const key = from < to ? `${from}|${to}` : `${to}|${from}`;
     if (!this.cache.has(key)) {
-      const path = findPath(this.world.nodes, this.world.roads, from, to);
+      const path = armyPath(this.world, this.side, from, to);
       this.cache.set(key, path ? pathLength(this.world.nodes, path) : null);
     }
     return this.cache.get(key)!;
@@ -66,7 +69,7 @@ interface Plan {
 
 function think(world: World, ai: AiState): Command[] {
   const side = ai.side;
-  const dist = new Distances(world);
+  const dist = new Distances(world, side);
   const plan: Plan = { commands: [], sent: new Map(), gold: world.sides[side].gold };
 
   const threatened = defend(world, side, dist, plan);

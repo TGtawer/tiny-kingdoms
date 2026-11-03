@@ -1,5 +1,5 @@
 import { ARMY, BUILDINGS, type BuildingType, type SpellId } from '../../config/balance';
-import { findPath } from './pathfinding';
+import { armyPath } from './pathfinding';
 import { fireballKill, reinforcementTroops, spellCooldownMs, spellCost } from './spells';
 import type { ArmyState, BuildingLevel, Side, World } from './World';
 
@@ -79,7 +79,7 @@ export function validate(world: World, cmd: Command): RejectReason | null {
       if (from.owner !== cmd.side) return 'notOwner';
       if (cmd.from === cmd.to) return 'sameNode';
       if (sendAmount(from.troops) === 0) return 'notEnoughTroops';
-      if (!findPath(world.nodes, world.roads, cmd.from, cmd.to)) return 'noPath';
+      if (!armyPath(world, cmd.side, cmd.from, cmd.to)) return 'noPath';
       return null;
     }
     case 'build': {
@@ -129,7 +129,7 @@ export function apply(world: World, cmd: Command): ArmyState | null {
         id: `a${world.nextArmyId++}`,
         owner: cmd.side,
         count,
-        path: findPath(world.nodes, world.roads, cmd.from, cmd.to)!,
+        path: armyPath(world, cmd.side, cmd.from, cmd.to)!,
         segment: 0,
         progress: 0,
         targetId: cmd.to,
