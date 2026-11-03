@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
+import { DRAGON, SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
 import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS } from '../config/game';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -296,6 +296,24 @@ export class BattleScene extends Phaser.Scene {
         ringBurst(this, view.x, view.y, view.radius, COLORS.bandits);
         break;
       }
+      case 'dragonWarn':
+        // The marked node gets a shadow and a red circle in drawGoal.
+        break;
+      case 'dragonStrike': {
+        const view = this.nodeViews.get(event.nodeId)!;
+        explosion(this, view.x, view.y, view.radius * 1.6);
+        floatText(this, view.x, view.y - view.radius, `-${Math.floor(event.killed)}`, COLORS.fireball);
+        playSfx('fireball');
+        this.shake();
+        break;
+      }
+      case 'citadelWave': {
+        const from = this.world.nodes[event.from]!;
+        this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
+        const view = this.nodeViews.get(event.from)!;
+        ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.faction.enemy);
+        break;
+      }
       case 'gameOver':
         this.endBattle(event.winner, event.reason);
         break;
@@ -393,7 +411,7 @@ export class BattleScene extends Phaser.Scene {
     // The bottom bar is always reserved (spells and the build menu live there), and the hint bar stays
     // reserved for the whole level, so the field does not jump when the tutorial ends.
     const bottom = HUD.bottomBar + (this.tutorial ? HUD.hintBar : 0);
-    const top = this.world.goal.type === 'conquer' ? 0 : HUD.goalBar;
+    const top = this.world.goal.type === 'conquer' && !this.world.boss ? 0 : HUD.goalBar;
     this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom, top));
     drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
@@ -505,9 +523,19 @@ export class BattleScene extends Phaser.Scene {
   private drawGoal(): void {
     const goal = this.world.goal;
     const done = Math.floor(goalProgressSec(this.world));
+    const boss = this.world.boss;
     switch (goal.type) {
       case 'conquer':
-        this.hud.setGoal(null);
+        // Boss levels use the plaque for the boss countdown.
+        if (boss?.type === 'dragon') {
+          const sec = Math.max(0, Math.ceil(((boss.strikeTick - this.world.tick) * TICK_MS) / 1000));
+          this.hud.setGoal(t('boss.dragon', { sec }));
+        } else if (boss?.type === 'citadel') {
+          const sec = Math.max(0, Math.ceil(((boss.nextWaveTick - this.world.tick) * TICK_MS) / 1000));
+          this.hud.setGoal(t('boss.citadel', { sec }));
+        } else {
+          this.hud.setGoal(null);
+        }
         break;
       case 'capital':
         this.hud.setGoal(t('goal.capital'));
@@ -521,6 +549,14 @@ export class BattleScene extends Phaser.Scene {
     }
     const g = this.goalRing;
     g.clear();
+    // Dragon warning: shadow and a pulsing red circle over the marked node.
+    if (boss?.type === 'dragon' && boss.targetId) {
+      const view = this.nodeViews.get(boss.targetId)!;
+      const left = Math.max(0, (boss.strikeTick - this.world.tick) * TICK_MS) / DRAGON.warnMs;
+      const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 90);
+      g.fillStyle(0x000000, 0.18 + 0.22 * (1 - left)).fillEllipse(view.x, view.y + view.radius * 0.2, view.radius * 3.2, view.radius * 1.6);
+      g.lineStyle(px(5), COLORS.faction.enemy, 0.5 + 0.5 * pulse).strokeCircle(view.x, view.y, view.radius * (1.5 + 0.4 * left));
+    }
     if (goal.type !== 'hold') return;
     const view = this.nodeViews.get(goal.nodeId);
     if (!view) return;

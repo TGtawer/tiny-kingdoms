@@ -98,5 +98,8 @@
   "goal.reason.survive": "You held out",
   "goal.reason.capital": "The enemy capital has fallen",
   "goal.reason.eliminated": "You lost all your nodes",
-  "goal.reason.capitalLost": "Your capital has fallen"
+  "goal.reason.capitalLost": "Your capital has fallen",
+  "boss.dragon": "Dragon strikes in {sec} s",
+  "boss.citadel": "The citadel sends a squad in {sec} s",
+  "tut.dragon": "The dragon burns half of the biggest garrison. See the red circle? Move your troops out!"
 }

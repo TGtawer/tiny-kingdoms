@@ -67,5 +67,8 @@
   },
   "c01_l06": {
     "steps": [{ "hint": "tut.chest", "highlight": [{ "node": "c" }], "until": { "type": "time", "sec": 10 } }]
+  },
+  "c01_l10": {
+    "steps": [{ "hint": "tut.dragon", "until": { "type": "time", "sec": 20 } }]
   }
 }

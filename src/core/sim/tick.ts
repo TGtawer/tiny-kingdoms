@@ -5,6 +5,8 @@ import { apply, validate, type Command, type RejectReason } from './commands';
 import { produce } from './economy';
 import { segmentLength } from './pathfinding';
 import { stepBandits, type BanditRaid } from './bandits';
+import { stepCitadel, type CitadelWave } from './specials/citadel';
+import { stepDragon, type DragonEvent } from './specials/dragon';
 import { checkOutcome, updateGoal, type OutcomeReason } from './victory';
 import type { ArmyState, Side, World } from './World';
 
@@ -16,6 +18,8 @@ export type TickEvent =
   | ({ type: 'arrived' } & ArrivalResult)
   | ({ type: 'clash' } & ClashResult)
   | ({ type: 'raid' } & BanditRaid)
+  | DragonEvent
+  | CitadelWave
   | { type: 'gameOver'; winner: Side; reason: OutcomeReason };
 
 /**
@@ -66,6 +70,8 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
 
   produce(world, TICK_SEC);
   for (const raid of stepBandits(world)) events.push({ type: 'raid', ...raid });
+  if (world.boss?.type === 'dragon') events.push(...stepDragon(world, world.boss));
+  else if (world.boss?.type === 'citadel') events.push(...stepCitadel(world, world.boss));
 
   for (const side of Object.values(world.sides)) {
     for (const spell of SPELL_IDS) {

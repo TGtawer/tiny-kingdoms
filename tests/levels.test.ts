@@ -12,8 +12,8 @@ describe('chapter 1', () => {
     expect(chapter.map((l) => l.id)).toEqual(Array.from({ length: 10 }, (_, i) => `c01_l${String(i + 1).padStart(2, '0')}`));
   });
 
-  it('levels 1–5 have a tutorial; 6 introduces the chest; 7–10 have none', () => {
-    chapter.forEach((l, i) => expect(Boolean(l.tutorial), l.id).toBe(i < 6));
+  it('levels 1–5 have a tutorial; 6 introduces the chest, 10 the dragon; 7–9 have none', () => {
+    chapter.forEach((l, i) => expect(Boolean(l.tutorial), l.id).toBe(i < 6 || i === 9));
   });
 
   it('uses 6–9 nodes per level and enemy production 0.7 (BALANCE.md, chapter 1)', () => {

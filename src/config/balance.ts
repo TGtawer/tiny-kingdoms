@@ -111,6 +111,22 @@ export const SPECIAL_NODES = {
   bandits: { raidEveryMs: 20000 },
 } as const;
 
+/** Boss of chapter 1 level 10 (GDD 4.1, CONTENT.md C-4.1). */
+export const DRAGON = {
+  everyMs: 20000,
+  /** Share of the target's troops burned. */
+  burnShare: 0.5,
+  /** The target is shown this long before the strike. */
+  warnMs: 3000,
+} as const;
+
+/** Boss of chapter 2 level 10 (CONTENT.md C-4.2). */
+export const CITADEL = {
+  waveEveryMs: 15000,
+  /** Extra troops per wave, on top of the garrison. */
+  waveSize: 20,
+} as const;
+
 /** Battle speed-up button (GDD 3.11): offered while the player owns more than `unlockShare` of all nodes. */
 export const SPEED_UP = {
   unlockShare: 0.65,

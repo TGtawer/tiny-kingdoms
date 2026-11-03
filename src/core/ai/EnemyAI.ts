@@ -139,6 +139,7 @@ function think(world: World, ai: AiState): Command[] {
   const dist = new Distances(world, side);
   const plan: Plan = { commands: [], sent: new Map(), gold: world.sides[side].gold };
 
+  evadeDragon(world, side, dist, plan);
   const threatened = defend(world, side, dist, plan);
   spendGold(world, side, ai.params.aggression, styleOf(ai.params), threatened, plan);
   if (world.tick * TICK_MS >= styleOf(ai.params).attackAfterMs) attack(world, ai, threatened, dist, plan);
@@ -176,6 +177,22 @@ function etaSec(distance: number): number {
 /** Troop strength ratio: how many own troops one defender is worth (fortresses count double). */
 function strengthRatio(world: World, attacker: Side, defender: NodeState): number {
   return defenseStrength(world, defender) / strengthOf(world, attacker);
+}
+
+// ---- Dragon -------------------------------------------------------------------------------------
+
+/** The dragon has marked one of our nodes: move most troops to the nearest own node (if there is one). */
+function evadeDragon(world: World, side: Side, dist: Distances, plan: Plan): void {
+  const boss = world.boss;
+  if (boss?.type !== 'dragon' || !boss.targetId) return;
+  const marked = world.nodes[boss.targetId]!;
+  if (marked.owner !== side) return;
+  const refuge = own(world, side)
+    .filter((n) => n.id !== marked.id)
+    .map((n) => ({ n, d: dist.get(marked.id, n.id) }))
+    .filter((r): r is { n: NodeState; d: number } => r.d !== null)
+    .sort((a, b) => a.d - b.d)[0];
+  if (refuge) send(plan, side, marked, refuge.n.id);
 }
 
 // ---- Defense ------------------------------------------------------------------------------------

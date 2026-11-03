@@ -1,6 +1,8 @@
 import { SPECIAL_NODES, SPELL_IDS, TICK_MS, type BuildingType, type NodeKind, type NodeSize, type SpellId } from '../../config/balance';
 import type { LevelData } from '../level/schema';
 import type { Goal } from './victory';
+import { createCitadel, type CitadelState } from './specials/citadel';
+import { createDragon, type DragonState } from './specials/dragon';
 import { nextRandom, seedState } from './rng';
 
 export type Owner = 'player' | 'enemy' | 'neutral';
@@ -82,6 +84,8 @@ export interface World {
   goalTicks: number;
   /** Start capitals of the sides (level `capital` flags), for the capital goal. */
   capitals: Record<Side, string | null>;
+  /** Boss mechanic of the level, if any. */
+  boss: DragonState | CitadelState | null;
 }
 
 export function defaultModifiers(): SideModifiers {
@@ -169,6 +173,12 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
       player: level.nodes.find((n) => n.capital && n.owner === 'player')?.id ?? null,
       enemy: level.nodes.find((n) => n.capital && n.owner === 'enemy')?.id ?? null,
     },
+    boss:
+      level.special?.type === 'dragon'
+        ? createDragon()
+        : level.special?.type === 'citadel'
+          ? createCitadel(String(level.special.params.nodeId))
+          : null,
   };
 }
 

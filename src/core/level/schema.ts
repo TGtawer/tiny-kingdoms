@@ -47,8 +47,11 @@ export interface LevelData {
   roads: Array<[string, string]>;
   enemy: EnemyParams;
   playerStartGold: number;
-  /** Special mechanic for 10th levels. TODO(design): mechanics are not defined yet. */
-  special?: { type: string; params: Record<string, unknown> };
+  /**
+   * Boss mechanic of 10th levels (GDD 4.1): 'dragon' (no params) or 'citadel' ({ nodeId }: the enemy citadel).
+   * TODO(design): bosses of chapters 3–10 are not defined yet.
+   */
+  special?: { type: 'dragon' | 'citadel'; params: Record<string, unknown> };
   /** Tutorial scenario id (see src/levels/tutorials.json). */
   tutorial?: string;
   /** Win faster than this (simulation seconds) for the "fast" star; default STARS.defaultTimeSec. */
@@ -158,6 +161,16 @@ export function validateLevel(data: unknown): ValidationResult {
     }
     if (isNum(n.x) && isNum(n.y)) byId.set(n.id, { x: n.x, y: n.y });
   });
+
+  const special = data.special;
+  if (special !== undefined) {
+    if (!isObject(special) || !isObject(special.params)) at('special must be { type, params }');
+    else if (special.type === 'citadel') {
+      const id = special.params.nodeId;
+      const n = nodes.find((m) => isObject(m) && m.id === id);
+      if (!isObject(n) || n.owner !== 'enemy') at('special citadel: params.nodeId must be an enemy node');
+    } else if (special.type !== 'dragon') at('special.type is unknown');
+  }
 
   const goal = data.goal;
   if (goal !== undefined) {

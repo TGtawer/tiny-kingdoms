@@ -152,5 +152,10 @@
       "c",
       "a1"
     ]
-  ]
+  ],
+  "special": {
+    "type": "dragon",
+    "params": {}
+  },
+  "tutorial": "c01_l10"
 }

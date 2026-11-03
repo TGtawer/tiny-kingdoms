@@ -98,5 +98,8 @@
   "goal.reason.survive": "Ты продержался",
   "goal.reason.capital": "Вражеская столица взята",
   "goal.reason.eliminated": "Ты потерял все узлы",
-  "goal.reason.capitalLost": "Твоя столица пала"
+  "goal.reason.capitalLost": "Твоя столица пала",
+  "boss.dragon": "Дракон ударит через {sec} с",
+  "boss.citadel": "Цитадель выпустит отряд через {sec} с",
+  "tut.dragon": "Дракон сжигает половину войск в самом большом гарнизоне. Увидел красный круг — уводи войска!"
 }
