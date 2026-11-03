@@ -87,11 +87,18 @@ export const MAP = {
   waveStep: 1.1,
 } as const;
 
+/** Build menu strip in the bottom HUD bar, CSS px. */
 export const BUILD_MENU = {
-  buttonWidth: 156,
-  buttonHeight: 56,
-  gap: 8,
-  padding: 10,
+  /** Max button width when several options are shown (shrinks to fit narrow screens). */
+  buttonWidth: 132,
+  /** Max button width for a single upgrade / max-level button. */
+  singleButtonWidth: 180,
+  buttonHeight: 66,
+  gap: 10,
+  /** Side margin of the button row. */
+  padding: 12,
+  /** Min vertical space between a button and the bar edges. */
+  barInset: 6,
 } as const;
 
 /** Pointer travel (CSS px) after which a press becomes a swipe. */
