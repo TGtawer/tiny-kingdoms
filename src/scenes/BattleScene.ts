@@ -1,24 +1,28 @@
 import * as Phaser from 'phaser';
 import { TICK_MS, type SpellId } from '../config/balance';
-import { COLORS, DRAG_THRESHOLD_PX, MAX_FRAME_DELTA_MS } from '../config/game';
+import { COLORS, DRAG_THRESHOLD_PX, HUD, MAX_FRAME_DELTA_MS } from '../config/game';
+import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
-import type { Command } from '../core/sim/commands';
+import type { Command, SendMode } from '../core/sim/commands';
+import { armyPath } from '../core/sim/pathfinding';
 import { step, type TickEvent } from '../core/sim/tick';
+import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
 import { createWorld, type NodeState, type World } from '../core/sim/World';
-import { TEST_LEVEL } from '../levels';
+import { t } from '../i18n/i18n';
+import { applyBattleResult } from '../core/meta/rewards';
+import { playerSetupFrom } from '../core/meta/upgrades';
+import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
+import { TutorialView } from '../view/TutorialView';
 import { ArmyView, armyLevelPosition } from '../view/ArmyView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
 import { explosion, floatText, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, type Point } from '../view/layout';
 import { NodeView, type Highlight } from '../view/NodeView';
 import { RoadView } from '../view/RoadView';
+import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
-import { getPlatform } from './registry';
-
-// TODO(stage-5): spells come from meta progression (fireball after chapter 1, reinforcement after chapter 2).
-// Both are unlocked on the test level so the HUD and spells can be checked.
-const DEV_UNLOCKED_SPELLS: SpellId[] = ['fireball', 'reinforcement'];
+import { getPlatform, getStore } from './registry';
 
 /** Delay before the result panel, so the final capture is visible. */
 const RESULT_DELAY_MS = 700;
@@ -35,7 +39,7 @@ interface DragState {
 }
 
 export interface BattleSceneData {
-  level?: LevelData;
+  levelId?: string;
 }
 
 /** Renders the World and turns input into commands. All rules live in src/core. */
@@ -43,6 +47,7 @@ export class BattleScene extends Phaser.Scene {
   private platform!: Platform;
   private level!: LevelData;
   private world!: World;
+  private ai!: AiState;
   private layoutField!: FieldLayout;
 
   private background!: Phaser.GameObjects.Graphics;
@@ -62,13 +67,16 @@ export class BattleScene extends Phaser.Scene {
   private menu: BuildMenu | null = null;
   private drag: DragState | null = null;
   private armed: SpellId | null = null;
+  private tutorial: TutorialState | null = null;
+  private tutorialView: TutorialView | null = null;
+  private uiEvents: UiEvent[] = [];
 
   constructor() {
     super('BattleScene');
   }
 
   init(data: BattleSceneData): void {
-    this.level = data.level ?? TEST_LEVEL;
+    this.level = (data.levelId && getLevel(data.levelId)) || FIRST_LEVEL;
   }
 
   create(): void {
@@ -84,9 +92,18 @@ export class BattleScene extends Phaser.Scene {
     this.menu = null;
     this.drag = null;
     this.armed = null;
+    this.uiEvents = [];
 
     this.platform = getPlatform(this);
-    this.world = createWorld(this.level, { seed: 1, player: { unlockedSpells: DEV_UNLOCKED_SPELLS } });
+    // Seed per level: the AI's timing jitter is reproducible for a given level.
+    // Player bonuses, start army and open spells come from meta progression.
+    this.world = createWorld(this.level, {
+      seed: this.level.chapter * 100 + this.level.index,
+      player: playerSetupFrom(getStore(this).progress, ALL_LEVELS),
+    });
+    this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy));
+    const script = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
+    this.tutorial = script ? startTutorial(script, this.world.tick) : null;
 
     this.background = this.add.graphics();
     this.roads = new RoadView(this);
@@ -94,12 +111,14 @@ export class BattleScene extends Phaser.Scene {
       this.nodeViews.set(node.id, new NodeView(this, node));
     }
     this.dragLines = this.add.graphics().setDepth(50);
-    this.hud = new BattleHUD(this, this.world.sides.player.unlockedSpells, {
+    this.hud = new BattleHUD(this, t('level.title', { index: this.level.index }), this.world.sides.player.unlockedSpells, {
       onPause: () => this.pause(),
       onSpell: (spell) => this.toggleSpell(spell),
     });
+    this.tutorialView = this.tutorial ? new TutorialView(this) : null;
 
     this.relayout();
+    if (this.tutorial) this.tutorialView!.show(currentStep(this.tutorial), this.hud.hasSpellBar ? HUD.bottomBar : 0);
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
@@ -111,12 +130,14 @@ export class BattleScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.relayout, this);
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.onHidden, this);
       this.hud.destroy();
+      this.tutorialView?.destroy();
+      this.tutorialView = null;
     });
 
     this.platform.gameplayStart();
   }
 
-  override update(_time: number, delta: number): void {
+  override update(time: number, delta: number): void {
     if (!this.paused && !this.ended) {
       this.accumulator += Math.min(delta, MAX_FRAME_DELTA_MS);
       while (this.accumulator >= TICK_MS && !this.ended) {
@@ -125,6 +146,10 @@ export class BattleScene extends Phaser.Scene {
       }
     }
     this.render(this.ended ? 1 : this.accumulator / TICK_MS);
+    this.tutorialView?.update(time, {
+      node: (id) => this.nodeViews.get(id) ?? null,
+      gold: () => this.hud.goldAnchor(),
+    });
   }
 
   // ---- Simulation -------------------------------------------------------------------------------
@@ -133,9 +158,16 @@ export class BattleScene extends Phaser.Scene {
     this.prevArmyPos.clear();
     for (const army of this.world.armies) this.prevArmyPos.set(army.id, armyLevelPosition(this.world, army));
 
-    const events = step(this.world, this.queue);
+    // Player input and the enemy AI go through the same command queue and rules.
+    const commands = [...this.queue, ...aiStep(this.world, this.ai)];
     this.queue = [];
+    const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
+
+    if (this.tutorial && !this.ended && advanceTutorial(this.tutorial, this.world, events, this.uiEvents)) {
+      this.tutorialView?.show(currentStep(this.tutorial));
+    }
+    this.uiEvents = [];
   }
 
   private handleEvent(event: TickEvent): void {
@@ -174,11 +206,27 @@ export class BattleScene extends Phaser.Scene {
         }
         break;
       }
+      case 'clash': {
+        // Head-on fight on a road: flash in the winner's color (grey if both died) and show the losses.
+        const p = this.layoutField.toScreen(event.x, event.y);
+        const survivor = event.survivorId ? this.world.armies.find((a) => a.id === event.survivorId) : undefined;
+        const lost = Math.min(...event.armies.map((id) => this.armyViews.get(id)?.shownCount ?? 0));
+        ringBurst(this, p.x, p.y, px(18), survivor ? COLORS.faction[survivor.owner] : COLORS.faction.neutral);
+        if (lost > 0) floatText(this, p.x, p.y - px(18), `-${lost}`, COLORS.select);
+        break;
+      }
       case 'gameOver':
         this.endBattle(event.winner);
         break;
-      case 'rejected':
+      case 'rejected': {
+        // Feedback for a player send without a route (e.g. a neutral node in the way).
+        const cmd = event.command;
+        if (cmd.type === 'send' && cmd.side === 'player' && event.reason === 'noPath') {
+          const view = this.nodeViews.get(cmd.to);
+          if (view) ringBurst(this, view.x, view.y, view.radius, COLORS.faction.enemy);
+        }
         break;
+      }
     }
   }
 
@@ -188,7 +236,36 @@ export class BattleScene extends Phaser.Scene {
     this.drag = null;
     this.armed = null;
     this.platform.gameplayStop();
-    this.time.delayedCall(RESULT_DELAY_MS, () => this.hud.showResult(winner, () => this.scene.restart()));
+    this.tutorialView?.show(null);
+
+    // Rewards are applied and saved right away, so leaving the result screen can't lose them.
+    const store = getStore(this);
+    const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
+    store.commit();
+    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reward.crystals));
+  }
+
+  private showResult(winner: 'player' | 'enemy', crystals: number): void {
+    const replay = { label: t('result.playAgain'), onClick: () => this.scene.restart({ levelId: this.level.id }) };
+    const toMap = { label: t('result.toMap'), onClick: () => this.toMap() };
+    if (winner === 'enemy') {
+      this.hud.showResult(t('result.defeat'), false, crystals, [replay, toMap]);
+      return;
+    }
+    const next = nextLevel(this.level.id);
+    if (next) {
+      this.hud.showResult(t('result.victory'), true, crystals, [
+        { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
+        replay,
+        toMap,
+      ]);
+    } else {
+      this.hud.showResult(t('result.chapterDone'), true, crystals, [toMap, replay]);
+    }
+  }
+
+  private toMap(): void {
+    this.scene.start('ChapterMapScene', { chapter: this.level.chapter });
   }
 
   // ---- Rendering --------------------------------------------------------------------------------
@@ -200,33 +277,14 @@ export class BattleScene extends Phaser.Scene {
     this.deselect();
 
     const nodes = Object.values(this.world.nodes);
-    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, this.hud.hasSpellBar));
-    this.drawBackground(w, h);
+    // The bottom stays reserved for the whole level, so the field does not jump when the tutorial ends.
+    const bottom = (this.hud.hasSpellBar ? HUD.bottomBar : 0) + (this.tutorial ? HUD.hintBar : 0);
+    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom));
+    drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
     this.hud.layout();
-  }
-
-  private drawBackground(w: number, h: number): void {
-    const g = this.background;
-    g.clear();
-    g.fillStyle(COLORS.background, 1).fillRect(0, 0, w, h);
-    // Deterministic grass tufts, so the meadow does not look flat.
-    let seed = 12345;
-    const rnd = (): number => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-    const count = Math.round((w * h) / (px(70) * px(70)));
-    g.lineStyle(px(2), COLORS.backgroundDark, 0.8);
-    for (let i = 0; i < count; i++) {
-      const x = rnd() * w;
-      const y = rnd() * h;
-      const s = px(4 + rnd() * 3);
-      g.lineBetween(x - s, y, x - s * 0.4, y - s * 1.2);
-      g.lineBetween(x, y, x, y - s * 1.5);
-      g.lineBetween(x + s, y, x + s * 0.4, y - s * 1.2);
-    }
+    this.tutorialView?.layout();
   }
 
   private render(alpha: number): void {
@@ -276,9 +334,10 @@ export class BattleScene extends Phaser.Scene {
     if (this.drag?.moved) {
       if (this.drag.sources.includes(node.id)) return 'selected';
       const hover = this.nodeAt(this.drag.x, this.drag.y);
-      return hover?.id === node.id ? 'target' : 'none';
+      return hover?.id === node.id && this.drag.sources.some((s) => this.canReach(s, node.id)) ? 'target' : 'none';
     }
-    return this.selected === node.id ? 'selected' : 'none';
+    if (this.selected === node.id) return 'selected';
+    return this.tutorialView?.highlightedNodes().includes(node.id) ? 'hint' : 'none';
   }
 
   private drawDragLines(): void {
@@ -291,10 +350,17 @@ export class BattleScene extends Phaser.Scene {
     for (const id of drag.sources) {
       if (id === hover?.id) continue;
       const from = this.nodeViews.get(id)!;
+      // Red line: no route through own nodes to the hovered target.
+      const color = hover && !this.canReach(id, hover.id) ? COLORS.faction.enemy : COLORS.select;
       g.lineStyle(px(9), COLORS.outline, 0.35).lineBetween(from.x, from.y, end.x, end.y);
-      g.lineStyle(px(5), COLORS.select, 0.9).lineBetween(from.x, from.y, end.x, end.y);
+      g.lineStyle(px(5), color, 0.9).lineBetween(from.x, from.y, end.x, end.y);
     }
     g.fillStyle(COLORS.select, 0.9).fillCircle(end.x, end.y, px(7));
+  }
+
+  /** Whether a player army from `from` has a route to `to` (only through own nodes). */
+  private canReach(from: string, to: string): boolean {
+    return from !== to && armyPath(this.world, 'player', from, to) !== null;
   }
 
   // ---- Input ------------------------------------------------------------------------------------
@@ -340,7 +406,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // Tap-tap: a node is selected, the second tap on a foreign node sends the army.
-    if (node && this.selected) this.sendFrom([this.selected], node.id);
+    if (node && this.selected) this.sendFrom([this.selected], node.id, 'tap');
     this.deselect();
   }
 
@@ -368,13 +434,13 @@ export class BattleScene extends Phaser.Scene {
 
     if (drag.moved) {
       const target = this.nodeAt(pointer.x, pointer.y);
-      if (target) this.sendFrom(drag.sources, target.id);
+      if (target) this.sendFrom(drag.sources, target.id, 'swipe');
       return;
     }
 
     // A tap on an own node.
     if (this.selected && this.selected !== drag.downNode) {
-      this.sendFrom([this.selected], drag.downNode);
+      this.sendFrom([this.selected], drag.downNode, 'tap');
       this.deselect();
     } else if (this.selected === drag.downNode) {
       this.deselect();
@@ -383,15 +449,16 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private sendFrom(sources: readonly string[], target: string): void {
+  private sendFrom(sources: readonly string[], target: string, mode: SendMode): void {
     for (const from of sources) {
-      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target });
+      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target, mode });
     }
   }
 
   private select(nodeId: string): void {
     this.deselect();
     this.selected = nodeId;
+    this.uiEvents.push({ type: 'select', node: nodeId });
     const view = this.nodeViews.get(nodeId)!;
     this.menu = new BuildMenu(
       this,
@@ -432,9 +499,11 @@ export class BattleScene extends Phaser.Scene {
     this.drag = null;
     this.armed = null;
     this.platform.gameplayStop();
+    // Leaving mid-battle counts as nothing: no reward and no defeat consolation.
     this.hud.showPause(
       () => this.resume(),
-      () => this.scene.restart(),
+      () => this.scene.restart({ levelId: this.level.id }),
+      () => this.toMap(),
     );
   }
 

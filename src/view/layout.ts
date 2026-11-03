@@ -93,11 +93,11 @@ export class FieldLayout {
   }
 }
 
-/** Screen area left for the field after HUD bars. */
-export function fieldArea(width: number, height: number, hasSpellBar: boolean): Rect {
+/** Screen area left for the field after HUD bars. `bottomReserveCss` is the bottom HUD height in CSS px. */
+export function fieldArea(width: number, height: number, bottomReserveCss: number): Rect {
   const margin = px(HUD.fieldMargin);
   const top = px(HUD.topBar) + margin;
-  const bottom = (hasSpellBar ? px(HUD.bottomBar) : 0) + margin;
+  const bottom = px(bottomReserveCss) + margin;
   return { x: margin, y: top, width: width - 2 * margin, height: Math.max(1, height - top - bottom) };
 }
 

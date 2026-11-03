@@ -1,4 +1,14 @@
-import type { NodeState } from './World';
+import type { NodeState, Side, World } from './World';
+
+/** Armies of `side` may only travel through its own nodes. */
+export function passableFor(side: Side): (node: NodeState) => boolean {
+  return (node) => node.owner === side;
+}
+
+/** Route an army of `side` would take from `from` to `to`, or null if there is none. */
+export function armyPath(world: World, side: Side, from: string, to: string): string[] | null {
+  return findPath(world.nodes, world.roads, from, to, passableFor(side));
+}
 
 export function distance(a: Pick<NodeState, 'x' | 'y'>, b: Pick<NodeState, 'x' | 'y'>): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
@@ -9,13 +19,15 @@ export function distance(a: Pick<NodeState, 'x' | 'y'>, b: Pick<NodeState, 'x' |
  * Returns node ids from `from` to `to` inclusive, or null if unreachable.
  * Ties are broken by node insertion order, so the result is deterministic.
  *
- * TODO(design): paths may run through enemy/neutral nodes; armies pass through without interacting.
+ * `canPass` decides which nodes may be used as intermediate stops (the start and the target are always allowed).
+ * Armies use `passableFor(side)`: they cannot pass through enemy or neutral nodes.
  */
 export function findPath(
   nodes: Record<string, NodeState>,
   roads: ReadonlyArray<readonly [string, string]>,
   from: string,
   to: string,
+  canPass: (node: NodeState) => boolean = () => true,
 ): string[] | null {
   if (!nodes[from] || !nodes[to]) return null;
   if (from === to) return [from];
@@ -49,6 +61,7 @@ export function findPath(
     const currentNode = nodes[current]!;
     for (const next of adjacency.get(current) ?? []) {
       if (visited.has(next)) continue;
+      if (next !== to && !canPass(nodes[next]!)) continue;
       const candidate = best + distance(currentNode, nodes[next]!);
       const known = dist.get(next);
       if (known === undefined || candidate < known) {

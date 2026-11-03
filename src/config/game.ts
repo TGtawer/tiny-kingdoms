@@ -34,6 +34,7 @@ export const COLORS = {
   select: 0xffffff,
   fireball: 0xff6a1a,
   reinforcement: 0x5ee07a,
+  hint: 0xffe14d,
   faction: {
     player: 0x3b82f6,
     enemy: 0xef4444,
@@ -68,6 +69,9 @@ export const HUD = {
   fieldMargin: 12,
   spellButton: 64,
   pauseButton: 52,
+  /** Tutorial hint panel height reserved at the bottom, CSS px. */
+  hintBar: 88,
+  hintMaxWidth: 560,
 } as const;
 
 export const BUILD_MENU = {

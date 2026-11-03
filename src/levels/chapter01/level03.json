@@ -1,0 +1,128 @@
+{
+  "id": "c01_l03",
+  "chapter": 1,
+  "index": 3,
+  "playerStartGold": 30,
+  "enemy": {
+    "productionMult": 0.7,
+    "startGold": 10,
+    "aiThinkMs": 3000,
+    "aggression": 0.15,
+    "aiStartDelayMs": 12000
+  },
+  "tutorial": "c01_l03",
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.1,
+      "y": 0.5,
+      "size": "large",
+      "owner": "player",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "a",
+      "x": 0.3,
+      "y": 0.25,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "b",
+      "x": 0.3,
+      "y": 0.75,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "c",
+      "x": 0.5,
+      "y": 0.5,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 12,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "d",
+      "x": 0.7,
+      "y": 0.25,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "e",
+      "x": 0.7,
+      "y": 0.75,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "enemy",
+      "x": 0.9,
+      "y": 0.5,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "a"
+    ],
+    [
+      "player",
+      "b"
+    ],
+    [
+      "a",
+      "c"
+    ],
+    [
+      "b",
+      "c"
+    ],
+    [
+      "a",
+      "d"
+    ],
+    [
+      "b",
+      "e"
+    ],
+    [
+      "c",
+      "d"
+    ],
+    [
+      "c",
+      "e"
+    ],
+    [
+      "d",
+      "enemy"
+    ],
+    [
+      "e",
+      "enemy"
+    ]
+  ]
+}

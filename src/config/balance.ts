@@ -5,6 +5,12 @@ export type BuildingType = 'mine' | 'barracks' | 'tower';
 export type SpellId = 'fireball' | 'reinforcement';
 export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement'];
 
+/** GDD 3.8: a spell becomes available after completing this chapter. */
+export const SPELL_UNLOCK_AFTER_CHAPTER: Record<SpellId, number> = {
+  fireball: 1,
+  reinforcement: 2,
+};
+
 /** Simulation fixed timestep. */
 export const TICK_MS = 100;
 
@@ -39,8 +45,8 @@ export const BUILDINGS = {
 export const ARMY = {
   /** Field widths per second. */
   speed: 0.12,
-  /** Share of node troops sent per order (rounded down). */
-  sendShare: 0.5,
+  /** Share of node troops sent per order (rounded down): swipe sends more than tap-tap (GDD 3.5). */
+  sendShare: { swipe: 0.75, tap: 0.5 },
   minSend: 1,
   /** A node with this many troops or fewer cannot send. */
   minTroopsToSend: 2,
@@ -57,6 +63,35 @@ export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
 export const START_GOLD = {
   player: 20,
   // Enemy start gold is defined per level.
+} as const;
+
+/**
+ * Enemy AI tuning. Difficulty per level comes from LevelData.enemy (productionMult, aiThinkMs, aggression 0..1).
+ * Not in BALANCE.md yet: starting guesses, to be tuned in playtests.
+ */
+export const AI = {
+  /** Random spread of the think interval, ±share. */
+  thinkJitter: 0.2,
+  /** Required troops = defense × (1 + margin) + flatMargin; margin goes from max (aggression 0) to min (aggression 1). */
+  attackMarginMax: 0.6,
+  attackMarginMin: 0.1,
+  flatMargin: 2,
+  /** Attacks launched per decision: 1 at aggression 0, up to this at aggression 1. */
+  maxAttacksPerThink: 2,
+  /** Weight of a target node by size. */
+  sizeValue: { small: 1, medium: 1.5, large: 2 },
+  goldVeinValue: 0.6,
+  buildingLevelValue: 0.4,
+  /** Opponent nodes are worth (1 + aggression × this) times more than neutrals. */
+  opponentTargetBonus: 1,
+  /** Each field unit of travel counts as this many troops of cost when scoring targets. */
+  distanceCost: 12,
+  /** Hostile armies arriving within this time count as a threat. */
+  defendLookaheadSec: 8,
+  /** Rear nodes push troops to the front once they reach this share of capacity. */
+  consolidateAt: 0.85,
+  /** Below this aggression the AI prefers towers on the front line, above it barracks. */
+  towerAggressionThreshold: 0.5,
 } as const;
 
 export const CRYSTALS = {

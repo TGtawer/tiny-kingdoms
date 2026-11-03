@@ -39,6 +39,13 @@ describe('findPath', () => {
     expect(findPath(world.nodes, world.roads, 'A', 'nope')).toBeNull();
   });
 
+  it('canPass limits intermediate stops, but never the start or the target', () => {
+    const notB = (n: { id: string }) => n.id !== 'B';
+    expect(findPath(world.nodes, world.roads, 'A', 'C', notB)).toEqual(['A', 'D', 'C']);
+    expect(findPath(world.nodes, world.roads, 'A', 'B', notB)).toEqual(['A', 'B']);
+    expect(findPath(world.nodes, world.roads, 'A', 'C', () => false)).toBeNull();
+  });
+
   it('path to itself is a single node', () => {
     expect(findPath(world.nodes, world.roads, 'A', 'A')).toEqual(['A']);
   });

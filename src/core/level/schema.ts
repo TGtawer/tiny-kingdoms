@@ -1,7 +1,5 @@
 import type { BuildingType, NodeSize } from '../../config/balance';
 
-// TODO(stage-4): runtime validation of LevelData (ids unique, roads reference existing nodes, coords in 0..1).
-
 export type LevelOwner = 'player' | 'enemy' | 'neutral';
 
 export interface LevelNode {
@@ -19,8 +17,11 @@ export interface LevelNode {
 export interface EnemyParams {
   productionMult: number;
   aiThinkMs: number;
+  /** 0 = cautious, 1 = reckless. */
   aggression: number;
   startGold: number;
+  /** AI makes no decisions before this time (used on tutorial levels). */
+  aiStartDelayMs?: number;
 }
 
 export interface LevelData {
@@ -34,6 +35,188 @@ export interface LevelData {
   playerStartGold: number;
   /** Special mechanic for 10th levels. TODO(design): mechanics are not defined yet. */
   special?: { type: string; params: Record<string, unknown> };
-  /** Tutorial scenario id. */
+  /** Tutorial scenario id (see src/levels/tutorials.json). */
   tutorial?: string;
+}
+
+/** Limits checked by validation. GDD: 8–20 nodes in general, chapter 1 uses 6–9 (BALANCE.md). */
+export const LEVEL_LIMITS = {
+  minNodes: 3,
+  maxNodes: 20,
+  /** Minimum distance between node centers, field units (keeps nodes from overlapping on screen). */
+  minNodeDistance: 0.12,
+  /** A road must not pass closer than this to a node it does not connect (field units). */
+  roadNodeClearance: 0.05,
+} as const;
+
+const SIZES: readonly NodeSize[] = ['small', 'medium', 'large'];
+const OWNERS: readonly LevelOwner[] = ['player', 'enemy', 'neutral'];
+const BUILDINGS: readonly BuildingType[] = ['mine', 'barracks', 'tower'];
+
+export type ValidationResult = { ok: true; level: LevelData } | { ok: false; errors: string[] };
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isInt = (v: unknown): v is number => Number.isInteger(v);
+
+/** Validates untrusted level JSON: structure, value ranges, graph connectivity and readable geometry. */
+export function validateLevel(data: unknown): ValidationResult {
+  const errors: string[] = [];
+  const err = (msg: string): void => {
+    errors.push(msg);
+  };
+
+  if (!isObject(data)) return { ok: false, errors: ['level is not an object'] };
+  const id = typeof data.id === 'string' && data.id ? data.id : '?';
+  const at = (msg: string): void => err(`${id}: ${msg}`);
+
+  if (id === '?') at('id must be a non-empty string');
+  if (!isInt(data.chapter) || data.chapter < 0) at('chapter must be an integer >= 0');
+  if (!isInt(data.index) || data.index < 1) at('index must be an integer >= 1');
+  if (!isNum(data.playerStartGold) || data.playerStartGold < 0) at('playerStartGold must be >= 0');
+  if (data.tutorial !== undefined && typeof data.tutorial !== 'string') at('tutorial must be a string');
+
+  const enemy = data.enemy;
+  if (!isObject(enemy)) {
+    at('enemy params missing');
+  } else {
+    if (!isNum(enemy.productionMult) || enemy.productionMult <= 0) at('enemy.productionMult must be > 0');
+    if (!isNum(enemy.aiThinkMs) || enemy.aiThinkMs <= 0) at('enemy.aiThinkMs must be > 0');
+    if (!isNum(enemy.aggression) || enemy.aggression < 0 || enemy.aggression > 1) at('enemy.aggression must be in 0..1');
+    if (!isNum(enemy.startGold) || enemy.startGold < 0) at('enemy.startGold must be >= 0');
+    if (enemy.aiStartDelayMs !== undefined && (!isNum(enemy.aiStartDelayMs) || enemy.aiStartDelayMs < 0)) {
+      at('enemy.aiStartDelayMs must be >= 0');
+    }
+  }
+
+  const nodes = Array.isArray(data.nodes) ? data.nodes : null;
+  if (!nodes) {
+    at('nodes must be an array');
+    return { ok: false, errors };
+  }
+  if (nodes.length < LEVEL_LIMITS.minNodes || nodes.length > LEVEL_LIMITS.maxNodes) {
+    at(`node count ${nodes.length} outside ${LEVEL_LIMITS.minNodes}..${LEVEL_LIMITS.maxNodes}`);
+  }
+
+  const byId = new Map<string, { x: number; y: number }>();
+  nodes.forEach((n: unknown, i) => {
+    if (!isObject(n) || typeof n.id !== 'string' || !n.id) {
+      at(`node #${i} has no id`);
+      return;
+    }
+    const where = `node ${n.id}`;
+    if (byId.has(n.id)) at(`${where}: duplicate id`);
+    if (!isNum(n.x) || !isNum(n.y) || n.x < 0 || n.x > 1 || n.y < 0 || n.y > 1) at(`${where}: x/y must be in 0..1`);
+    if (!SIZES.includes(n.size as NodeSize)) at(`${where}: bad size`);
+    if (!OWNERS.includes(n.owner as LevelOwner)) at(`${where}: bad owner`);
+    if (!isNum(n.troops) || n.troops < 0) at(`${where}: troops must be >= 0`);
+    if (typeof n.hasGoldVein !== 'boolean') at(`${where}: hasGoldVein must be boolean`);
+    if (n.building !== null) {
+      const b = n.building;
+      if (!isObject(b) || !BUILDINGS.includes(b.type as BuildingType) || ![1, 2, 3].includes(b.level as number)) {
+        at(`${where}: bad building`);
+      } else if (b.type === 'mine' && n.hasGoldVein !== true) {
+        at(`${where}: mine without gold vein`);
+      }
+    }
+    if (isNum(n.x) && isNum(n.y)) byId.set(n.id, { x: n.x, y: n.y });
+  });
+
+  const owners = nodes.filter(isObject).map((n) => n.owner);
+  if (!owners.includes('player')) at('no player start node');
+  if (!owners.includes('enemy')) at('no enemy start node');
+
+  // Nodes must not overlap.
+  const points = [...byId.entries()];
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      const [a, pa] = points[i]!;
+      const [b, pb] = points[j]!;
+      if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < LEVEL_LIMITS.minNodeDistance) at(`nodes ${a} and ${b} are too close`);
+    }
+  }
+
+  const roads = Array.isArray(data.roads) ? data.roads : null;
+  if (!roads) {
+    at('roads must be an array');
+    return { ok: false, errors };
+  }
+  const seen = new Set<string>();
+  const valid: Array<[string, string]> = [];
+  roads.forEach((r: unknown, i) => {
+    if (!Array.isArray(r) || r.length !== 2 || typeof r[0] !== 'string' || typeof r[1] !== 'string') {
+      at(`road #${i} must be [id, id]`);
+      return;
+    }
+    const [a, b] = r as [string, string];
+    if (!byId.has(a) || !byId.has(b)) return at(`road ${a}-${b}: unknown node`);
+    if (a === b) return at(`road ${a}-${b}: loop`);
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+    if (seen.has(key)) return at(`road ${a}-${b}: duplicate`);
+    seen.add(key);
+    valid.push([a, b]);
+  });
+
+  // Geometry: roads don't cross and don't run over other nodes, so the map reads clearly.
+  for (let i = 0; i < valid.length; i++) {
+    const [a, b] = valid[i]!;
+    const pa = byId.get(a)!;
+    const pb = byId.get(b)!;
+    for (const [c, pc] of byId) {
+      if (c !== a && c !== b && pointSegmentDistance(pc, pa, pb) < LEVEL_LIMITS.roadNodeClearance) {
+        at(`road ${a}-${b} runs over node ${c}`);
+      }
+    }
+    for (let j = i + 1; j < valid.length; j++) {
+      const [c, d] = valid[j]!;
+      if (a === c || a === d || b === c || b === d) continue;
+      if (segmentsCross(pa, pb, byId.get(c)!, byId.get(d)!)) at(`roads ${a}-${b} and ${c}-${d} cross`);
+    }
+  }
+
+  // Connectivity over all roads (owners don't matter here).
+  if (byId.size > 0) {
+    const adjacency = new Map<string, string[]>([...byId.keys()].map((k) => [k, []]));
+    for (const [a, b] of valid) {
+      adjacency.get(a)!.push(b);
+      adjacency.get(b)!.push(a);
+    }
+    const start = byId.keys().next().value!;
+    const reached = new Set([start]);
+    const stack = [start];
+    while (stack.length) {
+      for (const next of adjacency.get(stack.pop()!)!) {
+        if (!reached.has(next)) {
+          reached.add(next);
+          stack.push(next);
+        }
+      }
+    }
+    for (const nodeId of byId.keys()) if (!reached.has(nodeId)) at(`node ${nodeId} is not connected`);
+  }
+
+  return errors.length ? { ok: false, errors } : { ok: true, level: data as unknown as LevelData };
+}
+
+interface P {
+  x: number;
+  y: number;
+}
+
+export function pointSegmentDistance(p: P, a: P, b: P): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/** Proper intersection of segments ab and cd (shared endpoints are handled by the caller). */
+export function segmentsCross(a: P, b: P, c: P, d: P): boolean {
+  const cross = (o: P, p: P, q: P): number => (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+  const d1 = cross(c, d, a);
+  const d2 = cross(c, d, b);
+  const d3 = cross(a, b, c);
+  const d4 = cross(a, b, d);
+  return d1 * d2 < 0 && d3 * d4 < 0;
 }

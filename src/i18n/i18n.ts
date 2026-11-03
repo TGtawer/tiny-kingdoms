@@ -31,3 +31,8 @@ export function t(key: string, params?: Record<string, string | number>): string
 }
 
 export const dictionaries: Readonly<Record<Lang, Dictionary>> = DICTIONARIES;
+
+/** True if the key exists in every language. */
+export function hasKey(key: string): boolean {
+  return Object.values(DICTIONARIES).every((d) => key in d);
+}

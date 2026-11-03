@@ -82,6 +82,48 @@ export function drawSpell(g: Phaser.GameObjects.Graphics, spell: SpellId, x: num
   }
 }
 
+/** Blue crystal (meta currency). */
+export function drawCrystal(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
+  const s = size / 2;
+  const line = Math.max(1, size * 0.07);
+  const top = { x, y: y - s };
+  const left = { x: x - s * 0.75, y: y - s * 0.25 };
+  const right = { x: x + s * 0.75, y: y - s * 0.25 };
+  const bottom = { x, y: y + s };
+  g.fillStyle(0x5ad1ff, 1).fillTriangle(top.x, top.y, left.x, left.y, right.x, right.y);
+  g.fillStyle(0x2f9be0, 1).fillTriangle(left.x, left.y, right.x, right.y, bottom.x, bottom.y);
+  g.fillStyle(0xffffff, 0.55).fillTriangle(top.x, top.y, left.x, left.y, x - s * 0.15, y - s * 0.25);
+  g.lineStyle(line, COLORS.outline, 1);
+  g.strokeTriangle(top.x, top.y, left.x, left.y, right.x, right.y);
+  g.strokeTriangle(left.x, left.y, right.x, right.y, bottom.x, bottom.y);
+}
+
+/** Left arrow for "back" buttons. */
+export function drawBack(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
+  const s = size / 2;
+  g.fillStyle(COLORS.textDark, 1);
+  g.fillTriangle(x - s * 0.8, y, x - s * 0.05, y - s * 0.7, x - s * 0.05, y + s * 0.7);
+  g.fillRect(x - s * 0.1, y - s * 0.25, s * 0.85, s * 0.5);
+}
+
+/** Padlock for locked items. */
+export function drawLock(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
+  const s = size / 2;
+  g.lineStyle(Math.max(2, size * 0.12), COLORS.textDark, 1);
+  g.beginPath().arc(x, y - s * 0.15, s * 0.4, Math.PI, 0).strokePath();
+  g.fillStyle(COLORS.textDark, 1).fillRoundedRect(x - s * 0.6, y - s * 0.15, s * 1.2, s * 0.95, s * 0.15);
+}
+
+/** Check mark for completed levels. */
+export function drawCheck(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
+  const s = size / 2;
+  g.fillStyle(COLORS.reinforcement, 1).fillCircle(x, y, s);
+  g.lineStyle(Math.max(1, size * 0.08), COLORS.outline, 1).strokeCircle(x, y, s);
+  g.lineStyle(Math.max(2, size * 0.16), 0xffffff, 1);
+  g.lineBetween(x - s * 0.45, y, x - s * 0.1, y + s * 0.35);
+  g.lineBetween(x - s * 0.1, y + s * 0.35, x + s * 0.5, y - s * 0.35);
+}
+
 export function drawPause(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
   const s = size / 2;
   g.fillStyle(COLORS.textDark, 1);

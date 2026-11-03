@@ -5,7 +5,11 @@ import { MockPlatform } from './platform/MockPlatform';
 import type { Platform } from './platform/Platform';
 import { BattleScene } from './scenes/BattleScene';
 import { BootScene } from './scenes/BootScene';
-import { setPlatform } from './scenes/registry';
+import { ChapterMapScene } from './scenes/ChapterMapScene';
+import { MenuScene } from './scenes/MenuScene';
+import { registerServices } from './scenes/registry';
+import { UpgradesScene } from './scenes/UpgradesScene';
+import { SaveStore } from './save/SaveStore';
 import { display } from './view/layout';
 
 // No browser context menu or long-press menu anywhere in the game.
@@ -24,7 +28,7 @@ async function main(): Promise<void> {
   // TODO(stage-6): pick YandexPlatform when the SDK is available.
   const platform: Platform = new MockPlatform();
   await platform.init();
-  // TODO(stage-5): load save data here.
+  const store = await SaveStore.load(platform);
   initI18n(platform.lang());
 
   const host = document.getElementById('game')!;
@@ -45,8 +49,8 @@ async function main(): Promise<void> {
     },
     input: { activePointers: 3 },
     disableContextMenu: true,
-    callbacks: { preBoot: (g) => setPlatform(g, platform) },
-    scene: [BootScene, BattleScene],
+    callbacks: { preBoot: (g) => registerServices(g, platform, store) },
+    scene: [BootScene, MenuScene, ChapterMapScene, UpgradesScene, BattleScene],
   });
 
   const resize = (): void => {
@@ -71,10 +75,15 @@ async function main(): Promise<void> {
   };
   platform.setPauseHandlers({ pause: pauseGame, resume: resumeGame });
 
-  // Pause the game loop and sound while the tab is hidden (the battle also opens its pause panel).
+  // Pause the game loop and sound while the tab is hidden (the battle also opens its pause panel),
+  // and write pending saves: the tab may never come back.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pauseGame();
-    else resumeGame();
+    if (document.hidden) {
+      pauseGame();
+      store.flush();
+    } else {
+      resumeGame();
+    }
   });
 
   // Signal readiness after the first frame has been rendered.

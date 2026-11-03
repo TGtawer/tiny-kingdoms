@@ -1,0 +1,138 @@
+{
+  "id": "c01_l04",
+  "chapter": 1,
+  "index": 4,
+  "playerStartGold": 30,
+  "enemy": {
+    "productionMult": 0.7,
+    "startGold": 20,
+    "aiThinkMs": 1000,
+    "aggression": 0.5,
+    "aiStartDelayMs": 10000
+  },
+  "tutorial": "c01_l04",
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.1,
+      "y": 0.5,
+      "size": "large",
+      "owner": "player",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "v",
+      "x": 0.28,
+      "y": 0.3,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": true,
+      "building": null
+    },
+    {
+      "id": "a",
+      "x": 0.28,
+      "y": 0.72,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "f",
+      "x": 0.5,
+      "y": 0.15,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "c",
+      "x": 0.5,
+      "y": 0.5,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 12,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "e",
+      "x": 0.72,
+      "y": 0.28,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "w",
+      "x": 0.72,
+      "y": 0.7,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 8,
+      "hasGoldVein": true,
+      "building": null
+    },
+    {
+      "id": "enemy",
+      "x": 0.9,
+      "y": 0.5,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 35,
+      "hasGoldVein": false,
+      "building": null
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "v"
+    ],
+    [
+      "player",
+      "a"
+    ],
+    [
+      "v",
+      "f"
+    ],
+    [
+      "v",
+      "c"
+    ],
+    [
+      "a",
+      "c"
+    ],
+    [
+      "f",
+      "e"
+    ],
+    [
+      "c",
+      "e"
+    ],
+    [
+      "c",
+      "w"
+    ],
+    [
+      "e",
+      "enemy"
+    ],
+    [
+      "w",
+      "enemy"
+    ]
+  ]
+}
