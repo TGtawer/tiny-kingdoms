@@ -83,6 +83,14 @@ export class BattleHUD {
     return this.spells.length > 0;
   }
 
+  /** Hides the spell buttons while another panel (the build menu) takes the bottom bar. */
+  setSpellBarVisible(visible: boolean): void {
+    for (const s of this.spells) {
+      s.button.setVisible(visible);
+      s.armedRing.setVisible(visible);
+    }
+  }
+
   layout(): void {
     const w = this.scene.scale.width;
     const h = this.scene.scale.height;

@@ -118,7 +118,7 @@ export class BattleScene extends Phaser.Scene {
     this.tutorialView = this.tutorial ? new TutorialView(this) : null;
 
     this.relayout();
-    if (this.tutorial) this.tutorialView!.show(currentStep(this.tutorial), this.hud.hasSpellBar ? HUD.bottomBar : 0);
+    if (this.tutorial) this.tutorialView!.show(currentStep(this.tutorial), HUD.bottomBar);
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
@@ -277,8 +277,9 @@ export class BattleScene extends Phaser.Scene {
     this.deselect();
 
     const nodes = Object.values(this.world.nodes);
-    // The bottom stays reserved for the whole level, so the field does not jump when the tutorial ends.
-    const bottom = (this.hud.hasSpellBar ? HUD.bottomBar : 0) + (this.tutorial ? HUD.hintBar : 0);
+    // The bottom bar is always reserved (spells and the build menu live there), and the hint bar stays
+    // reserved for the whole level, so the field does not jump when the tutorial ends.
+    const bottom = HUD.bottomBar + (this.tutorial ? HUD.hintBar : 0);
     this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom));
     drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
@@ -459,20 +460,18 @@ export class BattleScene extends Phaser.Scene {
     this.deselect();
     this.selected = nodeId;
     this.uiEvents.push({ type: 'select', node: nodeId });
-    const view = this.nodeViews.get(nodeId)!;
-    this.menu = new BuildMenu(
-      this,
-      this.world.nodes[nodeId]!,
-      { x: view.x, y: view.y, radius: view.radius },
-      (choice) => this.onBuild(nodeId, choice),
-    ).setDepth(90);
+    this.menu = new BuildMenu(this, this.world.nodes[nodeId]!, (choice) => this.onBuild(nodeId, choice)).setDepth(90);
     this.menu.refresh(this.world.sides.player.gold);
+    this.hud.setSpellBarVisible(false);
   }
 
   private deselect(): void {
     this.selected = null;
-    this.menu?.destroy();
-    this.menu = null;
+    if (this.menu) {
+      this.menu.destroy();
+      this.menu = null;
+      this.hud.setSpellBarVisible(true);
+    }
   }
 
   private onBuild(nodeId: string, choice: BuildChoice): void {
