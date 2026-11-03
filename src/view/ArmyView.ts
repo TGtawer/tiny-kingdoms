@@ -34,6 +34,11 @@ export class ArmyView extends Phaser.GameObjects.Container {
     scene.add.existing(this);
   }
 
+  /** The number currently shown on the marker. */
+  get shownCount(): number {
+    return Math.max(0, this.drawnCount);
+  }
+
   setCount(count: number): void {
     const visible = visibleTroops(count);
     if (visible === this.drawnCount) return;

@@ -1,4 +1,5 @@
 import { ARMY, SPELL_IDS, TICK_MS } from '../../config/balance';
+import { resolveClashes, type ClashResult } from './clash';
 import { arrive, type ArrivalResult } from './combat';
 import { apply, validate, type Command, type RejectReason } from './commands';
 import { produce } from './economy';
@@ -12,6 +13,7 @@ export type TickEvent =
   | { type: 'rejected'; command: Command; reason: RejectReason }
   | { type: 'applied'; command: Command; armyId?: string }
   | ({ type: 'arrived' } & ArrivalResult)
+  | ({ type: 'clash' } & ClashResult)
   | { type: 'gameOver'; winner: Side };
 
 /**
@@ -46,7 +48,7 @@ function moveArmy(world: World, army: ArmyState, distanceLeft: number): boolean 
 
 /**
  * One fixed simulation step. Mutates `world`.
- * Order: commands → production → cooldowns → army movement and arrivals → victory check.
+ * Order: commands → production → cooldowns → road clashes → army movement and arrivals → victory check.
  */
 export function step(world: World, commands: readonly Command[] = []): TickEvent[] {
   if (world.winner) return [];
@@ -69,6 +71,9 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
       side.spellCooldowns[spell] = Math.max(0, side.spellCooldowns[spell] - TICK_MS);
     }
   }
+
+  // Opposite armies meeting head-on on a road fight before anyone moves on.
+  for (const clash of resolveClashes(world, ARMY.speed * TICK_SEC)) events.push({ type: 'clash', ...clash });
 
   // Arrivals resolve in army creation order, so results are deterministic.
   const stillMoving: ArmyState[] = [];

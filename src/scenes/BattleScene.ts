@@ -207,6 +207,15 @@ export class BattleScene extends Phaser.Scene {
         }
         break;
       }
+      case 'clash': {
+        // Head-on fight on a road: flash in the winner's color (grey if both died) and show the losses.
+        const p = this.layoutField.toScreen(event.x, event.y);
+        const survivor = event.survivorId ? this.world.armies.find((a) => a.id === event.survivorId) : undefined;
+        const lost = Math.min(...event.armies.map((id) => this.armyViews.get(id)?.shownCount ?? 0));
+        ringBurst(this, p.x, p.y, px(18), survivor ? COLORS.faction[survivor.owner] : COLORS.faction.neutral);
+        if (lost > 0) floatText(this, p.x, p.y - px(18), `-${lost}`, COLORS.select);
+        break;
+      }
       case 'gameOver':
         this.endBattle(event.winner);
         break;
