@@ -74,6 +74,19 @@ export const HUD = {
   hintMaxWidth: 560,
 } as const;
 
+/** Chapter map, CSS px. Nodes keep this size; the map scrolls when the path does not fit. */
+export const MAP = {
+  nodeRadius: 36,
+  /** Distance between neighbouring levels along the path. */
+  spacing: 118,
+  /** Free space before the first and after the last level. */
+  margin: 80,
+  /** Max side-to-side swing of the path. */
+  amplitude: 110,
+  /** Phase step of the swing per level, radians. */
+  waveStep: 1.1,
+} as const;
+
 export const BUILD_MENU = {
   buttonWidth: 156,
   buttonHeight: 56,
