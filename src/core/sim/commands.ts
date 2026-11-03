@@ -3,11 +3,16 @@ import { armyPath } from './pathfinding';
 import { fireballKill, reinforcementTroops, spellCooldownMs, spellCost } from './spells';
 import type { ArmyState, BuildingLevel, Side, World } from './World';
 
+/** How the order was given: a swipe sends 75% of the troops, tap-tap sends 50% (GDD 3.5). */
+export type SendMode = 'swipe' | 'tap';
+
 export interface SendArmy {
   type: 'send';
   side: Side;
   from: string;
   to: string;
+  /** Defaults to 'tap'. */
+  mode?: SendMode;
 }
 
 export interface Build {
@@ -54,11 +59,14 @@ export function visibleTroops(troops: number): number {
   return Math.floor(troops + 1e-9);
 }
 
-/** Half of the visible troops (rounded down, at least minSend); 0 if the node cannot send. */
-export function sendAmount(troops: number): number {
+/**
+ * Troops an order takes from a node: 75% (swipe) or 50% (tap-tap) of the visible troops, rounded down,
+ * at least minSend; 0 if the node cannot send. At least one troop always stays behind.
+ */
+export function sendAmount(troops: number, mode: SendMode = 'tap'): number {
   const visible = visibleTroops(troops);
   if (visible < ARMY.minTroopsToSend) return 0;
-  return Math.max(ARMY.minSend, Math.floor(visible * ARMY.sendShare));
+  return Math.min(visible - 1, Math.max(ARMY.minSend, Math.floor(visible * ARMY.sendShare[mode])));
 }
 
 /** Cost to build (no building yet) or to upgrade to the next level; null if already max level. */
@@ -78,7 +86,7 @@ export function validate(world: World, cmd: Command): RejectReason | null {
       if (!from || !world.nodes[cmd.to]) return 'unknownNode';
       if (from.owner !== cmd.side) return 'notOwner';
       if (cmd.from === cmd.to) return 'sameNode';
-      if (sendAmount(from.troops) === 0) return 'notEnoughTroops';
+      if (sendAmount(from.troops, cmd.mode) === 0) return 'notEnoughTroops';
       if (!armyPath(world, cmd.side, cmd.from, cmd.to)) return 'noPath';
       return null;
     }
@@ -123,7 +131,7 @@ export function apply(world: World, cmd: Command): ArmyState | null {
   switch (cmd.type) {
     case 'send': {
       const from = world.nodes[cmd.from]!;
-      const count = sendAmount(from.troops);
+      const count = sendAmount(from.troops, cmd.mode);
       from.troops -= count;
       const army: ArmyState = {
         id: `a${world.nextArmyId++}`,

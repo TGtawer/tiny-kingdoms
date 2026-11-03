@@ -3,7 +3,7 @@ import { SPELL_IDS, SPELL_UNLOCK_AFTER_CHAPTER, TICK_MS, type SpellId } from '..
 import { COLORS, DRAG_THRESHOLD_PX, HUD, MAX_FRAME_DELTA_MS } from '../config/game';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
-import type { Command } from '../core/sim/commands';
+import type { Command, SendMode } from '../core/sim/commands';
 import { armyPath } from '../core/sim/pathfinding';
 import { step, type TickEvent } from '../core/sim/tick';
 import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
@@ -422,7 +422,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // Tap-tap: a node is selected, the second tap on a foreign node sends the army.
-    if (node && this.selected) this.sendFrom([this.selected], node.id);
+    if (node && this.selected) this.sendFrom([this.selected], node.id, 'tap');
     this.deselect();
   }
 
@@ -450,13 +450,13 @@ export class BattleScene extends Phaser.Scene {
 
     if (drag.moved) {
       const target = this.nodeAt(pointer.x, pointer.y);
-      if (target) this.sendFrom(drag.sources, target.id);
+      if (target) this.sendFrom(drag.sources, target.id, 'swipe');
       return;
     }
 
     // A tap on an own node.
     if (this.selected && this.selected !== drag.downNode) {
-      this.sendFrom([this.selected], drag.downNode);
+      this.sendFrom([this.selected], drag.downNode, 'tap');
       this.deselect();
     } else if (this.selected === drag.downNode) {
       this.deselect();
@@ -465,9 +465,9 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private sendFrom(sources: readonly string[], target: string): void {
+  private sendFrom(sources: readonly string[], target: string, mode: SendMode): void {
     for (const from of sources) {
-      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target });
+      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target, mode });
     }
   }
 

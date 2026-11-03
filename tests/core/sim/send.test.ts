@@ -27,7 +27,34 @@ describe('sendAmount', () => {
   });
 });
 
+describe('sendAmount for a swipe (75%)', () => {
+  it.each([
+    [1, 0],
+    [2, 1],
+    [3, 2],
+    [4, 3],
+    [10, 7],
+    [11, 8],
+    [20, 15],
+  ])('%f troops -> sends %i, at least one stays', (troops, expected) => {
+    expect(sendAmount(troops, 'swipe')).toBe(expected);
+    if (troops >= 2) expect(troops - sendAmount(troops, 'swipe')).toBeGreaterThanOrEqual(1);
+  });
+
+  it('tap-tap is the default and sends half', () => {
+    expect(sendAmount(20)).toBe(10);
+    expect(sendAmount(20, 'tap')).toBe(10);
+  });
+});
+
 describe('send army', () => {
+  it('a swipe order takes 75% of the troops', () => {
+    const world = freezeEconomy(lineWorld({ P: { troops: 20 } }));
+    step(world, [{ ...send('P', 'N'), mode: 'swipe' }]);
+    expect(world.armies[0]!.count).toBe(15);
+    expect(world.nodes.P!.troops).toBe(5);
+  });
+
   it('sends half of the node troops and leaves the rest', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 11 } }));
     const events = step(world, [send('P', 'N')]);
