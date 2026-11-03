@@ -32,6 +32,7 @@ export const COLORS = {
   buttonDisabled: 0xc9bfae,
   /** Secondary buttons next to a main one (result panel). */
   buttonSecondary: 0xf2dcae,
+  starEmpty: 0x8b8578,
   dim: 0x000000,
   select: 0xffffff,
   fireball: 0xff6a1a,
@@ -100,6 +101,8 @@ export const MAP = {
   amplitude: 110,
   /** Phase step of the swing per level, radians. */
   waveStep: 1.1,
+  /** Star size under completed levels. */
+  starSize: 18,
 } as const;
 
 /** Build menu strip in the bottom HUD bar, CSS px. */
@@ -124,6 +127,10 @@ export const RESULT_PANEL = {
   flyDelayMs: 450,
   flyStaggerMs: 90,
   flyDurationMs: 520,
+  starSize: 40,
+  starGap: 10,
+  /** Delay between stars appearing one by one. */
+  starStaggerMs: 260,
 } as const;
 
 /** Sound and haptics. */

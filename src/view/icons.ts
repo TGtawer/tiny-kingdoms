@@ -124,6 +124,22 @@ export function drawCheck(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   g.lineBetween(x - s * 0.1, y + s * 0.35, x + s * 0.5, y - s * 0.35);
 }
 
+/** Five-point star: gold when earned, dim when not. */
+export function drawStar(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number, earned: boolean): void {
+  const outer = size / 2;
+  const inner = outer * 0.45;
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outer : inner;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    if (i === 0) g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+    else g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+  g.closePath();
+  g.fillStyle(earned ? COLORS.gold : COLORS.starEmpty, 1).fillPath();
+  g.lineStyle(Math.max(1, size * 0.07), COLORS.outline, 1).strokePath();
+}
+
 /** Golden crown marking a capital (start castle). */
 export function drawCrown(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
   const s = size / 2;

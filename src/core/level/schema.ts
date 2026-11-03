@@ -43,6 +43,8 @@ export interface LevelData {
   special?: { type: string; params: Record<string, unknown> };
   /** Tutorial scenario id (see src/levels/tutorials.json). */
   tutorial?: string;
+  /** Win faster than this (simulation seconds) for the "fast" star; default STARS.defaultTimeSec. */
+  starTimeSec?: number;
 }
 
 /** Limits checked by validation. GDD: 8–20 nodes in general, chapter 1 uses 6–9 (BALANCE.md). */
@@ -81,6 +83,7 @@ export function validateLevel(data: unknown): ValidationResult {
   if (!isInt(data.index) || data.index < 1) at('index must be an integer >= 1');
   if (!isNum(data.playerStartGold) || data.playerStartGold < 0) at('playerStartGold must be >= 0');
   if (data.tutorial !== undefined && typeof data.tutorial !== 'string') at('tutorial must be a string');
+  if (data.starTimeSec !== undefined && (!isNum(data.starTimeSec) || data.starTimeSec <= 0)) at('starTimeSec must be > 0');
 
   const enemy = data.enemy;
   if (!isObject(enemy)) {

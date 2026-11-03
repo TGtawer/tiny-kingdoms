@@ -1,8 +1,8 @@
-import { BONUSES, SPELL_IDS, SPELL_UPGRADES, type SpellId } from '../../config/balance';
+import { BONUSES, SPELL_IDS, SPELL_UPGRADES, STARS, type SpellId } from '../../config/balance';
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveData {
   version: number;
@@ -32,6 +32,8 @@ export type Migration = (data: Record<string, unknown>) => Record<string, unknow
 export const MIGRATIONS: Record<number, Migration> = {
   // v2 added settings; v1 saves start with the defaults.
   1: (d) => ({ ...d, version: 2, settings: defaultSettings() }),
+  // v3 added progress.stars; older saves have no stars yet (sanitizeProgress fills an empty map).
+  2: (d) => ({ ...d, version: 3 }),
 };
 
 /**
@@ -83,6 +85,12 @@ function sanitizeProgress(raw: unknown): Progress {
   }
   if (isObject(raw.spellUpgrades)) {
     for (const id of SPELL_IDS) progress.spellUpgrades[id as SpellId] = level(raw.spellUpgrades[id], SPELL_UPGRADES.maxLevel);
+  }
+  if (isObject(raw.stars)) {
+    for (const [id, value] of Object.entries(raw.stars)) {
+      const stars = level(value, STARS.max);
+      if (stars > 0) progress.stars[id] = stars;
+    }
   }
   return progress;
 }

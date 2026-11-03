@@ -1,10 +1,11 @@
 import * as Phaser from 'phaser';
 import { COLORS, DRAG_THRESHOLD_PX, HUD, MAP } from '../config/game';
 import { currentLevel, isCompleted, isUnlocked } from '../core/meta/Progress';
+import { bestStars } from '../core/meta/stars';
 import type { LevelData } from '../core/level/schema';
 import { t } from '../i18n/i18n';
 import { ALL_LEVELS, CHAPTERS } from '../levels';
-import { drawCheck, drawLock } from '../view/icons';
+import { drawCheck, drawLock, drawStar } from '../view/icons';
 import { clamp, px, textStyle, type Point } from '../view/layout';
 import { drawMeadow, textButton, topBar } from '../view/ui';
 import { getStore } from './registry';
@@ -143,6 +144,12 @@ export class ChapterMapScene extends Phaser.Scene {
       const check = this.add.graphics();
       drawCheck(check, r * 0.7, -r * 0.7, r * 0.6);
       container.add(check);
+      // Best star rating under the node.
+      const stars = bestStars(progress, level.id);
+      const size = px(MAP.starSize);
+      const row = this.add.graphics();
+      for (let i = 0; i < 3; i++) drawStar(row, (i - 1) * size * 1.05, r + size * 0.55, size, i < stars);
+      container.add(row);
     }
 
     if (isNext) {

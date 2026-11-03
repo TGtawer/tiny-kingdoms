@@ -11,6 +11,8 @@ export interface Progress {
   completed: string[];
   bonuses: Record<BonusId, number>;
   spellUpgrades: Record<SpellId, number>;
+  /** Best star rating per level id, 1..3 (see stars.ts). */
+  stars: Record<string, number>;
 }
 
 export function defaultProgress(): Progress {
@@ -19,6 +21,7 @@ export function defaultProgress(): Progress {
     completed: [],
     bonuses: { startArmy: 0, troopProduction: 0, goldIncome: 0, unitStrength: 0 },
     spellUpgrades: { fireball: 0, reinforcement: 0 },
+    stars: {},
   };
 }
 

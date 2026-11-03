@@ -11,6 +11,8 @@ import { advanceTutorial, currentStep, startTutorial, type TutorialState, type U
 import { createWorld, ownedShare, type NodeState, type Owner, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
+import { recordStars, starsFor } from '../core/meta/stars';
+import { defeatTip } from '../core/meta/tips';
 import { playerSetupFrom } from '../core/meta/upgrades';
 import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
@@ -60,6 +62,8 @@ export class BattleScene extends Phaser.Scene {
   /** Node owners before the current tick, to tell "captured" from "lost" in arrival events. */
   private ownersBefore = new Map<string, Owner>();
   private capitals = new Set<string>();
+  /** Battle facts for the star rating and the defeat tip. */
+  private stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
   /** "How many will leave" badge for a swipe or a selected node; one reused Text. */
   private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
@@ -105,6 +109,7 @@ export class BattleScene extends Phaser.Scene {
     this.armed = null;
     this.uiEvents = [];
     this.speed = 1;
+    this.stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
 
     this.platform = getPlatform(this);
     // Seed per level: the AI's timing jitter is reproducible for a given level.
@@ -182,6 +187,11 @@ export class BattleScene extends Phaser.Scene {
     const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
     this.showNoPath(events);
+    if (!this.stats.hadVeinWithoutMine) {
+      this.stats.hadVeinWithoutMine = Object.values(this.world.nodes).some(
+        (n) => n.owner === 'player' && n.hasGoldVein && n.building?.type !== 'mine',
+      );
+    }
 
     if (this.tutorial && !this.ended && advanceTutorial(this.tutorial, this.world, events, this.uiEvents)) {
       this.tutorialView?.show(currentStep(this.tutorial));
@@ -199,7 +209,11 @@ export class BattleScene extends Phaser.Scene {
           this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
           if (cmd.side === 'player') playSfx('send');
         } else if (cmd.type === 'build' || cmd.type === 'upgrade') {
-          if (cmd.side === 'player') playSfx('build');
+          if (cmd.side === 'player') {
+            playSfx('build');
+            if (cmd.type === 'build' && cmd.building === 'barracks') this.stats.builtBarracks = true;
+            if (cmd.type === 'build' && cmd.building === 'mine') this.stats.builtMine = true;
+          }
           const view = this.nodeViews.get(cmd.nodeId)!;
           pop(this, view);
           ringBurst(this, view.x, view.y, view.radius, COLORS.gold);
@@ -230,6 +244,7 @@ export class BattleScene extends Phaser.Scene {
             this.vibrate(HAPTICS.short);
             if (before === 'enemy' && this.capitals.has(event.nodeId)) this.shake();
           } else if (before === 'player') {
+            this.stats.lostOwnNode = true;
             playSfx('lost');
             this.vibrate(HAPTICS.short);
           }
@@ -295,18 +310,25 @@ export class BattleScene extends Phaser.Scene {
     // Rewards are applied and saved right away, so leaving the result screen can't lose them.
     const store = getStore(this);
     const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
+    const stars = starsFor({ won: winner === 'player', timeMs: this.world.tick * TICK_MS, lostOwnNode: this.stats.lostOwnNode }, this.level);
+    recordStars(store.progress, this.level.id, stars);
     store.commit();
     playSfx(winner === 'player' ? 'victory' : 'defeat');
     if (winner === 'player') this.vibrate(HAPTICS.victory);
-    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reward.crystals));
+    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reward.crystals, stars));
   }
 
-  private showResult(winner: 'player' | 'enemy', crystals: number): void {
+  private showResult(winner: 'player' | 'enemy', crystals: number, stars: number): void {
     const replay = { label: t('result.playAgain'), onClick: () => this.scene.restart({ levelId: this.level.id }) };
     const toMap = { label: t('result.toMap'), onClick: () => this.toMap() };
     const total = getStore(this).progress.crystals;
     if (winner === 'enemy') {
-      this.hud.showResult(t('result.defeat'), false, crystals, total, [replay, toMap]);
+      const tip = defeatTip(this.stats, getStore(this).progress);
+      const buttons = [replay, toMap];
+      if (tip === 'upgrades') {
+        buttons.splice(1, 0, { label: t('menu.upgrades'), onClick: () => this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }) });
+      }
+      this.hud.showResult(t('result.defeat'), false, crystals, total, buttons, tip ? { tip: t(`tip.${tip}`) } : {});
       return;
     }
     const next = nextLevel(this.level.id);
@@ -315,9 +337,9 @@ export class BattleScene extends Phaser.Scene {
         { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
         replay,
         toMap,
-      ]);
+      ], { stars });
     } else {
-      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay]);
+      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], { stars });
     }
   }
 

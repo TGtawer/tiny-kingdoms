@@ -66,5 +66,8 @@
   "build.needMore": "{n} more",
   "hud.goldRate": "+{rate}/s",
   "pause.soundOn": "Sound: on",
-  "pause.soundOff": "Sound: off"
+  "pause.soundOff": "Sound: off",
+  "tip.barracks": "Tip: build barracks, they make troops faster",
+  "tip.mine": "Tip: build a mine on a gold-vein node",
+  "tip.upgrades": "Tip: you have enough crystals for an upgrade"
 }

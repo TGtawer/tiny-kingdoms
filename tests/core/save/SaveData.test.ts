@@ -47,7 +47,7 @@ describe('parseSave', () => {
 describe('settings (v2)', () => {
   it('a v1 save gets default settings', () => {
     const save = parseSave({ version: 1, updatedAt: 1, progress: { crystals: 5 } });
-    expect(save.version).toBe(2);
+    expect(save.version).toBe(SAVE_VERSION);
     expect(save.settings).toEqual({ sound: true });
     expect(save.progress.crystals).toBe(5);
   });

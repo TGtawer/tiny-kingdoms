@@ -6,7 +6,7 @@ import { spellCooldownMs } from '../core/sim/spells';
 import type { Side, World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { Button } from '../view/Button';
-import { drawCoin, drawCrystal, drawPause, drawSpell } from '../view/icons';
+import { drawCoin, drawCrystal, drawPause, drawSpell, drawStar } from '../view/icons';
 import { px, textStyle } from '../view/layout';
 
 export interface HudCallbacks {
@@ -252,9 +252,10 @@ export class BattleHUD {
     crystals: number,
     totalCrystals: number,
     buttons: Array<{ label: string; onClick: () => void }>,
+    extras: { stars?: number; tip?: string } = {},
   ): void {
     // TODO(stage-6): "double for a rewarded ad" button on victory.
-    this.showPanel(title, buttons, { celebrate: won, crystals, totalCrystals, primary: won });
+    this.showPanel(title, buttons, { celebrate: won, crystals, totalCrystals, primary: won, ...extras });
   }
 
   private placeRate(): void {
@@ -274,7 +275,17 @@ export class BattleHUD {
   private showPanel(
     title: string,
     buttons: Array<{ label: string; onClick: () => void }>,
-    options: { celebrate?: boolean; crystals?: number; totalCrystals?: number; primary?: boolean; fade?: boolean } = {},
+    options: {
+      celebrate?: boolean;
+      crystals?: number;
+      totalCrystals?: number;
+      primary?: boolean;
+      fade?: boolean;
+      /** Star rating row under the title (victory). */
+      stars?: number;
+      /** One advice line above the buttons (defeat). */
+      tip?: string;
+    } = {},
   ): void {
     this.hideOverlay();
     const scene = this.scene;
@@ -295,7 +306,13 @@ export class BattleHUD {
       const mainH = options.primary ? px(RESULT_PANEL.primaryButtonHeight) : bh;
       const gap = px(12);
       const rewardH = crystals === null ? 0 : px(44);
-      const top = px(96) + rewardH;
+      const starsH = options.stars === undefined ? 0 : px(RESULT_PANEL.starSize + 14);
+      const tipText = options.tip
+        ? scene.add.text(w / 2, 0, options.tip, textStyle(16, COLORS.textDark)).setOrigin(0.5, 0).setAlign('center')
+        : null;
+      tipText?.setWordWrapWidth(panelW - px(40), true);
+      const tipH = tipText ? tipText.height + px(14) : 0;
+      const top = px(96) + starsH + rewardH + tipH;
       const panelH = top + mainH + gap + (buttons.length - 1) * (bh + gap);
       const panel = scene.add.graphics();
       const px0 = w / 2 - panelW / 2;
@@ -311,9 +328,15 @@ export class BattleHUD {
         .setStroke('#1f2937', px(6));
       overlay.add([dim, panel, titleText]);
 
+      if (options.stars !== undefined) this.drawStars(overlay, w / 2, py0 + px(96) + starsH / 2 - px(10), options.stars, !animated);
+      if (tipText) {
+        tipText.setY(py0 + px(96) + starsH + rewardH);
+        overlay.add(tipText);
+      }
+
       let rewardAt: { x: number; y: number } | null = null;
       if (crystals !== null) {
-        const ry = py0 + px(96) + rewardH / 2 - px(8);
+        const ry = py0 + px(96) + starsH + rewardH / 2 - px(8);
         const label = scene.add.text(w / 2 + px(14), ry, `+${crystals}`, textStyle(28, COLORS.text)).setOrigin(0.5).setStroke('#1f2937', px(6));
         const icon = scene.add.graphics();
         rewardAt = { x: label.x - label.width / 2 - px(20), y: ry };
@@ -362,6 +385,28 @@ export class BattleHUD {
     if (options.fade !== false) {
       overlay.setAlpha(0);
       scene.tweens.add({ targets: overlay, alpha: 1, duration: 160 });
+    }
+  }
+
+  /** Row of three stars; earned ones pop in one by one the first time. */
+  private drawStars(overlay: Phaser.GameObjects.Container, cx: number, cy: number, stars: number, animate: boolean): void {
+    const size = px(RESULT_PANEL.starSize);
+    const gap = px(RESULT_PANEL.starGap);
+    for (let i = 0; i < 3; i++) {
+      const x = cx + (i - 1) * (size + gap);
+      const empty = this.scene.add.graphics();
+      drawStar(empty, 0, 0, size, false);
+      empty.setPosition(x, cy);
+      overlay.add(empty);
+      if (i >= stars) continue;
+      const star = this.scene.add.graphics();
+      drawStar(star, 0, 0, size, true);
+      star.setPosition(x, cy);
+      overlay.add(star);
+      if (animate) {
+        star.setScale(0);
+        this.scene.tweens.add({ targets: star, scale: 1, delay: 200 + i * RESULT_PANEL.starStaggerMs, duration: 260, ease: 'Back.Out' });
+      }
     }
   }
 

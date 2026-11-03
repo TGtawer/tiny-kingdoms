@@ -101,6 +101,13 @@ export const AI = {
   towerAggressionThreshold: 0.5,
 } as const;
 
+/** Star rating of a won level (GDD 4.2). */
+export const STARS = {
+  max: 3,
+  /** Win faster than this for the "fast" star, unless the level sets starTimeSec. Simulation seconds. */
+  defaultTimeSec: 180,
+} as const;
+
 export const CRYSTALS = {
   /** Victory reward: base + perChapter * chapter. */
   base: 20,
