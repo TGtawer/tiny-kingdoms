@@ -1,0 +1,33 @@
+{
+  "name": "tiny-kingdoms",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tiny Kingdoms — casual node-capture strategy for Yandex Games",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TGtawer/tiny-kingdoms.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "zip": "node scripts/zip.mjs"
+  },
+  "dependencies": {
+    "phaser": "^4.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.14.0",
+    "fflate": "^0.8.3",
+    "globals": "^17.14.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
+  }
+}
