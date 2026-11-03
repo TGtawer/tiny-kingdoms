@@ -56,5 +56,13 @@
   "menu.map": "Карта",
   "battle.noPath": "Нет пути",
   "battle.sendCount": "→ {count}",
-  "battle.speed": "×{mult}"
+  "battle.speed": "×{mult}",
+  "building.mine.desc": "Много золота",
+  "building.barracks.desc": "Больше войск",
+  "building.tower.desc": "Бьёт врагов",
+  "build.next.mine": "+{gold} золота/с",
+  "build.next.barracks": "×{mult} войск, +{cap} мест",
+  "build.next.tower": "Урон {damage}",
+  "build.needMore": "ещё {n}",
+  "hud.goldRate": "+{rate}/с"
 }

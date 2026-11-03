@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, NODES } from '../../../src/config/balance';
-import { goldRate, nodeCapacity, troopRate } from '../../../src/core/sim/economy';
+import { goldRate, nodeCapacity, sideGoldRate, troopRate } from '../../../src/core/sim/economy';
 import { step } from '../../../src/core/sim/tick';
 import { lineWorld, run } from '../helpers';
 
@@ -66,5 +66,26 @@ describe('gold', () => {
     world.sides.player.modifiers.goldIncomeMult = 1.5;
     step(world);
     expect(world.sides.player.gold).toBeCloseTo(NODES.small.goldPerSec * 0.1 * 1.5, 9);
+  });
+});
+
+describe('sideGoldRate', () => {
+  it('sums the gold rate of the side nodes, mines and income bonus included', () => {
+    const world = lineWorld({
+      P: { size: 'large', hasGoldVein: true, building: { type: 'mine', level: 1 } },
+      N: { owner: 'player', size: 'small' },
+    });
+    world.sides.player.modifiers.goldIncomeMult = 2;
+    const expected = (NODES.large.goldPerSec + BUILDINGS.mine.extraGoldPerSec[0] + NODES.small.goldPerSec) * 2;
+    expect(sideGoldRate(world, 'player')).toBeCloseTo(expected, 9);
+    expect(sideGoldRate(world, 'enemy')).toBeCloseTo(NODES.small.goldPerSec, 9);
+  });
+
+  it('matches the gold actually produced', () => {
+    const world = lineWorld({ N: { owner: 'player' } });
+    const rate = sideGoldRate(world, 'player');
+    const before = world.sides.player.gold;
+    run(world, 10);
+    expect(world.sides.player.gold - before).toBeCloseTo(rate, 6);
   });
 });

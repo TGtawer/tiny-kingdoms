@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { SPELLS, type SpellId } from '../config/balance';
 import { COLORS, HUD } from '../config/game';
+import { sideGoldRate } from '../core/sim/economy';
 import { spellCooldownMs } from '../core/sim/spells';
 import type { Side, World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
@@ -31,6 +32,9 @@ export class BattleHUD {
   private readonly topBar: Phaser.GameObjects.Graphics;
   private readonly coin: Phaser.GameObjects.Graphics;
   private readonly goldText: Phaser.GameObjects.Text;
+  /** "+N/s" next to the gold counter. */
+  private readonly rateText: Phaser.GameObjects.Text;
+  private shownRate = -1;
   private readonly title: Phaser.GameObjects.Text;
   private readonly pauseButton: Button;
   private readonly speedButton: Button;
@@ -48,6 +52,7 @@ export class BattleHUD {
     this.topBar = scene.add.graphics();
     this.coin = scene.add.graphics();
     this.goldText = scene.add.text(0, 0, '0', textStyle(24)).setOrigin(0, 0.5).setStroke('#1f2937', px(5));
+    this.rateText = scene.add.text(0, 0, '', textStyle(15, COLORS.gold)).setOrigin(0, 0.5).setStroke('#1f2937', px(4));
     this.title = scene.add.text(0, 0, title, textStyle(20)).setOrigin(0.5).setStroke('#1f2937', px(5));
 
     const pauseSize = px(HUD.pauseButton);
@@ -64,7 +69,7 @@ export class BattleHUD {
     this.speedButton.setVisible(false);
     this.speedRing.setVisible(false);
 
-    this.root.add([this.topBar, this.coin, this.goldText, this.title, this.speedRing, this.pauseButton, this.speedButton]);
+    this.root.add([this.topBar, this.coin, this.goldText, this.rateText, this.title, this.speedRing, this.pauseButton, this.speedButton]);
 
     for (const spell of spells) {
       const size = px(HUD.spellButton);
@@ -138,6 +143,7 @@ export class BattleHUD {
 
     drawCoinAt(this.coin, px(16) + px(14), barH / 2, px(28));
     this.goldText.setPosition(px(16) + px(34), barH / 2);
+    this.placeRate();
     this.title.setPosition(w / 2, barH / 2);
     this.pauseButton.setPosition(w - px(12) - this.pauseButton.buttonWidth / 2, barH / 2);
     this.speedButton.setPosition(
@@ -167,6 +173,20 @@ export class BattleHUD {
     if (gold !== this.shownGold) {
       this.shownGold = gold;
       this.goldText.setText(String(gold));
+      this.placeRate();
+    }
+
+    // Rounded to 0.1 so the label only changes when the income really changes.
+    const rate = Math.round(sideGoldRate(world, side) * 10) / 10;
+    if (rate !== this.shownRate) {
+      const grew = this.shownRate >= 0 && rate > this.shownRate;
+      this.shownRate = rate;
+      this.rateText.setText(t('hud.goldRate', { rate: rate.toFixed(1) }));
+      if (grew) {
+        this.scene.tweens.killTweensOf(this.rateText);
+        this.rateText.setScale(1.4);
+        this.scene.tweens.add({ targets: this.rateText, scale: 1, duration: 350, ease: 'Back.Out' });
+      }
     }
 
     for (const s of this.spells) {
@@ -208,6 +228,10 @@ export class BattleHUD {
   showResult(title: string, won: boolean, crystals: number, buttons: Array<{ label: string; onClick: () => void }>): void {
     // TODO(stage-6): "double for a rewarded ad" button on victory.
     this.showPanel(title, buttons, won, crystals);
+  }
+
+  private placeRate(): void {
+    this.rateText.setPosition(this.goldText.x + this.goldText.width + px(8), px(HUD.topBar) / 2 + px(2));
   }
 
   /** Screen position of the gold counter (for tutorial highlights). */

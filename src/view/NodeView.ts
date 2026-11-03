@@ -29,7 +29,7 @@ export class NodeView extends Phaser.GameObjects.Container {
   /** Capacity arc around the circle: how full the node is. */
   private readonly capGfx: Phaser.GameObjects.Graphics;
   private readonly countText: Phaser.GameObjects.Text;
-  /** Small "/35" under the count: the node's capacity. */
+  /** "/35" under the circle: capacity, shown only on the selected node. */
   private readonly capText: Phaser.GameObjects.Text;
   private drawnKey = '';
   private drawnCount = -1;
@@ -45,7 +45,7 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.capGfx = scene.add.graphics();
     this.bodyGfx = scene.add.graphics();
     this.countText = scene.add.text(0, 0, '', textStyle(18)).setOrigin(0.5);
-    this.capText = scene.add.text(0, 0, '', textStyle(11)).setOrigin(0.5).setAlpha(0.9);
+    this.capText = scene.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setVisible(false);
     this.add([this.ring, this.capGfx, this.bodyGfx, this.countText, this.capText]);
     scene.add.existing(this);
   }
@@ -58,8 +58,7 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.hitRadius = layout.hitRadius(node.size);
     this.countText.setFontSize(Math.round(Math.max(px(15), this.radius * 0.66)));
     this.countText.setStroke('#1f2937', Math.max(2, this.radius * 0.14));
-    this.capText.setFontSize(Math.round(Math.max(px(10), this.radius * 0.3)));
-    this.capText.setStroke('#1f2937', Math.max(2, this.radius * 0.08));
+    this.capText.setStroke('#1f2937', px(4));
     this.drawnKey = '';
     this.drawnCapKey = '';
     this.drawHighlight();
@@ -82,7 +81,7 @@ export class NodeView extends Phaser.GameObjects.Container {
   }
 
   /**
-   * Capacity arc + "/max" label for owned nodes (neutrals don't produce, so capacity means nothing there).
+   * Capacity arc for owned nodes, plus the "/max" label while selected (neutrals don't produce, so capacity means nothing there).
    * Full arc = production stopped; gold arc = above capacity (e.g. after reinforcements).
    */
   private syncCapacity(node: NodeState): void {
@@ -91,18 +90,18 @@ export class NodeView extends Phaser.GameObjects.Container {
     const fill = Math.min(1, node.troops / capacity);
     const over = node.troops > capacity + 1e-9;
     // Quantized so the arc redraws a few dozen times while filling, not every frame.
-    const key = owned ? `${Math.round(fill * 48)}|${over}|${capacity}|${this.radius}` : 'neutral';
+    const showCap = owned && this.highlight === 'selected';
+    const key = owned ? `${Math.round(fill * 48)}|${over}|${capacity}|${this.radius}|${showCap}` : 'neutral';
     if (key === this.drawnCapKey) return;
     this.drawnCapKey = key;
 
     const r = this.radius;
     const g = this.capGfx;
     g.clear();
-    this.capText.setVisible(owned);
-    this.countText.setY(owned ? -r * 0.18 : 0);
+    this.capText.setVisible(showCap);
     if (!owned) return;
 
-    this.capText.setText(`/${capacity}`).setY(r * 0.45);
+    this.capText.setText(`/${capacity}`).setY(r * 1.13 + px(12));
     const arcR = r * 1.13;
     const width = Math.max(px(3), r * 0.1);
     g.lineStyle(width, COLORS.outline, 0.3);

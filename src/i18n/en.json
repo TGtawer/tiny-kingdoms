@@ -56,5 +56,13 @@
   "menu.map": "Map",
   "battle.noPath": "No route",
   "battle.sendCount": "→ {count}",
-  "battle.speed": "×{mult}"
+  "battle.speed": "×{mult}",
+  "building.mine.desc": "Lots of gold",
+  "building.barracks.desc": "More troops",
+  "building.tower.desc": "Hits attackers",
+  "build.next.mine": "+{gold} gold/s",
+  "build.next.barracks": "×{mult} troops, +{cap} room",
+  "build.next.tower": "Damage {damage}",
+  "build.needMore": "{n} more",
+  "hud.goldRate": "+{rate}/s"
 }

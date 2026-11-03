@@ -1,5 +1,5 @@
 import { BUILDINGS, NODES } from '../../config/balance';
-import type { NodeState, SideModifiers, World } from './World';
+import type { NodeState, Side, SideModifiers, World } from './World';
 
 /** Max troops a node produces up to (base + barracks). */
 export function nodeCapacity(node: NodeState): number {
@@ -28,6 +28,16 @@ export function goldRate(node: NodeState, modifiers: SideModifiers): number {
     rate += BUILDINGS.mine.extraGoldPerSec[node.building.level - 1]!;
   }
   return rate * modifiers.goldIncomeMult;
+}
+
+/** Total gold per second of a side (all its nodes, mines included). */
+export function sideGoldRate(world: World, side: Side): number {
+  const modifiers = world.sides[side].modifiers;
+  let total = 0;
+  for (const node of Object.values(world.nodes)) {
+    if (node.owner === side) total += goldRate(node, modifiers);
+  }
+  return total;
 }
 
 /** Produces troops (stopping at capacity, never reducing an overfilled node) and gold. */

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import type { BuildingType } from '../config/balance';
+import { BUILDINGS, type BuildingType } from '../config/balance';
 import { BUILD_MENU, COLORS, HUD } from '../config/game';
 import { buildCost } from '../core/sim/commands';
 import type { NodeState } from '../core/sim/World';
@@ -13,6 +13,8 @@ export type BuildChoice = { kind: 'build'; building: BuildingType } | { kind: 'u
 interface Entry {
   button: Button;
   cost: number | null;
+  costText: Phaser.GameObjects.Text | null;
+  shownCost: string;
 }
 
 const BUILDING_ORDER: readonly BuildingType[] = ['mine', 'barracks', 'tower'];
@@ -25,6 +27,7 @@ const BUILDING_ORDER: readonly BuildingType[] = ['mine', 'barracks', 'tower'];
 export class BuildMenu extends Phaser.GameObjects.Container {
   readonly nodeId: string;
   private readonly entries: Entry[] = [];
+  private gold = 0;
 
   constructor(scene: Phaser.Scene, node: NodeState, onChoose: (choice: BuildChoice) => void) {
     const w = scene.scale.width;
@@ -33,19 +36,26 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     super(scene, w / 2, h - barH / 2);
     this.nodeId = node.id;
 
-    const items: Array<{ choice: BuildChoice | null; label: string; icon: BuildingType; cost: number | null }> = [];
+    const items: Array<{ choice: BuildChoice | null; label: string; desc: string; icon: BuildingType; cost: number | null }> = [];
     if (node.building) {
       const cost = buildCost(node.building.level);
       items.push({
         choice: cost === null ? null : { kind: 'upgrade' },
         label: cost === null ? t('build.maxLevel') : t('build.upgrade', { level: node.building.level + 1 }),
+        desc: cost === null ? '' : nextLevelEffect(node.building.type, node.building.level + 1),
         icon: node.building.type,
         cost,
       });
     } else {
       for (const type of BUILDING_ORDER) {
         if (type === 'mine' && !node.hasGoldVein) continue;
-        items.push({ choice: { kind: 'build', building: type }, label: t(`building.${type}`), icon: type, cost: buildCost(0) });
+        items.push({
+          choice: { kind: 'build', building: type },
+          label: t(`building.${type}`),
+          desc: t(`building.${type}.desc`),
+          icon: type,
+          cost: buildCost(0),
+        });
       }
     }
 
@@ -69,13 +79,14 @@ export class BuildMenu extends Phaser.GameObjects.Container {
         width: bw,
         height: bh,
         onClick: () => {
-          if (item.choice) onChoose(item.choice);
+          // Not affordable: the button stays bright and says how much is missing, but does nothing.
+          if (item.choice && item.cost !== null && this.gold >= item.cost) onChoose(item.choice);
         },
       });
 
-      // Top row: icon + name. Bottom row: coin + cost (absent at max level).
-      const topY = item.cost === null ? 0 : -bh * 0.18;
-      const iconSize = bh * 0.4;
+      // Rows: icon + name, effect, coin + cost (only the name at max level).
+      const topY = item.cost === null ? 0 : -bh * 0.27;
+      const iconSize = bh * 0.32;
       const label = scene.add.text(0, topY, item.label, textStyle(14, COLORS.textDark)).setOrigin(0, 0.5);
       const rowContentW = iconSize + px(4) + label.width;
       const left = -rowContentW / 2;
@@ -84,20 +95,23 @@ export class BuildMenu extends Phaser.GameObjects.Container {
       label.setX(left + iconSize + px(4));
       button.add([icon, label]);
 
+      let costText: Phaser.GameObjects.Text | null = null;
       if (item.cost !== null) {
-        const costY = bh * 0.2;
-        const coinSize = px(15);
-        const cost = scene.add.text(0, costY, String(item.cost), textStyle(15, COLORS.textDark)).setOrigin(0, 0.5);
-        const costW = coinSize + px(4) + cost.width;
+        const desc = scene.add.text(0, 0, item.desc, textStyle(12, COLORS.textDark)).setOrigin(0.5).setAlpha(0.8);
+        const costY = bh * 0.25;
+        const coinSize = px(14);
+        costText = scene.add.text(0, costY, String(item.cost), textStyle(14, COLORS.textDark)).setOrigin(0.5);
         const coin = scene.add.graphics();
-        drawCoin(coin, -costW / 2 + coinSize / 2, costY, coinSize);
-        cost.setX(-costW / 2 + coinSize + px(4));
-        button.add([coin, cost]);
+        drawCoin(coin, 0, 0, coinSize);
+        coin.setPosition(0, costY).setName('coin');
+        button.add([desc, coin, costText]);
       }
 
       if (!item.choice) button.setEnabled(false);
       this.add(button);
-      this.entries.push({ button, cost: item.choice ? item.cost : null });
+      const entry: Entry = { button, cost: item.choice ? item.cost : null, costText, shownCost: '' };
+      this.entries.push(entry);
+      this.placeCost(entry, String(item.cost ?? ''));
     });
 
     // Slide up from below the screen edge.
@@ -107,10 +121,42 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     scene.add.existing(this);
   }
 
-  /** Enables only affordable options. */
+  /** Shows the price of affordable options and "N more" for the others. */
   refresh(gold: number): void {
+    this.gold = gold;
     for (const entry of this.entries) {
-      if (entry.cost !== null) entry.button.setEnabled(gold >= entry.cost);
+      if (entry.cost === null) continue;
+      const missing = Math.ceil(entry.cost - gold);
+      this.placeCost(entry, missing > 0 ? t('build.needMore', { n: missing }) : String(entry.cost));
     }
+  }
+
+  /** Sets the cost label and centers the coin + label pair. */
+  private placeCost(entry: Entry, text: string): void {
+    const label = entry.costText;
+    if (!label || entry.shownCost === text) return;
+    entry.shownCost = text;
+    label.setText(text);
+    const coin = entry.button.getByName('coin') as Phaser.GameObjects.Graphics | null;
+    const coinSize = px(14);
+    const total = coinSize + px(4) + label.width;
+    coin?.setX(-total / 2 + coinSize / 2);
+    label.setX(-total / 2 + coinSize + px(4) + label.width / 2);
+  }
+}
+
+/** One-line effect of a building at `level` (for the upgrade button). */
+function nextLevelEffect(type: BuildingType, level: number): string {
+  const i = level - 1;
+  switch (type) {
+    case 'mine':
+      return t('build.next.mine', { gold: BUILDINGS.mine.extraGoldPerSec[i] ?? 0 });
+    case 'barracks':
+      return t('build.next.barracks', {
+        mult: BUILDINGS.barracks.productionMult[i] ?? 1,
+        cap: BUILDINGS.barracks.extraCapacity[i] ?? 0,
+      });
+    case 'tower':
+      return t('build.next.tower', { damage: BUILDINGS.tower.damage[i] ?? 0 });
   }
 }
