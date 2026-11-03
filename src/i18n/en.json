@@ -1,4 +1,15 @@
 {
   "game.title": "Tiny Kingdoms",
-  "boot.loading": "Loading…"
+  "boot.loading": "Loading…",
+  "building.mine": "Mine",
+  "building.barracks": "Barracks",
+  "building.tower": "Tower",
+  "build.upgrade": "Upgrade → {level}",
+  "build.maxLevel": "Max level",
+  "pause.title": "Paused",
+  "pause.resume": "Resume",
+  "pause.restart": "Restart",
+  "result.victory": "Victory!",
+  "result.defeat": "Defeat",
+  "result.playAgain": "Play again"
 }

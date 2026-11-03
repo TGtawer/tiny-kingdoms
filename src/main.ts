@@ -1,12 +1,24 @@
 import * as Phaser from 'phaser';
-import { COLORS } from './config/game';
+import { COLORS, MAX_DPR } from './config/game';
 import { initI18n } from './i18n/i18n';
 import { MockPlatform } from './platform/MockPlatform';
 import type { Platform } from './platform/Platform';
+import { BattleScene } from './scenes/BattleScene';
 import { BootScene } from './scenes/BootScene';
+import { setPlatform } from './scenes/registry';
+import { display } from './view/layout';
 
 // No browser context menu or long-press menu anywhere in the game.
 document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function currentDpr(): number {
+  return Math.min(window.devicePixelRatio || 1, MAX_DPR);
+}
+
+/** CSS size of the game container. */
+function hostSize(host: HTMLElement): { width: number; height: number } {
+  return { width: Math.max(1, host.clientWidth), height: Math.max(1, host.clientHeight) };
+}
 
 async function main(): Promise<void> {
   // TODO(stage-6): pick YandexPlatform when the SDK is available.
@@ -15,19 +27,39 @@ async function main(): Promise<void> {
   // TODO(stage-5): load save data here.
   initI18n(platform.lang());
 
+  const host = document.getElementById('game')!;
+  display.dpr = currentDpr();
+  const size = hostSize(host);
+
+  // The canvas is rendered at device resolution and shown at CSS size (zoom = 1 / dpr),
+  // so graphics and text stay crisp on high-density phone screens.
   const game = new Phaser.Game({
     type: Phaser.AUTO,
-    parent: 'game',
+    parent: host,
     backgroundColor: COLORS.background,
     scale: {
-      mode: Phaser.Scale.RESIZE,
-      width: '100%',
-      height: '100%',
+      mode: Phaser.Scale.NONE,
+      width: size.width * display.dpr,
+      height: size.height * display.dpr,
+      zoom: 1 / display.dpr,
     },
     input: { activePointers: 3 },
     disableContextMenu: true,
-    scene: [BootScene],
+    callbacks: { preBoot: (g) => setPlatform(g, platform) },
+    scene: [BootScene, BattleScene],
   });
+
+  const resize = (): void => {
+    const dpr = currentDpr();
+    const { width, height } = hostSize(host);
+    if (dpr !== display.dpr) {
+      display.dpr = dpr;
+      game.scale.setZoom(1 / dpr);
+    }
+    game.scale.resize(width * dpr, height * dpr);
+  };
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
 
   const pauseGame = (): void => {
     game.sound.pauseAll();
@@ -39,7 +71,7 @@ async function main(): Promise<void> {
   };
   platform.setPauseHandlers({ pause: pauseGame, resume: resumeGame });
 
-  // Pause the game and sound while the tab is hidden.
+  // Pause the game loop and sound while the tab is hidden (the battle also opens its pause panel).
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pauseGame();
     else resumeGame();

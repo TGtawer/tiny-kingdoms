@@ -1,0 +1,32 @@
+{
+  "id": "test_01",
+  "chapter": 0,
+  "index": 1,
+  "playerStartGold": 20,
+  "enemy": { "productionMult": 0.7, "aiThinkMs": 1500, "aggression": 0.3, "startGold": 20 },
+  "nodes": [
+    { "id": "player", "x": 0.08, "y": 0.5, "size": "large", "owner": "player", "troops": 20, "hasGoldVein": false, "building": null },
+    { "id": "nw", "x": 0.27, "y": 0.27, "size": "small", "owner": "neutral", "troops": 6, "hasGoldVein": true, "building": null },
+    { "id": "sw", "x": 0.27, "y": 0.73, "size": "medium", "owner": "neutral", "troops": 10, "hasGoldVein": false, "building": null },
+    { "id": "north", "x": 0.5, "y": 0.15, "size": "small", "owner": "neutral", "troops": 5, "hasGoldVein": false, "building": null },
+    { "id": "center", "x": 0.5, "y": 0.5, "size": "medium", "owner": "neutral", "troops": 14, "hasGoldVein": false, "building": { "type": "tower", "level": 1 } },
+    { "id": "south", "x": 0.5, "y": 0.85, "size": "small", "owner": "neutral", "troops": 5, "hasGoldVein": true, "building": null },
+    { "id": "ne", "x": 0.73, "y": 0.27, "size": "medium", "owner": "neutral", "troops": 10, "hasGoldVein": false, "building": null },
+    { "id": "se", "x": 0.73, "y": 0.73, "size": "small", "owner": "neutral", "troops": 6, "hasGoldVein": true, "building": null },
+    { "id": "enemy", "x": 0.92, "y": 0.5, "size": "large", "owner": "enemy", "troops": 20, "hasGoldVein": false, "building": { "type": "barracks", "level": 1 } }
+  ],
+  "roads": [
+    ["player", "nw"],
+    ["player", "sw"],
+    ["nw", "north"],
+    ["nw", "center"],
+    ["sw", "center"],
+    ["sw", "south"],
+    ["north", "ne"],
+    ["center", "ne"],
+    ["center", "se"],
+    ["south", "se"],
+    ["ne", "enemy"],
+    ["se", "enemy"]
+  ]
+}

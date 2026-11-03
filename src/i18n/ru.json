@@ -1,4 +1,15 @@
 {
   "game.title": "Tiny Kingdoms",
-  "boot.loading": "Загрузка…"
+  "boot.loading": "Загрузка…",
+  "building.mine": "Шахта",
+  "building.barracks": "Казармы",
+  "building.tower": "Башня",
+  "build.upgrade": "Улучшить → {level}",
+  "build.maxLevel": "Макс. уровень",
+  "pause.title": "Пауза",
+  "pause.resume": "Продолжить",
+  "pause.restart": "Начать заново",
+  "result.victory": "Победа!",
+  "result.defeat": "Поражение",
+  "result.playAgain": "Ещё раз"
 }
