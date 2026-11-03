@@ -1,5 +1,6 @@
 import { SPECIAL_NODES, SPELL_IDS, TICK_MS, type BuildingType, type NodeKind, type NodeSize, type SpellId } from '../../config/balance';
 import type { LevelData } from '../level/schema';
+import type { Goal } from './victory';
 import { nextRandom, seedState } from './rng';
 
 export type Owner = 'player' | 'enemy' | 'neutral';
@@ -76,6 +77,11 @@ export interface World {
   nextArmyId: number;
   rngState: number;
   winner: Side | null;
+  goal: Goal;
+  /** Hold goal: ticks the player has held the node in a row. */
+  goalTicks: number;
+  /** Start capitals of the sides (level `capital` flags), for the capital goal. */
+  capitals: Record<Side, string | null>;
 }
 
 export function defaultModifiers(): SideModifiers {
@@ -157,6 +163,12 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
     nextArmyId: 1,
     rngState: seedState(options.seed ?? 1),
     winner: null,
+    goal: level.goal ? structuredClone(level.goal) : { type: 'conquer' },
+    goalTicks: 0,
+    capitals: {
+      player: level.nodes.find((n) => n.capital && n.owner === 'player')?.id ?? null,
+      enemy: level.nodes.find((n) => n.capital && n.owner === 'enemy')?.id ?? null,
+    },
   };
 }
 

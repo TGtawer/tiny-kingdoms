@@ -89,5 +89,14 @@
   "leader.dwarf": "Гном Скряга",
   "leader.dwarf.quote": "«Сначала золото. Потом — ваше королевство»",
   "leader.witch": "Ведьма Хитрая",
-  "leader.witch.quote": "«Оставишь замок пустым — я тут как тут»"
+  "leader.witch.quote": "«Оставишь замок пустым — я тут как тут»",
+  "goal.hold": "Удержи отмеченный узел: {done}/{total} с",
+  "goal.survive": "Продержись: {done}/{total} с",
+  "goal.capital": "Захвати столицу врага и сбереги свою",
+  "goal.reason.conquer": "Все земли врага твои",
+  "goal.reason.hold": "Узел удержан",
+  "goal.reason.survive": "Ты продержался",
+  "goal.reason.capital": "Вражеская столица взята",
+  "goal.reason.eliminated": "Ты потерял все узлы",
+  "goal.reason.capitalLost": "Твоя столица пала"
 }

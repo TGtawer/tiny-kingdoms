@@ -89,5 +89,14 @@
   "leader.dwarf": "Dwarf Miser",
   "leader.dwarf.quote": "\"Gold first. Then your kingdom.\"",
   "leader.witch": "Sly Witch",
-  "leader.witch.quote": "\"Leave a castle empty and I will be there\""
+  "leader.witch.quote": "\"Leave a castle empty and I will be there\"",
+  "goal.hold": "Hold the marked node: {done}/{total} s",
+  "goal.survive": "Survive: {done}/{total} s",
+  "goal.capital": "Take the enemy capital, keep your own",
+  "goal.reason.conquer": "All enemy lands are yours",
+  "goal.reason.hold": "The node was held",
+  "goal.reason.survive": "You held out",
+  "goal.reason.capital": "The enemy capital has fallen",
+  "goal.reason.eliminated": "You lost all your nodes",
+  "goal.reason.capitalLost": "Your capital has fallen"
 }

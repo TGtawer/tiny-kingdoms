@@ -5,6 +5,7 @@ import { nodeCapacity, troopRate } from '../sim/economy';
 import { armyPath, routeLength, segmentLength } from '../sim/pathfinding';
 import { defenseStrength, opponentOf, random, strengthOf, type NodeState, type Side, type World } from '../sim/World';
 import type { EnemyParams } from '../level/schema';
+import type { Goal } from '../sim/victory';
 
 /** Behaviour knobs of a leader; a leaderless AI uses these neutral values. */
 const NO_LEADER: Omit<LeaderPreset, 'aggression' | 'thinkMs'> = {
@@ -17,13 +18,16 @@ const NO_LEADER: Omit<LeaderPreset, 'aggression' | 'thinkMs'> = {
 };
 
 /** AI params from level data: the leader preset, overridden by the level's own aggression and think interval. */
-export function aiParamsFromLevel(enemy: EnemyParams): AiParams {
+export function aiParamsFromLevel(enemy: EnemyParams, goal?: Goal, playerCapital?: string | null): AiParams {
   const preset = enemy.leader ? LEADERS[enemy.leader] : null;
+  // Goals give the enemy something to go for: deny the node to hold, take the player's capital.
+  const goalTargets = goal?.type === 'hold' ? [goal.nodeId] : goal?.type === 'capital' && playerCapital ? [playerCapital] : [];
   return {
     thinkMs: enemy.aiThinkMs ?? preset?.thinkMs ?? 1500,
     aggression: enemy.aggression ?? preset?.aggression ?? 0.5,
     startDelayMs: enemy.aiStartDelayMs ?? 0,
     ...(enemy.leader ? { leader: enemy.leader } : {}),
+    ...(goalTargets.length ? { goalTargets } : {}),
   };
 }
 
@@ -40,6 +44,8 @@ export interface AiParams {
   startDelayMs?: number;
   /** Character preset (build style, attack rules); none = the default behaviour. */
   leader?: LeaderId;
+  /** Nodes the level goal makes important (worth AI.goalTargetValue more). */
+  goalTargets?: string[];
 }
 
 /** Serializable AI state; the AI itself is the pure function `aiStep`. */
@@ -339,6 +345,7 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
       if (force < required) continue;
 
       let value = targetValue(side, target, aggression);
+      if (ai.params.goalTargets?.includes(target.id)) value += AI.goalTargetValue;
       // Opportunists (witch) go for opponent nodes that just sent their troops away.
       if (style.weakenedBonus > 0 && target.owner === opponentOf(side) && recentDrop(ai.snapshots, target.id, target.troops) > 0) {
         value *= 1 + style.weakenedBonus;

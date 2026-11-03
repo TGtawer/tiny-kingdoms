@@ -5,7 +5,7 @@ import { apply, validate, type Command, type RejectReason } from './commands';
 import { produce } from './economy';
 import { segmentLength } from './pathfinding';
 import { stepBandits, type BanditRaid } from './bandits';
-import { checkWinner } from './victory';
+import { checkOutcome, updateGoal, type OutcomeReason } from './victory';
 import type { ArmyState, Side, World } from './World';
 
 export const TICK_SEC = TICK_MS / 1000;
@@ -16,7 +16,7 @@ export type TickEvent =
   | ({ type: 'arrived' } & ArrivalResult)
   | ({ type: 'clash' } & ClashResult)
   | ({ type: 'raid' } & BanditRaid)
-  | { type: 'gameOver'; winner: Side };
+  | { type: 'gameOver'; winner: Side; reason: OutcomeReason };
 
 /**
  * Moves an army along its path. Returns true when it reaches the target.
@@ -89,10 +89,11 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
 
   world.tick += 1;
 
-  const winner = checkWinner(world);
-  if (winner) {
-    world.winner = winner;
-    events.push({ type: 'gameOver', winner });
+  updateGoal(world);
+  const outcome = checkOutcome(world);
+  if (outcome) {
+    world.winner = outcome.winner;
+    events.push({ type: 'gameOver', winner: outcome.winner, reason: outcome.reason });
   }
   return events;
 }

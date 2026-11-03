@@ -7,6 +7,7 @@ import { sendAmount, type Command, type SendMode } from '../core/sim/commands';
 import { armyPath, blockingNode, isPortalLink } from '../core/sim/pathfinding';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
+import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
 import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
 import { createWorld, ownedShare, type NodeState, type Owner, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
@@ -59,6 +60,8 @@ export class BattleScene extends Phaser.Scene {
   private dragLines!: Phaser.GameObjects.Graphics;
   /** Fading dots behind marching armies; one Graphics for all of them. */
   private trails!: Phaser.GameObjects.Graphics;
+  /** Hold goal: timer ring around the node to hold. */
+  private goalRing!: Phaser.GameObjects.Graphics;
   /** Node owners before the current tick, to tell "captured" from "lost" in arrival events. */
   private ownersBefore = new Map<string, Owner>();
   private capitals = new Set<string>();
@@ -124,7 +127,7 @@ export class BattleScene extends Phaser.Scene {
       seed: this.level.chapter * 100 + this.level.index,
       player: playerSetupFrom(getStore(this).progress, ALL_LEVELS),
     });
-    this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy));
+    this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy, this.world.goal, this.world.capitals.player));
     const script = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
     this.tutorial = script ? startTutorial(script, this.world.tick) : null;
 
@@ -135,6 +138,7 @@ export class BattleScene extends Phaser.Scene {
       this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id)));
     }
     this.trails = this.add.graphics().setDepth(39);
+    this.goalRing = this.add.graphics().setDepth(38);
     this.dragLines = this.add.graphics().setDepth(50);
     this.sendBadge = this.add.text(0, 0, '', textStyle(20)).setOrigin(0.5).setStroke('#1f2937', px(5)).setDepth(60);
     this.sendBadge.setVisible(false);
@@ -293,7 +297,7 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'gameOver':
-        this.endBattle(event.winner);
+        this.endBattle(event.winner, event.reason);
         break;
       case 'rejected':
         // Player sends without a route are reported once per target in showNoPath.
@@ -327,7 +331,7 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  private endBattle(winner: 'player' | 'enemy'): void {
+  private endBattle(winner: 'player' | 'enemy', reason: OutcomeReason): void {
     this.ended = true;
     this.deselect();
     this.drag = null;
@@ -343,10 +347,12 @@ export class BattleScene extends Phaser.Scene {
     store.commit();
     playSfx(winner === 'player' ? 'victory' : 'defeat');
     if (winner === 'player') this.vibrate(HAPTICS.victory);
-    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reward.crystals, stars));
+    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reason, reward.crystals, stars));
   }
 
-  private showResult(winner: 'player' | 'enemy', crystals: number, stars: number): void {
+  private showResult(winner: 'player' | 'enemy', reason: OutcomeReason, crystals: number, stars: number): void {
+    // Which goal was met (or why the battle was lost), plus the defeat tip.
+    const why = t(`goal.reason.${reason}`);
     const replay = { label: t('result.playAgain'), onClick: () => this.scene.restart({ levelId: this.level.id }) };
     const toMap = { label: t('result.toMap'), onClick: () => this.toMap() };
     const total = getStore(this).progress.crystals;
@@ -356,7 +362,7 @@ export class BattleScene extends Phaser.Scene {
       if (tip === 'upgrades') {
         buttons.splice(1, 0, { label: t('menu.upgrades'), onClick: () => this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }) });
       }
-      this.hud.showResult(t('result.defeat'), false, crystals, total, buttons, tip ? { tip: t(`tip.${tip}`) } : {});
+      this.hud.showResult(t('result.defeat'), false, crystals, total, buttons, { tip: tip ? `${why}\n${t(`tip.${tip}`)}` : why });
       return;
     }
     const next = nextLevel(this.level.id);
@@ -365,9 +371,9 @@ export class BattleScene extends Phaser.Scene {
         { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
         replay,
         toMap,
-      ], { stars });
+      ], { stars, tip: why });
     } else {
-      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], { stars });
+      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], { stars, tip: why });
     }
   }
 
@@ -387,7 +393,8 @@ export class BattleScene extends Phaser.Scene {
     // The bottom bar is always reserved (spells and the build menu live there), and the hint bar stays
     // reserved for the whole level, so the field does not jump when the tutorial ends.
     const bottom = HUD.bottomBar + (this.tutorial ? HUD.hintBar : 0);
-    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom));
+    const top = this.world.goal.type === 'conquer' ? 0 : HUD.goalBar;
+    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom, top));
     drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
@@ -443,6 +450,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.drawDragLines();
     this.drawSendBadge();
+    this.drawGoal();
     this.hud.update(world, 'player', this.armed);
     this.syncSpeed();
     if (this.menu) {
@@ -491,6 +499,38 @@ export class BattleScene extends Phaser.Scene {
       g.lineStyle(px(5), lineColor, 0.9).lineBetween(from.x, from.y, end.x, end.y);
     }
     g.fillStyle(color, 0.9).fillCircle(end.x, end.y, px(7));
+  }
+
+  /** Goal plaque text and the hold timer ring. */
+  private drawGoal(): void {
+    const goal = this.world.goal;
+    const done = Math.floor(goalProgressSec(this.world));
+    switch (goal.type) {
+      case 'conquer':
+        this.hud.setGoal(null);
+        break;
+      case 'capital':
+        this.hud.setGoal(t('goal.capital'));
+        break;
+      case 'survive':
+        this.hud.setGoal(t('goal.survive', { done: Math.min(done, goal.seconds), total: goal.seconds }));
+        break;
+      case 'hold':
+        this.hud.setGoal(t('goal.hold', { done: Math.min(done, goal.seconds), total: goal.seconds }));
+        break;
+    }
+    const g = this.goalRing;
+    g.clear();
+    if (goal.type !== 'hold') return;
+    const view = this.nodeViews.get(goal.nodeId);
+    if (!view) return;
+    const r = view.radius * 1.55;
+    g.lineStyle(px(5), COLORS.outline, 0.35).strokeCircle(view.x, view.y, r);
+    const frac = Math.min(1, goalProgressSec(this.world) / goal.seconds);
+    if (frac > 0) {
+      g.lineStyle(px(5), COLORS.hint, 1);
+      g.beginPath().arc(view.x, view.y, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2).strokePath();
+    }
   }
 
   /** Badge with the troops that will leave: at the swipe end, or above the selected node (tap-tap). */

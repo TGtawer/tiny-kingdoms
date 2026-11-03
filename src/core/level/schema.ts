@@ -1,3 +1,4 @@
+import type { Goal } from '../sim/victory';
 import { LEADER_IDS, NODE_KINDS, type BuildingType, type LeaderId, type NodeKind, type NodeSize } from '../../config/balance';
 
 export type LevelOwner = 'player' | 'enemy' | 'neutral';
@@ -15,7 +16,7 @@ export interface LevelNode {
   /**
    * Start castle of its side ("capital"): drawn with a crown, which stays after the node changes owner.
    * At most one per side, only on a player or enemy start node.
-   * TODO(design): capitals are visual only; GDD does not give them a gameplay meaning yet.
+   * Matters for the 'capital' goal (GDD 3.9); otherwise visual only.
    */
   capital?: boolean;
   /** Special node (GDD 3.12); default 'normal'. */
@@ -52,6 +53,8 @@ export interface LevelData {
   tutorial?: string;
   /** Win faster than this (simulation seconds) for the "fast" star; default STARS.defaultTimeSec. */
   starTimeSec?: number;
+  /** Level goal (GDD 3.9); default conquer. */
+  goal?: Goal;
 }
 
 /** Limits checked by validation. GDD: 8–20 nodes in general, chapter 1 uses 6–9 (BALANCE.md). */
@@ -155,6 +158,21 @@ export function validateLevel(data: unknown): ValidationResult {
     }
     if (isNum(n.x) && isNum(n.y)) byId.set(n.id, { x: n.x, y: n.y });
   });
+
+  const goal = data.goal;
+  if (goal !== undefined) {
+    if (!isObject(goal)) at('goal must be an object');
+    else if (goal.type === 'hold') {
+      if (typeof goal.nodeId !== 'string' || !byId.has(goal.nodeId)) at('goal.nodeId must be a node');
+      if (!isNum(goal.seconds) || goal.seconds <= 0) at('goal.seconds must be > 0');
+    } else if (goal.type === 'survive') {
+      if (!isNum(goal.seconds) || goal.seconds <= 0) at('goal.seconds must be > 0');
+    } else if (goal.type === 'capital') {
+      for (const side of ['player', 'enemy']) {
+        if (!nodes.some((n) => isObject(n) && n.capital === true && n.owner === side)) at(`goal capital needs a ${side} capital`);
+      }
+    } else if (goal.type !== 'conquer') at('goal.type is unknown');
+  }
 
   const owners = nodes.filter(isObject).map((n) => n.owner);
   if (!owners.includes('player')) at('no player start node');

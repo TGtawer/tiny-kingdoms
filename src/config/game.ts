@@ -87,6 +87,8 @@ export const HUD = {
   pauseButton: 52,
   /** Gap between buttons in the top bar (speed-up and pause), CSS px. */
   topBarGap: 8,
+  /** Goal plaque under the top bar (non-conquer goals), CSS px. */
+  goalBar: 30,
   /** Tutorial hint panel height reserved at the bottom, CSS px. */
   hintBar: 88,
   hintMaxWidth: 560,

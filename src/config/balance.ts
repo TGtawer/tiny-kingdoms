@@ -163,6 +163,8 @@ export const AI = {
   /** A node counts as weakened after losing this share of its recent maximum (and at least weakenedMinDrop troops). */
   weakenedShare: 0.4,
   weakenedMinDrop: 4,
+  /** Extra target value of goal nodes: the node to hold (deny it) and the player's capital. */
+  goalTargetValue: 3,
   /** Extra target value of special nodes. */
   templeValue: 1.5,
   chestValue: 2.5,
