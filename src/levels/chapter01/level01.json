@@ -1,0 +1,98 @@
+{
+  "id": "c01_l01",
+  "chapter": 1,
+  "index": 1,
+  "playerStartGold": 20,
+  "enemy": {
+    "productionMult": 0.7,
+    "startGold": 0,
+    "aiThinkMs": 4000,
+    "aggression": 0,
+    "aiStartDelayMs": 25000
+  },
+  "tutorial": "c01_l01",
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.12,
+      "y": 0.5,
+      "size": "large",
+      "owner": "player",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n1",
+      "x": 0.37,
+      "y": 0.5,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 3,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n2",
+      "x": 0.62,
+      "y": 0.5,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 4,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "enemy",
+      "x": 0.87,
+      "y": 0.5,
+      "size": "small",
+      "owner": "enemy",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n3",
+      "x": 0.37,
+      "y": 0.22,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n4",
+      "x": 0.62,
+      "y": 0.78,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "n1"
+    ],
+    [
+      "n1",
+      "n2"
+    ],
+    [
+      "n2",
+      "enemy"
+    ],
+    [
+      "n1",
+      "n3"
+    ],
+    [
+      "n2",
+      "n4"
+    ]
+  ]
+}

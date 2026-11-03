@@ -29,18 +29,20 @@ export class BattleHUD {
   private readonly topBar: Phaser.GameObjects.Graphics;
   private readonly coin: Phaser.GameObjects.Graphics;
   private readonly goldText: Phaser.GameObjects.Text;
+  private readonly title: Phaser.GameObjects.Text;
   private readonly pauseButton: Button;
   private readonly spells: SpellButton[] = [];
   private overlay: Phaser.GameObjects.Container | null = null;
   private shownGold = -1;
 
-  constructor(scene: Phaser.Scene, spells: readonly SpellId[], callbacks: HudCallbacks) {
+  constructor(scene: Phaser.Scene, title: string, spells: readonly SpellId[], callbacks: HudCallbacks) {
     this.scene = scene;
     this.root = scene.add.container(0, 0).setDepth(100);
 
     this.topBar = scene.add.graphics();
     this.coin = scene.add.graphics();
     this.goldText = scene.add.text(0, 0, '0', textStyle(24)).setOrigin(0, 0.5).setStroke('#1f2937', px(5));
+    this.title = scene.add.text(0, 0, title, textStyle(20)).setOrigin(0.5).setStroke('#1f2937', px(5));
 
     const pauseSize = px(HUD.pauseButton);
     this.pauseButton = new Button(scene, 0, 0, { width: pauseSize, height: pauseSize, onClick: callbacks.onPause });
@@ -48,7 +50,7 @@ export class BattleHUD {
     drawPause(pauseIcon, 0, 0, pauseSize * 0.5);
     this.pauseButton.add(pauseIcon);
 
-    this.root.add([this.topBar, this.coin, this.goldText, this.pauseButton]);
+    this.root.add([this.topBar, this.coin, this.goldText, this.title, this.pauseButton]);
 
     for (const spell of spells) {
       const size = px(HUD.spellButton);
@@ -91,6 +93,7 @@ export class BattleHUD {
 
     drawCoinAt(this.coin, px(16) + px(14), barH / 2, px(28));
     this.goldText.setPosition(px(16) + px(34), barH / 2);
+    this.title.setPosition(w / 2, barH / 2);
     this.pauseButton.setPosition(w - px(12) - this.pauseButton.buttonWidth / 2, barH / 2);
 
     const size = px(HUD.spellButton);
@@ -150,10 +153,15 @@ export class BattleHUD {
     ]);
   }
 
-  showResult(winner: Side, onReplay: () => void): void {
-    const won = winner === 'player';
+  /** Result panel; buttons are listed top to bottom. */
+  showResult(title: string, won: boolean, buttons: Array<{ label: string; onClick: () => void }>): void {
     // TODO(stage-5): rewards, "double for ad", exit to chapter map (ResultScene).
-    this.showPanel(t(won ? 'result.victory' : 'result.defeat'), [{ label: t('result.playAgain'), onClick: onReplay }], won);
+    this.showPanel(title, buttons, won);
+  }
+
+  /** Screen position of the gold counter (for tutorial highlights). */
+  goldAnchor(): { x: number; y: number } {
+    return { x: this.coin.x + px(16) + px(14), y: px(HUD.topBar) / 2 };
   }
 
   hideOverlay(): void {

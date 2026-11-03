@@ -1,14 +1,17 @@
 import * as Phaser from 'phaser';
-import { TICK_MS, type SpellId } from '../config/balance';
-import { COLORS, DRAG_THRESHOLD_PX, MAX_FRAME_DELTA_MS } from '../config/game';
+import { SPELL_IDS, SPELL_UNLOCK_AFTER_CHAPTER, TICK_MS, type SpellId } from '../config/balance';
+import { COLORS, DRAG_THRESHOLD_PX, HUD, MAX_FRAME_DELTA_MS } from '../config/game';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
 import type { Command } from '../core/sim/commands';
 import { armyPath } from '../core/sim/pathfinding';
 import { step, type TickEvent } from '../core/sim/tick';
+import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
 import { createWorld, type NodeState, type World } from '../core/sim/World';
-import { TEST_LEVEL } from '../levels';
+import { t } from '../i18n/i18n';
+import { FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
+import { TutorialView } from '../view/TutorialView';
 import { ArmyView, armyLevelPosition } from '../view/ArmyView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
 import { explosion, floatText, pop, ringBurst } from '../view/effects';
@@ -18,9 +21,10 @@ import { RoadView } from '../view/RoadView';
 import { BattleHUD } from './BattleHUD';
 import { getPlatform } from './registry';
 
-// TODO(stage-5): spells come from meta progression (fireball after chapter 1, reinforcement after chapter 2).
-// Both are unlocked on the test level so the HUD and spells can be checked.
-const DEV_UNLOCKED_SPELLS: SpellId[] = ['fireball', 'reinforcement'];
+/** Spells open after completing a chapter (GDD 3.8). TODO(stage-5): take from Progress. */
+function unlockedSpellsFor(level: LevelData): SpellId[] {
+  return SPELL_IDS.filter((s) => level.chapter > SPELL_UNLOCK_AFTER_CHAPTER[s]);
+}
 
 /** Delay before the result panel, so the final capture is visible. */
 const RESULT_DELAY_MS = 700;
@@ -37,7 +41,7 @@ interface DragState {
 }
 
 export interface BattleSceneData {
-  level?: LevelData;
+  levelId?: string;
 }
 
 /** Renders the World and turns input into commands. All rules live in src/core. */
@@ -65,13 +69,16 @@ export class BattleScene extends Phaser.Scene {
   private menu: BuildMenu | null = null;
   private drag: DragState | null = null;
   private armed: SpellId | null = null;
+  private tutorial: TutorialState | null = null;
+  private tutorialView: TutorialView | null = null;
+  private uiEvents: UiEvent[] = [];
 
   constructor() {
     super('BattleScene');
   }
 
   init(data: BattleSceneData): void {
-    this.level = data.level ?? TEST_LEVEL;
+    this.level = (data.levelId && getLevel(data.levelId)) || FIRST_LEVEL;
   }
 
   create(): void {
@@ -87,11 +94,17 @@ export class BattleScene extends Phaser.Scene {
     this.menu = null;
     this.drag = null;
     this.armed = null;
+    this.uiEvents = [];
 
     this.platform = getPlatform(this);
-    // TODO(stage-4): per-level or per-attempt seed.
-    this.world = createWorld(this.level, { seed: 1, player: { unlockedSpells: DEV_UNLOCKED_SPELLS } });
+    // Seed per level: the AI's timing jitter is reproducible for a given level.
+    this.world = createWorld(this.level, {
+      seed: this.level.chapter * 100 + this.level.index,
+      player: { unlockedSpells: unlockedSpellsFor(this.level) },
+    });
     this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy));
+    const script = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
+    this.tutorial = script ? startTutorial(script, this.world.tick) : null;
 
     this.background = this.add.graphics();
     this.roads = new RoadView(this);
@@ -99,12 +112,14 @@ export class BattleScene extends Phaser.Scene {
       this.nodeViews.set(node.id, new NodeView(this, node));
     }
     this.dragLines = this.add.graphics().setDepth(50);
-    this.hud = new BattleHUD(this, this.world.sides.player.unlockedSpells, {
+    this.hud = new BattleHUD(this, t('level.title', { index: this.level.index }), this.world.sides.player.unlockedSpells, {
       onPause: () => this.pause(),
       onSpell: (spell) => this.toggleSpell(spell),
     });
+    this.tutorialView = this.tutorial ? new TutorialView(this) : null;
 
     this.relayout();
+    if (this.tutorial) this.tutorialView!.show(currentStep(this.tutorial), this.hud.hasSpellBar ? HUD.bottomBar : 0);
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
@@ -116,12 +131,14 @@ export class BattleScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.relayout, this);
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.onHidden, this);
       this.hud.destroy();
+      this.tutorialView?.destroy();
+      this.tutorialView = null;
     });
 
     this.platform.gameplayStart();
   }
 
-  override update(_time: number, delta: number): void {
+  override update(time: number, delta: number): void {
     if (!this.paused && !this.ended) {
       this.accumulator += Math.min(delta, MAX_FRAME_DELTA_MS);
       while (this.accumulator >= TICK_MS && !this.ended) {
@@ -130,6 +147,10 @@ export class BattleScene extends Phaser.Scene {
       }
     }
     this.render(this.ended ? 1 : this.accumulator / TICK_MS);
+    this.tutorialView?.update(time, {
+      node: (id) => this.nodeViews.get(id) ?? null,
+      gold: () => this.hud.goldAnchor(),
+    });
   }
 
   // ---- Simulation -------------------------------------------------------------------------------
@@ -143,6 +164,11 @@ export class BattleScene extends Phaser.Scene {
     this.queue = [];
     const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
+
+    if (this.tutorial && !this.ended && advanceTutorial(this.tutorial, this.world, events, this.uiEvents)) {
+      this.tutorialView?.show(currentStep(this.tutorial));
+    }
+    this.uiEvents = [];
   }
 
   private handleEvent(event: TickEvent): void {
@@ -202,7 +228,29 @@ export class BattleScene extends Phaser.Scene {
     this.drag = null;
     this.armed = null;
     this.platform.gameplayStop();
-    this.time.delayedCall(RESULT_DELAY_MS, () => this.hud.showResult(winner, () => this.scene.restart()));
+    this.tutorialView?.show(null);
+    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner));
+  }
+
+  private showResult(winner: 'player' | 'enemy'): void {
+    // TODO(stage-5): rewards and the chapter map instead of going straight to the next level.
+    const replay = { label: t('result.playAgain'), onClick: () => this.scene.restart({ levelId: this.level.id }) };
+    if (winner === 'enemy') {
+      this.hud.showResult(t('result.defeat'), false, [replay]);
+      return;
+    }
+    const next = nextLevel(this.level.id);
+    if (next) {
+      this.hud.showResult(t('result.victory'), true, [
+        { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
+        replay,
+      ]);
+    } else {
+      this.hud.showResult(t('result.chapterDone'), true, [
+        { label: t('result.fromStart'), onClick: () => this.scene.restart({ levelId: FIRST_LEVEL.id }) },
+        replay,
+      ]);
+    }
   }
 
   // ---- Rendering --------------------------------------------------------------------------------
@@ -214,11 +262,14 @@ export class BattleScene extends Phaser.Scene {
     this.deselect();
 
     const nodes = Object.values(this.world.nodes);
-    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, this.hud.hasSpellBar));
+    // The bottom stays reserved for the whole level, so the field does not jump when the tutorial ends.
+    const bottom = (this.hud.hasSpellBar ? HUD.bottomBar : 0) + (this.tutorial ? HUD.hintBar : 0);
+    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom));
     this.drawBackground(w, h);
     this.roads.draw(this.world, this.layoutField);
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
     this.hud.layout();
+    this.tutorialView?.layout();
   }
 
   private drawBackground(w: number, h: number): void {
@@ -292,7 +343,8 @@ export class BattleScene extends Phaser.Scene {
       const hover = this.nodeAt(this.drag.x, this.drag.y);
       return hover?.id === node.id && this.drag.sources.some((s) => this.canReach(s, node.id)) ? 'target' : 'none';
     }
-    return this.selected === node.id ? 'selected' : 'none';
+    if (this.selected === node.id) return 'selected';
+    return this.tutorialView?.highlightedNodes().includes(node.id) ? 'hint' : 'none';
   }
 
   private drawDragLines(): void {
@@ -413,6 +465,7 @@ export class BattleScene extends Phaser.Scene {
   private select(nodeId: string): void {
     this.deselect();
     this.selected = nodeId;
+    this.uiEvents.push({ type: 'select', node: nodeId });
     const view = this.nodeViews.get(nodeId)!;
     this.menu = new BuildMenu(
       this,
@@ -455,7 +508,7 @@ export class BattleScene extends Phaser.Scene {
     this.platform.gameplayStop();
     this.hud.showPause(
       () => this.resume(),
-      () => this.scene.restart(),
+      () => this.scene.restart({ levelId: this.level.id }),
     );
   }
 

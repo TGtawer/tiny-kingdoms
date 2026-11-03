@@ -1,0 +1,136 @@
+{
+  "id": "c01_l08",
+  "chapter": 1,
+  "index": 8,
+  "playerStartGold": 20,
+  "enemy": {
+    "productionMult": 0.7,
+    "aiThinkMs": 2200,
+    "aggression": 0.35,
+    "startGold": 20
+  },
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.088,
+      "y": 0.581,
+      "size": "large",
+      "owner": "player",
+      "troops": 20,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "enemy",
+      "x": 0.912,
+      "y": 0.419,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 20,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "a1",
+      "x": 0.32,
+      "y": 0.671,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 11,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "b1",
+      "x": 0.68,
+      "y": 0.329,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 11,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "a2",
+      "x": 0.411,
+      "y": 0.307,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 7,
+      "hasGoldVein": true,
+      "building": null
+    },
+    {
+      "id": "b2",
+      "x": 0.589,
+      "y": 0.693,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 7,
+      "hasGoldVein": true,
+      "building": null
+    },
+    {
+      "id": "a3",
+      "x": 0.256,
+      "y": 0.889,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": true,
+      "building": null
+    },
+    {
+      "id": "b3",
+      "x": 0.744,
+      "y": 0.111,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": true,
+      "building": null
+    }
+  ],
+  "roads": [
+    [
+      "a1",
+      "a3"
+    ],
+    [
+      "b1",
+      "b3"
+    ],
+    [
+      "enemy",
+      "b1"
+    ],
+    [
+      "player",
+      "a1"
+    ],
+    [
+      "a1",
+      "b2"
+    ],
+    [
+      "b1",
+      "a2"
+    ],
+    [
+      "b1",
+      "b2"
+    ],
+    [
+      "a1",
+      "a2"
+    ],
+    [
+      "enemy",
+      "b3"
+    ],
+    [
+      "player",
+      "a3"
+    ]
+  ]
+}

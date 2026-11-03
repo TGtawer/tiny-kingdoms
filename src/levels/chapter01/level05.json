@@ -1,0 +1,132 @@
+{
+  "id": "c01_l05",
+  "chapter": 1,
+  "index": 5,
+  "playerStartGold": 30,
+  "enemy": {
+    "productionMult": 0.7,
+    "startGold": 20,
+    "aiThinkMs": 2500,
+    "aggression": 0.35,
+    "aiStartDelayMs": 8000
+  },
+  "tutorial": "c01_l05",
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.1,
+      "y": 0.5,
+      "size": "large",
+      "owner": "player",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "f",
+      "x": 0.35,
+      "y": 0.5,
+      "size": "medium",
+      "owner": "player",
+      "troops": 10,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "a",
+      "x": 0.25,
+      "y": 0.22,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "b",
+      "x": 0.25,
+      "y": 0.78,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "c",
+      "x": 0.6,
+      "y": 0.3,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 10,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "d",
+      "x": 0.6,
+      "y": 0.7,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 10,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "enemy",
+      "x": 0.88,
+      "y": 0.5,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 20,
+      "hasGoldVein": false,
+      "building": null
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "a"
+    ],
+    [
+      "player",
+      "b"
+    ],
+    [
+      "player",
+      "f"
+    ],
+    [
+      "a",
+      "f"
+    ],
+    [
+      "b",
+      "f"
+    ],
+    [
+      "a",
+      "c"
+    ],
+    [
+      "f",
+      "c"
+    ],
+    [
+      "f",
+      "d"
+    ],
+    [
+      "b",
+      "d"
+    ],
+    [
+      "c",
+      "enemy"
+    ],
+    [
+      "d",
+      "enemy"
+    ]
+  ]
+}

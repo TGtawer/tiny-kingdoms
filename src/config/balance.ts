@@ -5,6 +5,12 @@ export type BuildingType = 'mine' | 'barracks' | 'tower';
 export type SpellId = 'fireball' | 'reinforcement';
 export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement'];
 
+/** GDD 3.8: a spell becomes available after completing this chapter. */
+export const SPELL_UNLOCK_AFTER_CHAPTER: Record<SpellId, number> = {
+  fireball: 1,
+  reinforcement: 2,
+};
+
 /** Simulation fixed timestep. */
 export const TICK_MS = 100;
 

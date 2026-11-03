@@ -5,13 +5,14 @@ import type { NodeState } from '../core/sim/World';
 import { drawBuilding } from './icons';
 import { px, textStyle, type FieldLayout } from './layout';
 
-export type Highlight = 'none' | 'selected' | 'target' | 'fireball' | 'reinforcement';
+export type Highlight = 'none' | 'selected' | 'target' | 'fireball' | 'reinforcement' | 'hint';
 
 const HIGHLIGHT_COLOR: Record<Exclude<Highlight, 'none'>, number> = {
   selected: COLORS.select,
   target: COLORS.select,
   fireball: COLORS.fireball,
   reinforcement: COLORS.reinforcement,
+  hint: COLORS.hint,
 };
 
 /** A node drawn with Graphics: faction circle, building badge, gold vein, troop count. Redraws only on change. */

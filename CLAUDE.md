@@ -37,6 +37,7 @@ npm run build      # продакшн-сборка в dist/
 npm run test       # Vitest
 npm run lint       # ESLint
 npm run zip        # dist/ -> build.zip для загрузки в Консоль Яндекс Игр
+npm run gen-level -- --seed 3 --nodes 8 --id c01_l06 --index 6   # черновик уровня по seed (JSON в stdout)
 ```
 
 ## Жёсткие правила

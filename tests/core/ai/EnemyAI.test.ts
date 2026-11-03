@@ -36,6 +36,11 @@ describe('decision timing', () => {
     expect(aiStep(world, ai)).toEqual([]);
   });
 
+  it('waits for aiStartDelayMs before the first decision', () => {
+    const ai = createAi('enemy', aiParamsFromLevel({ productionMult: 1, aiThinkMs: 1000, aggression: 0.5, startGold: 0, aiStartDelayMs: 5000 }));
+    expect(ai.nextThinkTick).toBe(5000 / TICK_MS);
+  });
+
   it('does nothing after the battle is over', () => {
     const world = lineWorld({ E: { troops: 30 } });
     world.winner = 'player';

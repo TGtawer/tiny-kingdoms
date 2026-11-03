@@ -1,0 +1,68 @@
+{
+  "c01_l01": {
+    "steps": [
+      {
+        "hint": "tut.send",
+        "highlight": [{ "node": "player" }, { "node": "n1" }],
+        "finger": { "kind": "drag", "from": "player", "to": "n1" },
+        "until": { "type": "send" }
+      },
+      { "hint": "tut.neutral", "until": { "type": "capture" } },
+      { "hint": "tut.goal", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 8 } }
+    ]
+  },
+  "c01_l02": {
+    "steps": [
+      { "hint": "tut.produce", "highlight": [{ "node": "player" }], "until": { "type": "time", "sec": 5 } },
+      {
+        "hint": "tut.tapTap",
+        "highlight": [{ "node": "player" }, { "node": "b" }],
+        "finger": { "kind": "tapTap", "from": "player", "to": "b" },
+        "until": { "type": "send" }
+      },
+      { "hint": "tut.grow", "until": { "type": "capture" } },
+      { "hint": "tut.goal", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 8 } }
+    ]
+  },
+  "c01_l03": {
+    "steps": [
+      { "hint": "tut.gold", "highlight": [{ "ui": "gold" }], "until": { "type": "time", "sec": 5 } },
+      {
+        "hint": "tut.buildBarracks",
+        "highlight": [{ "node": "player" }],
+        "finger": { "kind": "tap", "node": "player" },
+        "until": { "type": "build", "building": "barracks" }
+      },
+      { "hint": "tut.barracks", "until": { "type": "time", "sec": 6 } },
+      { "hint": "tut.goal", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 8 } }
+    ]
+  },
+  "c01_l04": {
+    "steps": [
+      {
+        "hint": "tut.vein",
+        "highlight": [{ "node": "v" }],
+        "finger": { "kind": "drag", "from": "player", "to": "v" },
+        "until": { "type": "capture", "node": "v" }
+      },
+      {
+        "hint": "tut.buildMine",
+        "highlight": [{ "node": "v" }],
+        "finger": { "kind": "tap", "node": "v" },
+        "until": { "type": "build", "building": "mine" }
+      },
+      { "hint": "tut.mine", "highlight": [{ "ui": "gold" }], "until": { "type": "time", "sec": 6 } }
+    ]
+  },
+  "c01_l05": {
+    "steps": [
+      {
+        "hint": "tut.buildTower",
+        "highlight": [{ "node": "f" }],
+        "finger": { "kind": "tap", "node": "f" },
+        "until": { "type": "build", "building": "tower" }
+      },
+      { "hint": "tut.tower", "until": { "type": "time", "sec": 7 } }
+    ]
+  }
+}

@@ -8,7 +8,7 @@ import type { EnemyParams } from '../level/schema';
 
 /** AI params from level data. */
 export function aiParamsFromLevel(enemy: EnemyParams): AiParams {
-  return { thinkMs: enemy.aiThinkMs, aggression: enemy.aggression };
+  return { thinkMs: enemy.aiThinkMs, aggression: enemy.aggression, startDelayMs: enemy.aiStartDelayMs ?? 0 };
 }
 
 export interface AiParams {
@@ -16,6 +16,8 @@ export interface AiParams {
   thinkMs: number;
   /** 0 = cautious, 1 = reckless. */
   aggression: number;
+  /** No decisions before this time, ms (tutorial levels). */
+  startDelayMs?: number;
 }
 
 /** Serializable AI state; the AI itself is the pure function `aiStep`. */
@@ -26,8 +28,9 @@ export interface AiState {
 }
 
 export function createAi(side: Side, params: AiParams): AiState {
-  // First decision after one think interval, so the player gets a moment at the start.
-  return { side, params: { ...params }, nextThinkTick: Math.max(1, Math.round(params.thinkMs / TICK_MS)) };
+  // First decision after one think interval (or the start delay), so the player gets a moment at the start.
+  const firstMs = Math.max(params.thinkMs, params.startDelayMs ?? 0);
+  return { side, params: { ...params }, nextThinkTick: Math.max(1, Math.round(firstMs / TICK_MS)) };
 }
 
 /**
