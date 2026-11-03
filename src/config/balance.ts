@@ -52,6 +52,13 @@ export const ARMY = {
   minTroopsToSend: 2,
 } as const;
 
+/** Battle speed-up button (GDD 3.11): offered while the player owns more than `unlockShare` of all nodes. */
+export const SPEED_UP = {
+  unlockShare: 0.65,
+  /** Simulation ticks per real tick while sped up. */
+  multiplier: 2,
+} as const;
+
 export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
   fireball: { killShare: number; minKill: number };
   reinforcement: { troops: number };

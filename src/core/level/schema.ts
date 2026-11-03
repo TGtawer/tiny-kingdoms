@@ -12,6 +12,12 @@ export interface LevelNode {
   troops: number;
   hasGoldVein: boolean;
   building: { type: BuildingType; level: 1 | 2 | 3 } | null;
+  /**
+   * Start castle of its side ("capital"): drawn with a crown, which stays after the node changes owner.
+   * At most one per side, only on a player or enemy start node.
+   * TODO(design): capitals are visual only; GDD does not give them a gameplay meaning yet.
+   */
+  capital?: boolean;
 }
 
 export interface EnemyParams {
@@ -119,12 +125,20 @@ export function validateLevel(data: unknown): ValidationResult {
         at(`${where}: mine without gold vein`);
       }
     }
+    if (n.capital !== undefined) {
+      if (typeof n.capital !== 'boolean') at(`${where}: capital must be boolean`);
+      else if (n.capital && n.owner !== 'player' && n.owner !== 'enemy') at(`${where}: capital must start as player or enemy`);
+    }
     if (isNum(n.x) && isNum(n.y)) byId.set(n.id, { x: n.x, y: n.y });
   });
 
   const owners = nodes.filter(isObject).map((n) => n.owner);
   if (!owners.includes('player')) at('no player start node');
   if (!owners.includes('enemy')) at('no enemy start node');
+  for (const side of ['player', 'enemy'] as const) {
+    const capitals = nodes.filter((n) => isObject(n) && n.capital === true && n.owner === side).length;
+    if (capitals > 1) at(`more than one ${side} capital`);
+  }
 
   // Nodes must not overlap.
   const points = [...byId.entries()];

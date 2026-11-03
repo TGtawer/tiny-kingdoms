@@ -30,7 +30,6 @@
   "tut.mine": "Шахта приносит много золота — трать его на постройки",
   "tut.buildTower": "Нажми на круг у границы и построй башню",
   "tut.tower": "Башня бьёт по каждой вражеской армии, которая входит в её круг",
-  "menu.play": "Играть",
   "menu.upgrades": "Прокачка",
   "map.chapter": "Глава {chapter}",
   "result.toMap": "К карте",
@@ -52,5 +51,10 @@
   "spell.fireball": "Огненный шар",
   "spell.fireball.desc": "+{damage}% урона, −{cooldown} с перезарядки",
   "spell.reinforcement": "Подкрепление",
-  "spell.reinforcement.desc": "+{troops} войска, −{cooldown} с перезарядки"
+  "spell.reinforcement.desc": "+{troops} войска, −{cooldown} с перезарядки",
+  "menu.playLevel": "Играть · Ур. {index}",
+  "menu.map": "Карта",
+  "battle.noPath": "Нет пути",
+  "battle.sendCount": "→ {count}",
+  "battle.speed": "×{mult}"
 }

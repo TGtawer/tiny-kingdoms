@@ -30,7 +30,6 @@
   "tut.mine": "A mine brings lots of gold — spend it on buildings",
   "tut.buildTower": "Tap the circle at the border and build a tower",
   "tut.tower": "A tower hits every enemy army entering its circle",
-  "menu.play": "Play",
   "menu.upgrades": "Upgrades",
   "map.chapter": "Chapter {chapter}",
   "result.toMap": "To the map",
@@ -52,5 +51,10 @@
   "spell.fireball": "Fireball",
   "spell.fireball.desc": "+{damage}% damage, −{cooldown} s cooldown",
   "spell.reinforcement": "Reinforcements",
-  "spell.reinforcement.desc": "+{troops} troops, −{cooldown} s cooldown"
+  "spell.reinforcement.desc": "+{troops} troops, −{cooldown} s cooldown",
+  "menu.playLevel": "Play · Lv. {index}",
+  "menu.map": "Map",
+  "battle.noPath": "No route",
+  "battle.sendCount": "→ {count}",
+  "battle.speed": "×{mult}"
 }

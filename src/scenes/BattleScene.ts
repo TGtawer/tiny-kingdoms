@@ -1,13 +1,14 @@
 import * as Phaser from 'phaser';
-import { TICK_MS, type SpellId } from '../config/balance';
+import { SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
 import { COLORS, DRAG_THRESHOLD_PX, HUD, MAX_FRAME_DELTA_MS } from '../config/game';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
-import type { Command, SendMode } from '../core/sim/commands';
-import { armyPath } from '../core/sim/pathfinding';
+import { sendAmount, type Command, type SendMode } from '../core/sim/commands';
+import { armyPath, blockingNode } from '../core/sim/pathfinding';
+import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
-import { createWorld, type NodeState, type World } from '../core/sim/World';
+import { createWorld, ownedShare, type NodeState, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
 import { playerSetupFrom } from '../core/meta/upgrades';
@@ -17,7 +18,7 @@ import { TutorialView } from '../view/TutorialView';
 import { ArmyView, armyLevelPosition } from '../view/ArmyView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
 import { explosion, floatText, pop, ringBurst } from '../view/effects';
-import { FieldLayout, fieldArea, px, type Point } from '../view/layout';
+import { FieldLayout, fieldArea, px, textStyle, type Point } from '../view/layout';
 import { NodeView, type Highlight } from '../view/NodeView';
 import { RoadView } from '../view/RoadView';
 import { drawMeadow } from '../view/ui';
@@ -53,6 +54,8 @@ export class BattleScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
   private roads!: RoadView;
   private dragLines!: Phaser.GameObjects.Graphics;
+  /** "How many will leave" badge for a swipe or a selected node; one reused Text. */
+  private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
   private nodeViews = new Map<string, NodeView>();
   private armyViews = new Map<string, ArmyView>();
@@ -70,6 +73,8 @@ export class BattleScene extends Phaser.Scene {
   private tutorial: TutorialState | null = null;
   private tutorialView: TutorialView | null = null;
   private uiEvents: UiEvent[] = [];
+  /** Simulation speed: 1, or SPEED_UP.multiplier while the speed-up is on. */
+  private speed = 1;
 
   constructor() {
     super('BattleScene');
@@ -93,6 +98,7 @@ export class BattleScene extends Phaser.Scene {
     this.drag = null;
     this.armed = null;
     this.uiEvents = [];
+    this.speed = 1;
 
     this.platform = getPlatform(this);
     // Seed per level: the AI's timing jitter is reproducible for a given level.
@@ -107,12 +113,16 @@ export class BattleScene extends Phaser.Scene {
 
     this.background = this.add.graphics();
     this.roads = new RoadView(this);
+    const capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
     for (const node of Object.values(this.world.nodes)) {
-      this.nodeViews.set(node.id, new NodeView(this, node));
+      this.nodeViews.set(node.id, new NodeView(this, node, capitals.has(node.id)));
     }
     this.dragLines = this.add.graphics().setDepth(50);
+    this.sendBadge = this.add.text(0, 0, '', textStyle(20)).setOrigin(0.5).setStroke('#1f2937', px(5)).setDepth(60);
+    this.sendBadge.setVisible(false);
     this.hud = new BattleHUD(this, t('level.title', { index: this.level.index }), this.world.sides.player.unlockedSpells, {
       onPause: () => this.pause(),
+      onSpeed: () => this.toggleSpeed(),
       onSpell: (spell) => this.toggleSpell(spell),
     });
     this.tutorialView = this.tutorial ? new TutorialView(this) : null;
@@ -139,7 +149,7 @@ export class BattleScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     if (!this.paused && !this.ended) {
-      this.accumulator += Math.min(delta, MAX_FRAME_DELTA_MS);
+      this.accumulator += Math.min(delta, MAX_FRAME_DELTA_MS) * this.speed;
       while (this.accumulator >= TICK_MS && !this.ended) {
         this.tickOnce();
         this.accumulator -= TICK_MS;
@@ -163,6 +173,7 @@ export class BattleScene extends Phaser.Scene {
     this.queue = [];
     const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
+    this.showNoPath(events);
 
     if (this.tutorial && !this.ended && advanceTutorial(this.tutorial, this.world, events, this.uiEvents)) {
       this.tutorialView?.show(currentStep(this.tutorial));
@@ -218,15 +229,35 @@ export class BattleScene extends Phaser.Scene {
       case 'gameOver':
         this.endBattle(event.winner);
         break;
-      case 'rejected': {
-        // Feedback for a player send without a route (e.g. a neutral node in the way).
-        const cmd = event.command;
-        if (cmd.type === 'send' && cmd.side === 'player' && event.reason === 'noPath') {
-          const view = this.nodeViews.get(cmd.to);
-          if (view) ringBurst(this, view.x, view.y, view.radius, COLORS.faction.enemy);
-        }
+      case 'rejected':
+        // Player sends without a route are reported once per target in showNoPath.
         break;
-      }
+    }
+  }
+
+  /**
+   * Feedback for player sends without a route: "No route" over the target and a red ring on the foreign node
+   * that blocks the way. Skipped when another army of the same order did go to that target (multi-node swipe).
+   */
+  private showNoPath(events: readonly TickEvent[]): void {
+    const sentTo = new Set<string>();
+    const blocked = new Map<string, string>();
+    for (const event of events) {
+      if (event.type !== 'applied' && event.type !== 'rejected') continue;
+      const cmd = event.command;
+      if (cmd.type !== 'send' || cmd.side !== 'player') continue;
+      if (event.type === 'applied') sentTo.add(cmd.to);
+      else if (event.reason === 'noPath' && !blocked.has(cmd.to)) blocked.set(cmd.to, cmd.from);
+    }
+    for (const [to, from] of blocked) {
+      if (sentTo.has(to)) continue;
+      const view = this.nodeViews.get(to);
+      if (!view) continue;
+      ringBurst(this, view.x, view.y, view.radius, COLORS.faction.enemy);
+      floatText(this, view.x, view.y - view.radius, t('battle.noPath'), COLORS.faction.enemy);
+      const blocker = blockingNode(this.world, 'player', from, to);
+      const blockerView = blocker ? this.nodeViews.get(blocker) : undefined;
+      if (blockerView) ringBurst(this, blockerView.x, blockerView.y, blockerView.radius * 1.2, COLORS.faction.enemy);
     }
   }
 
@@ -320,7 +351,9 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.drawDragLines();
+    this.drawSendBadge();
     this.hud.update(world, 'player', this.armed);
+    this.syncSpeed();
     if (this.menu) {
       if (world.nodes[this.menu.nodeId]!.owner !== 'player') this.deselect();
       else this.menu.refresh(world.sides.player.gold);
@@ -341,6 +374,10 @@ export class BattleScene extends Phaser.Scene {
     return this.tutorialView?.highlightedNodes().includes(node.id) ? 'hint' : 'none';
   }
 
+  /**
+   * Swipe lines with the attack preview: green = predicted capture, yellow = not enough troops,
+   * red = no route from that source, white = own target or no target yet.
+   */
   private drawDragLines(): void {
     const g = this.dragLines;
     g.clear();
@@ -348,15 +385,53 @@ export class BattleScene extends Phaser.Scene {
     if (!drag?.moved) return;
     const hover = this.nodeAt(drag.x, drag.y);
     const end = hover ? this.nodeViews.get(hover.id)! : { x: drag.x, y: drag.y };
+
+    let color: number = COLORS.select;
+    if (hover && hover.owner !== 'player') {
+      const preview = previewAttack(this.world, 'player', drag.sources, 'swipe', hover.id);
+      if (preview.sent > 0) color = preview.wins ? COLORS.attackWin : COLORS.attackShort;
+    }
+
     for (const id of drag.sources) {
       if (id === hover?.id) continue;
       const from = this.nodeViews.get(id)!;
-      // Red line: no route through own nodes to the hovered target.
-      const color = hover && !this.canReach(id, hover.id) ? COLORS.faction.enemy : COLORS.select;
+      const lineColor = hover && !this.canReach(id, hover.id) ? COLORS.faction.enemy : color;
       g.lineStyle(px(9), COLORS.outline, 0.35).lineBetween(from.x, from.y, end.x, end.y);
-      g.lineStyle(px(5), color, 0.9).lineBetween(from.x, from.y, end.x, end.y);
+      g.lineStyle(px(5), lineColor, 0.9).lineBetween(from.x, from.y, end.x, end.y);
     }
-    g.fillStyle(COLORS.select, 0.9).fillCircle(end.x, end.y, px(7));
+    g.fillStyle(color, 0.9).fillCircle(end.x, end.y, px(7));
+  }
+
+  /** Badge with the troops that will leave: at the swipe end, or above the selected node (tap-tap). */
+  private drawSendBadge(): void {
+    const badge = this.sendBadge;
+    const drag = this.drag;
+    let count = 0;
+    let x = 0;
+    let y = 0;
+    let text = '';
+    if (drag?.moved) {
+      const hover = this.nodeAt(drag.x, drag.y);
+      const end = hover ? this.nodeViews.get(hover.id)! : null;
+      count = hover
+        ? previewAttack(this.world, 'player', drag.sources, 'swipe', hover.id).sent
+        : drag.sources.reduce((sum, id) => sum + sendAmount(this.world.nodes[id]!.troops, 'swipe'), 0);
+      x = end ? end.x : drag.x;
+      y = end ? end.y - end.radius * 1.34 - px(16) : drag.y - px(36);
+      text = String(count);
+    } else if (this.selected) {
+      const view = this.nodeViews.get(this.selected)!;
+      count = sendAmount(this.world.nodes[this.selected]!.troops, 'tap');
+      x = view.x;
+      y = view.y - view.radius * 1.34 - px(16);
+      text = t('battle.sendCount', { count });
+    }
+    if (count <= 0) {
+      badge.setVisible(false);
+      return;
+    }
+    if (badge.text !== text) badge.setText(text);
+    badge.setPosition(x, y).setVisible(true);
   }
 
   /** Whether a player army from `from` has a route to `to` (only through own nodes). */
@@ -481,6 +556,24 @@ export class BattleScene extends Phaser.Scene {
         : { type: 'upgrade', side: 'player', nodeId },
     );
     this.deselect();
+  }
+
+  // ---- Speed-up ---------------------------------------------------------------------------------
+
+  /** The speed-up is offered only while the player holds more than SPEED_UP.unlockShare of all nodes. */
+  private speedAvailable(): boolean {
+    return ownedShare(this.world, 'player') > SPEED_UP.unlockShare;
+  }
+
+  private syncSpeed(): void {
+    const available = !this.ended && this.speedAvailable();
+    if (!available) this.speed = 1;
+    this.hud.setSpeed(available, this.speed);
+  }
+
+  private toggleSpeed(): void {
+    if (this.paused || this.ended || !this.speedAvailable()) return;
+    this.speed = this.speed === 1 ? SPEED_UP.multiplier : 1;
   }
 
   private toggleSpell(spell: SpellId): void {

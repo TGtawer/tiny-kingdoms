@@ -124,6 +124,29 @@ export function drawCheck(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   g.lineBetween(x - s * 0.1, y + s * 0.35, x + s * 0.5, y - s * 0.35);
 }
 
+/** Golden crown marking a capital (start castle). */
+export function drawCrown(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
+  const s = size / 2;
+  const line = Math.max(1, size * 0.08);
+  const base = y + s * 0.55;
+  const rim = y - s * 0.05;
+  g.fillStyle(COLORS.gold, 1);
+  g.beginPath();
+  g.moveTo(x - s * 0.9, base);
+  g.lineTo(x - s * 0.9, y - s * 0.55);
+  g.lineTo(x - s * 0.45, rim);
+  g.lineTo(x, y - s * 0.85);
+  g.lineTo(x + s * 0.45, rim);
+  g.lineTo(x + s * 0.9, y - s * 0.55);
+  g.lineTo(x + s * 0.9, base);
+  g.closePath();
+  g.fillPath();
+  g.lineStyle(line, COLORS.outline, 1).strokePath();
+  g.fillStyle(COLORS.goldDark, 1).fillRect(x - s * 0.9, base - s * 0.25, s * 1.8, s * 0.25);
+  g.strokeRect(x - s * 0.9, base - s * 0.25, s * 1.8, s * 0.25);
+  g.fillStyle(COLORS.faction.enemy, 1).fillCircle(x, y - s * 0.85, s * 0.16);
+}
+
 export function drawPause(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
   const s = size / 2;
   g.fillStyle(COLORS.textDark, 1);

@@ -10,6 +10,8 @@ import { px, textStyle } from '../view/layout';
 
 export interface HudCallbacks {
   onPause(): void;
+  /** Speed-up button: toggles ×1 / ×SPEED_UP.multiplier. */
+  onSpeed(): void;
   onSpell(spell: SpellId): void;
 }
 
@@ -31,6 +33,10 @@ export class BattleHUD {
   private readonly goldText: Phaser.GameObjects.Text;
   private readonly title: Phaser.GameObjects.Text;
   private readonly pauseButton: Button;
+  private readonly speedButton: Button;
+  private readonly speedText: Phaser.GameObjects.Text;
+  private readonly speedRing: Phaser.GameObjects.Graphics;
+  private shownSpeed = '';
   private readonly spells: SpellButton[] = [];
   private overlay: Phaser.GameObjects.Container | null = null;
   private shownGold = -1;
@@ -50,7 +56,15 @@ export class BattleHUD {
     drawPause(pauseIcon, 0, 0, pauseSize * 0.5);
     this.pauseButton.add(pauseIcon);
 
-    this.root.add([this.topBar, this.coin, this.goldText, this.title, this.pauseButton]);
+    // Speed-up: hidden until the player holds enough nodes (see BattleScene).
+    this.speedButton = new Button(scene, 0, 0, { width: pauseSize, height: pauseSize, onClick: callbacks.onSpeed });
+    this.speedText = scene.add.text(0, -px(2), '', textStyle(20, COLORS.textDark)).setOrigin(0.5);
+    this.speedButton.add(this.speedText);
+    this.speedRing = scene.add.graphics();
+    this.speedButton.setVisible(false);
+    this.speedRing.setVisible(false);
+
+    this.root.add([this.topBar, this.coin, this.goldText, this.title, this.speedRing, this.pauseButton, this.speedButton]);
 
     for (const spell of spells) {
       const size = px(HUD.spellButton);
@@ -83,6 +97,29 @@ export class BattleHUD {
     return this.spells.length > 0;
   }
 
+  /**
+   * Speed-up button state: hidden when not available; `multiplier` is the current speed (1 = normal).
+   * Cheap to call every frame.
+   */
+  setSpeed(available: boolean, multiplier: number): void {
+    const key = available ? String(multiplier) : '';
+    if (key === this.shownSpeed) return;
+    const appearing = available && this.shownSpeed === '';
+    this.shownSpeed = key;
+    this.speedButton.setVisible(available);
+    this.speedRing.setVisible(available && multiplier > 1);
+    if (!available) return;
+
+    this.speedText.setText(t('battle.speed', { mult: multiplier }));
+    const size = this.speedButton.buttonWidth;
+    this.speedRing.clear();
+    this.speedRing.lineStyle(px(4), COLORS.hint, 1).strokeRoundedRect(-size / 2 - px(4), -size / 2 - px(2), size + px(8), size + px(8), px(16));
+    if (appearing) {
+      this.speedButton.setScale(0.6);
+      this.scene.tweens.add({ targets: this.speedButton, scale: 1, duration: 220, ease: 'Back.Out' });
+    }
+  }
+
   /** Hides the spell buttons while another panel (the build menu) takes the bottom bar. */
   setSpellBarVisible(visible: boolean): void {
     for (const s of this.spells) {
@@ -103,6 +140,11 @@ export class BattleHUD {
     this.goldText.setPosition(px(16) + px(34), barH / 2);
     this.title.setPosition(w / 2, barH / 2);
     this.pauseButton.setPosition(w - px(12) - this.pauseButton.buttonWidth / 2, barH / 2);
+    this.speedButton.setPosition(
+      this.pauseButton.x - this.pauseButton.buttonWidth / 2 - px(HUD.topBarGap) - this.speedButton.buttonWidth / 2,
+      barH / 2,
+    );
+    this.speedRing.setPosition(this.speedButton.x, this.speedButton.y);
 
     const size = px(HUD.spellButton);
     const gap = px(16);

@@ -153,6 +153,12 @@ export function nodesOf(world: World, owner: Owner): NodeState[] {
   return Object.values(world.nodes).filter((n) => n.owner === owner);
 }
 
+/** Share of all nodes (neutrals included) owned by `owner`, 0..1. */
+export function ownedShare(world: World, owner: Owner): number {
+  const all = Object.values(world.nodes);
+  return all.length === 0 ? 0 : all.filter((n) => n.owner === owner).length / all.length;
+}
+
 /** Random number in [0, 1) from the world's seeded RNG. */
 export function random(world: World): number {
   const [value, next] = nextRandom(world.rngState);

@@ -10,6 +10,19 @@ export function armyPath(world: World, side: Side, from: string, to: string): st
   return findPath(world.nodes, world.roads, from, to, passableFor(side));
 }
 
+/**
+ * Why `side` has no route: the first foreign (neutral or enemy) node on the shortest road path from `from` to `to`
+ * when ownership is ignored. Null if the target is not reachable over roads at all, or nothing is in the way.
+ */
+export function blockingNode(world: World, side: Side, from: string, to: string): string | null {
+  const path = findPath(world.nodes, world.roads, from, to);
+  if (!path) return null;
+  for (const id of path.slice(1, -1)) {
+    if (world.nodes[id]!.owner !== side) return id;
+  }
+  return null;
+}
+
 export function distance(a: Pick<NodeState, 'x' | 'y'>, b: Pick<NodeState, 'x' | 'y'>): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }

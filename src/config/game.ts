@@ -35,6 +35,9 @@ export const COLORS = {
   fireball: 0xff6a1a,
   reinforcement: 0x5ee07a,
   hint: 0xffe14d,
+  /** Swipe line when the attack is predicted to capture the target / not enough troops. */
+  attackWin: 0x4ade80,
+  attackShort: 0xfacc15,
   faction: {
     player: 0x3b82f6,
     enemy: 0xef4444,
@@ -69,6 +72,8 @@ export const HUD = {
   fieldMargin: 12,
   spellButton: 64,
   pauseButton: 52,
+  /** Gap between buttons in the top bar (speed-up and pause), CSS px. */
+  topBarGap: 8,
   /** Tutorial hint panel height reserved at the bottom, CSS px. */
   hintBar: 88,
   hintMaxWidth: 560,

@@ -3,7 +3,7 @@ import { COLORS } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
 import type { NodeState } from '../core/sim/World';
-import { drawBuilding } from './icons';
+import { drawBuilding, drawCrown } from './icons';
 import { px, textStyle, type FieldLayout } from './layout';
 
 export type Highlight = 'none' | 'selected' | 'target' | 'fireball' | 'reinforcement' | 'hint';
@@ -19,6 +19,8 @@ const HIGHLIGHT_COLOR: Record<Exclude<Highlight, 'none'>, number> = {
 /** A node drawn with Graphics: faction circle, building badge, gold vein, troop count. Redraws only on change. */
 export class NodeView extends Phaser.GameObjects.Container {
   readonly nodeId: string;
+  /** Start castle of a side: drawn with a crown whoever owns it now. */
+  readonly capital: boolean;
   radius = 0;
   hitRadius = 0;
 
@@ -35,9 +37,10 @@ export class NodeView extends Phaser.GameObjects.Container {
   private highlight: Highlight = 'none';
   private ringTween: Phaser.Tweens.Tween | null = null;
 
-  constructor(scene: Phaser.Scene, node: NodeState) {
+  constructor(scene: Phaser.Scene, node: NodeState, capital = false) {
     super(scene, 0, 0);
     this.nodeId = node.id;
+    this.capital = capital;
     this.ring = scene.add.graphics();
     this.capGfx = scene.add.graphics();
     this.bodyGfx = scene.add.graphics();
@@ -137,6 +140,12 @@ export class NodeView extends Phaser.GameObjects.Container {
       g.fillStyle(COLORS.goldDark, 1).fillCircle(vx, vy, r * 0.24);
       g.fillStyle(COLORS.gold, 1).fillCircle(vx - r * 0.05, vy - r * 0.04, r * 0.19);
       g.fillStyle(COLORS.gold, 1).fillCircle(vx + r * 0.2, vy + r * 0.1, r * 0.12);
+    }
+
+    // Capital crown at the top left (mirrors the building badge).
+    if (this.capital) {
+      const size = Math.max(px(18), r * 0.7);
+      drawCrown(g, -r * 0.62, -r * 0.88, size);
     }
 
     // Building badge at the top right, with level pips.
