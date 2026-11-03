@@ -5,7 +5,7 @@ import { spellCooldownMs } from '../core/sim/spells';
 import type { Side, World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { Button } from '../view/Button';
-import { drawCoin, drawPause, drawSpell } from '../view/icons';
+import { drawCoin, drawCrystal, drawPause, drawSpell } from '../view/icons';
 import { px, textStyle } from '../view/layout';
 
 export interface HudCallbacks {
@@ -146,17 +146,18 @@ export class BattleHUD {
     }
   }
 
-  showPause(onResume: () => void, onRestart: () => void): void {
+  showPause(onResume: () => void, onRestart: () => void, onExit: () => void): void {
     this.showPanel(t('pause.title'), [
       { label: t('pause.resume'), onClick: onResume },
       { label: t('pause.restart'), onClick: onRestart },
+      { label: t('pause.toMap'), onClick: onExit },
     ]);
   }
 
-  /** Result panel; buttons are listed top to bottom. */
-  showResult(title: string, won: boolean, buttons: Array<{ label: string; onClick: () => void }>): void {
-    // TODO(stage-5): rewards, "double for ad", exit to chapter map (ResultScene).
-    this.showPanel(title, buttons, won);
+  /** Result panel with the crystal reward; buttons are listed top to bottom. */
+  showResult(title: string, won: boolean, crystals: number, buttons: Array<{ label: string; onClick: () => void }>): void {
+    // TODO(stage-6): "double for a rewarded ad" button on victory.
+    this.showPanel(title, buttons, won, crystals);
   }
 
   /** Screen position of the gold counter (for tutorial highlights). */
@@ -169,7 +170,12 @@ export class BattleHUD {
     this.overlay = null;
   }
 
-  private showPanel(title: string, buttons: Array<{ label: string; onClick: () => void }>, celebrate = false): void {
+  private showPanel(
+    title: string,
+    buttons: Array<{ label: string; onClick: () => void }>,
+    celebrate = false,
+    crystals: number | null = null,
+  ): void {
     this.hideOverlay();
     const scene = this.scene;
     const overlay = scene.add.container(0, 0).setDepth(200);
@@ -185,7 +191,9 @@ export class BattleHUD {
       const panelW = Math.min(w - px(32), px(320));
       const bh = px(56);
       const gap = px(12);
-      const panelH = px(96) + buttons.length * (bh + gap);
+      const rewardH = crystals === null ? 0 : px(44);
+      const top = px(96) + rewardH;
+      const panelH = top + buttons.length * (bh + gap);
       const panel = scene.add.graphics();
       const px0 = w / 2 - panelW / 2;
       const py0 = h / 2 - panelH / 2;
@@ -200,8 +208,16 @@ export class BattleHUD {
         .setStroke('#1f2937', px(6));
       overlay.add([dim, panel, titleText]);
 
+      if (crystals !== null) {
+        const ry = py0 + px(96) + rewardH / 2 - px(8);
+        const label = scene.add.text(w / 2 + px(14), ry, `+${crystals}`, textStyle(28, COLORS.text)).setOrigin(0.5).setStroke('#1f2937', px(6));
+        const icon = scene.add.graphics();
+        drawCrystal(icon, label.x - label.width / 2 - px(20), ry, px(28));
+        overlay.add([icon, label]);
+      }
+
       buttons.forEach((b, i) => {
-        const button = new Button(scene, w / 2, py0 + px(96) + bh / 2 + i * (bh + gap), {
+        const button = new Button(scene, w / 2, py0 + top + bh / 2 + i * (bh + gap), {
           width: panelW - px(48),
           height: bh,
           onClick: b.onClick,

@@ -1,7 +1,8 @@
 import { resolveLang, type Lang } from '../i18n/i18n';
 import type { AdResult, PauseHandlers, Platform, ProductId, Purchase } from './Platform';
 
-const SAVE_KEY = 'tiny-kingdoms.save';
+// Stands in for the cloud copy (Yandex player data); the local copy uses its own key (see SaveStore).
+const SAVE_KEY = 'tiny-kingdoms.mock-cloud';
 const FAKE_AD_MS = 1000;
 
 /** Dev platform: ads are timers, purchases succeed instantly, saves go to localStorage. */

@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { SPELL_IDS, SPELL_UNLOCK_AFTER_CHAPTER, TICK_MS, type SpellId } from '../config/balance';
+import { TICK_MS, type SpellId } from '../config/balance';
 import { COLORS, DRAG_THRESHOLD_PX, HUD, MAX_FRAME_DELTA_MS } from '../config/game';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -9,7 +9,9 @@ import { step, type TickEvent } from '../core/sim/tick';
 import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
 import { createWorld, type NodeState, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
-import { FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
+import { applyBattleResult } from '../core/meta/rewards';
+import { playerSetupFrom } from '../core/meta/upgrades';
+import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
 import { ArmyView, armyLevelPosition } from '../view/ArmyView';
@@ -18,13 +20,9 @@ import { explosion, floatText, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, type Point } from '../view/layout';
 import { NodeView, type Highlight } from '../view/NodeView';
 import { RoadView } from '../view/RoadView';
+import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
-import { getPlatform } from './registry';
-
-/** Spells open after completing a chapter (GDD 3.8). TODO(stage-5): take from Progress. */
-function unlockedSpellsFor(level: LevelData): SpellId[] {
-  return SPELL_IDS.filter((s) => level.chapter > SPELL_UNLOCK_AFTER_CHAPTER[s]);
-}
+import { getPlatform, getStore } from './registry';
 
 /** Delay before the result panel, so the final capture is visible. */
 const RESULT_DELAY_MS = 700;
@@ -98,9 +96,10 @@ export class BattleScene extends Phaser.Scene {
 
     this.platform = getPlatform(this);
     // Seed per level: the AI's timing jitter is reproducible for a given level.
+    // Player bonuses, start army and open spells come from meta progression.
     this.world = createWorld(this.level, {
       seed: this.level.chapter * 100 + this.level.index,
-      player: { unlockedSpells: unlockedSpellsFor(this.level) },
+      player: playerSetupFrom(getStore(this).progress, ALL_LEVELS),
     });
     this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy));
     const script = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
@@ -238,28 +237,35 @@ export class BattleScene extends Phaser.Scene {
     this.armed = null;
     this.platform.gameplayStop();
     this.tutorialView?.show(null);
-    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner));
+
+    // Rewards are applied and saved right away, so leaving the result screen can't lose them.
+    const store = getStore(this);
+    const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
+    store.commit();
+    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reward.crystals));
   }
 
-  private showResult(winner: 'player' | 'enemy'): void {
-    // TODO(stage-5): rewards and the chapter map instead of going straight to the next level.
+  private showResult(winner: 'player' | 'enemy', crystals: number): void {
     const replay = { label: t('result.playAgain'), onClick: () => this.scene.restart({ levelId: this.level.id }) };
+    const toMap = { label: t('result.toMap'), onClick: () => this.toMap() };
     if (winner === 'enemy') {
-      this.hud.showResult(t('result.defeat'), false, [replay]);
+      this.hud.showResult(t('result.defeat'), false, crystals, [replay, toMap]);
       return;
     }
     const next = nextLevel(this.level.id);
     if (next) {
-      this.hud.showResult(t('result.victory'), true, [
+      this.hud.showResult(t('result.victory'), true, crystals, [
         { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
         replay,
+        toMap,
       ]);
     } else {
-      this.hud.showResult(t('result.chapterDone'), true, [
-        { label: t('result.fromStart'), onClick: () => this.scene.restart({ levelId: FIRST_LEVEL.id }) },
-        replay,
-      ]);
+      this.hud.showResult(t('result.chapterDone'), true, crystals, [toMap, replay]);
     }
+  }
+
+  private toMap(): void {
+    this.scene.start('ChapterMapScene', { chapter: this.level.chapter });
   }
 
   // ---- Rendering --------------------------------------------------------------------------------
@@ -274,33 +280,11 @@ export class BattleScene extends Phaser.Scene {
     // The bottom stays reserved for the whole level, so the field does not jump when the tutorial ends.
     const bottom = (this.hud.hasSpellBar ? HUD.bottomBar : 0) + (this.tutorial ? HUD.hintBar : 0);
     this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom));
-    this.drawBackground(w, h);
+    drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
     this.hud.layout();
     this.tutorialView?.layout();
-  }
-
-  private drawBackground(w: number, h: number): void {
-    const g = this.background;
-    g.clear();
-    g.fillStyle(COLORS.background, 1).fillRect(0, 0, w, h);
-    // Deterministic grass tufts, so the meadow does not look flat.
-    let seed = 12345;
-    const rnd = (): number => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-    const count = Math.round((w * h) / (px(70) * px(70)));
-    g.lineStyle(px(2), COLORS.backgroundDark, 0.8);
-    for (let i = 0; i < count; i++) {
-      const x = rnd() * w;
-      const y = rnd() * h;
-      const s = px(4 + rnd() * 3);
-      g.lineBetween(x - s, y, x - s * 0.4, y - s * 1.2);
-      g.lineBetween(x, y, x, y - s * 1.5);
-      g.lineBetween(x + s, y, x + s * 0.4, y - s * 1.2);
-    }
   }
 
   private render(alpha: number): void {
@@ -515,9 +499,11 @@ export class BattleScene extends Phaser.Scene {
     this.drag = null;
     this.armed = null;
     this.platform.gameplayStop();
+    // Leaving mid-battle counts as nothing: no reward and no defeat consolation.
     this.hud.showPause(
       () => this.resume(),
       () => this.scene.restart({ levelId: this.level.id }),
+      () => this.toMap(),
     );
   }
 
