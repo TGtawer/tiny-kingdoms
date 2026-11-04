@@ -12,6 +12,7 @@ import { advanceTutorial, currentStep, startTutorial, type TutorialState, type U
 import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
+import { canOpenSpell } from '../core/meta/spellbook';
 import { recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
 import { defeatTip } from '../core/meta/tips';
 import { playerSetupFrom } from '../core/meta/upgrades';
@@ -247,9 +248,13 @@ export class BattleScene extends Phaser.Scene {
             explosion(this, view.x, view.y, view.radius * 1.3);
             playSfx('fireball');
             this.shake();
-          } else {
+          } else if (cmd.spell === 'reinforcement') {
             ringBurst(this, view.x, view.y, view.radius, COLORS.reinforcement);
             pop(this, view);
+          } else {
+            ringBurst(this, view.x, view.y, view.radius * 1.3, COLORS.shield);
+            pop(this, view);
+            playSfx('build');
           }
         }
         break;
@@ -260,6 +265,9 @@ export class BattleScene extends Phaser.Scene {
         if (event.chestGold > 0) {
           floatText(this, view.x, view.y - view.radius * 1.4, t('battle.chestGold', { gold: event.chestGold }), COLORS.gold);
           ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.gold);
+        }
+        if (event.outcome === 'shielded') {
+          ringBurst(this, view.x, view.y, view.radius * 1.3, COLORS.shield);
         }
         if (event.outcome === 'captured') {
           const owner = this.world.nodes[event.nodeId]!.owner;
@@ -305,10 +313,15 @@ export class BattleScene extends Phaser.Scene {
         break;
       case 'dragonStrike': {
         const view = this.nodeViews.get(event.nodeId)!;
-        explosion(this, view.x, view.y, view.radius * 1.6);
-        floatText(this, view.x, view.y - view.radius, `-${Math.floor(event.killed)}`, COLORS.fireball);
+        if (this.world.nodes[event.nodeId]!.shieldTicks > 0) {
+          // The shield took the hit.
+          ringBurst(this, view.x, view.y, view.radius * 1.5, COLORS.shield);
+        } else {
+          explosion(this, view.x, view.y, view.radius * 1.6);
+          floatText(this, view.x, view.y - view.radius, `-${Math.floor(event.killed)}`, COLORS.fireball);
+          this.shake();
+        }
         playSfx('fireball');
-        this.shake();
         break;
       }
       case 'citadelWave': {
@@ -394,15 +407,17 @@ export class BattleScene extends Phaser.Scene {
       earned: checks,
       labels: [t('stars.won'), t('stars.fast', { time: clock }), t('stars.flawless')],
     };
+    // A new spell slot was earned: point the player to the Upgrades screen to pick one.
+    const winTip = canOpenSpell(getStore(this).progress) ? `${why}\n${t('result.newSpell')}` : why;
     const next = nextLevel(this.level.id);
     if (next) {
       this.hud.showResult(t('result.victory'), true, crystals, total, [
         { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
         replay,
         toMap,
-      ], { stars, tip: why });
+      ], { stars, tip: winTip });
     } else {
-      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], { stars, tip: why });
+      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], { stars, tip: winTip });
     }
   }
 
@@ -490,7 +505,7 @@ export class BattleScene extends Phaser.Scene {
 
   private highlightFor(node: NodeState): Highlight {
     if (this.armed) {
-      const valid = this.armed === 'fireball' ? isRival('player', node.owner) : node.owner === 'player';
+      const valid = this.armed === 'fireball' ? isRival('player', node.owner) && node.shieldTicks <= 0 : node.owner === 'player';
       return valid ? this.armed : 'none';
     }
     if (this.drag?.moved) {

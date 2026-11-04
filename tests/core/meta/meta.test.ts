@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { BONUSES, SPELLS, SPELL_UNLOCK_STARS, SPELL_UPGRADES } from '../../../src/config/balance';
+import { BONUSES, SPELLS, SPELL_SLOT_STARS, SPELL_UPGRADES } from '../../../src/config/balance';
 import {
   currentLevel,
   defaultProgress,
   isChapterCompleted,
   isUnlocked,
-  unlockedSpells,
   type Progress,
 } from '../../../src/core/meta/Progress';
 import { applyBattleResult, baseReward, rewardFor } from '../../../src/core/meta/rewards';
+import { activeSpell, canOpenSpell, nextSlotStars, openSpell, setActiveSpell, spellSlots } from '../../../src/core/meta/spellbook';
 import { freeStars, totalStars } from '../../../src/core/meta/stars';
 import {
   bonusCost,
@@ -64,20 +64,58 @@ describe('chapters', () => {
   });
 });
 
-describe('spell unlocks by stars', () => {
-  it('each spell opens at its total-stars threshold', () => {
-    const fire = SPELL_UNLOCK_STARS.fireball;
-    const reinf = SPELL_UNLOCK_STARS.reinforcement;
-    expect(unlockedSpells(withStars(fire - 1))).toEqual([]);
-    expect(unlockedSpells(withStars(fire))).toEqual(['fireball']);
-    expect(unlockedSpells(withStars(reinf))).toEqual(['fireball', 'reinforcement']);
+const [FIRST_SLOT, SECOND_SLOT, THIRD_SLOT] = SPELL_SLOT_STARS as [number, number, number];
+
+describe('spell slots by stars (GDD 3.8)', () => {
+  it('each star threshold gives one slot', () => {
+    expect(spellSlots(withStars(FIRST_SLOT - 1))).toBe(0);
+    expect(spellSlots(withStars(FIRST_SLOT))).toBe(1);
+    expect(spellSlots(withStars(SECOND_SLOT))).toBe(2);
+    expect(nextSlotStars(withStars(FIRST_SLOT))).toBe(SECOND_SLOT);
+    expect(nextSlotStars(withStars(SECOND_SLOT))).toBe(THIRD_SLOT);
+    expect(spellSlots(withStars(THIRD_SLOT))).toBe(3);
+    expect(nextSlotStars(withStars(THIRD_SLOT))).toBeNull();
+  });
+
+  it('the player picks any spell for a slot; no slot, no spell', () => {
+    const p = withStars(FIRST_SLOT - 1);
+    expect(canOpenSpell(p)).toBe(false);
+    expect(openSpell(p, 'reinforcement')).toBe('noSlot');
+    p.stars.extra = 1;
+    expect(canOpenSpell(p)).toBe(true);
+    expect(openSpell(p, 'reinforcement')).toBe('ok');
+    expect(openSpell(p, 'reinforcement')).toBe('alreadyOpen');
+    expect(openSpell(p, 'fireball')).toBe('noSlot');
+    expect(canOpenSpell(p)).toBe(false);
+  });
+
+  it('the first open spell becomes active; the active one can be switched among open spells', () => {
+    const p = withStars(SECOND_SLOT);
+    expect(activeSpell(p)).toBeNull();
+    openSpell(p, 'fireball');
+    expect(activeSpell(p)).toBe('fireball');
+    expect(setActiveSpell(p, 'reinforcement')).toBe(false);
+    openSpell(p, 'reinforcement');
+    expect(activeSpell(p)).toBe('fireball');
+    expect(setActiveSpell(p, 'reinforcement')).toBe(true);
+    expect(activeSpell(p)).toBe('reinforcement');
+  });
+
+  it('only the active spell goes into battle', () => {
+    const p = withStars(SECOND_SLOT);
+    expect(playerSetupFrom(p).unlockedSpells).toEqual([]);
+    openSpell(p, 'fireball');
+    openSpell(p, 'reinforcement');
+    setActiveSpell(p, 'reinforcement');
+    expect(playerSetupFrom(p).unlockedSpells).toEqual(['reinforcement']);
   });
 
   it('spending stars does not close a spell again', () => {
-    const p = withStars(SPELL_UNLOCK_STARS.fireball);
+    const p = withStars(FIRST_SLOT);
+    openSpell(p, 'fireball');
     p.spentStars = totalStars(p);
     expect(freeStars(p)).toBe(0);
-    expect(unlockedSpells(p)).toEqual(['fireball']);
+    expect(activeSpell(p)).toBe('fireball');
   });
 });
 
@@ -147,20 +185,21 @@ describe('spell upgrades', () => {
   });
 
   it('locked until the spell is open', () => {
-    const p = withStars(SPELL_UNLOCK_STARS.fireball - 1);
+    const p = withStars(FIRST_SLOT + 2);
     expect(buySpellUpgrade(p, 'fireball')).toBe('locked');
-    p.stars.extra = 1;
+    openSpell(p, 'fireball');
     expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
     expect(buySpellUpgrade(p, 'reinforcement')).toBe('locked');
   });
 
   it('spends free stars, not crystals', () => {
-    const p = withStars(SPELL_UNLOCK_STARS.fireball + 2);
+    const p = withStars(FIRST_SLOT + 2);
+    openSpell(p, 'fireball');
     p.crystals = 1000;
     expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
     expect(p.crystals).toBe(1000);
     expect(p.spentStars).toBe(2);
-    expect(freeStars(p)).toBe(SPELL_UNLOCK_STARS.fireball);
+    expect(freeStars(p)).toBe(FIRST_SLOT);
     expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
     expect(buySpellUpgrade(p, 'fireball')).toBe('notEnoughStars');
     expect(p.spellUpgrades.fireball).toBe(2);

@@ -1,18 +1,20 @@
 import * as Phaser from 'phaser';
-import { COLORS } from '../config/game';
+import { TICK_MS } from '../config/balance';
+import { COLORS, SHIELD_FX } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
 import type { NodeState } from '../core/sim/World';
 import { drawBuilding, drawCrown, drawKind } from './icons';
 import { px, textStyle, type FieldLayout } from './layout';
 
-export type Highlight = 'none' | 'selected' | 'target' | 'fireball' | 'reinforcement' | 'hint';
+export type Highlight = 'none' | 'selected' | 'target' | 'fireball' | 'reinforcement' | 'shield' | 'hint';
 
 const HIGHLIGHT_COLOR: Record<Exclude<Highlight, 'none'>, number> = {
   selected: COLORS.select,
   target: COLORS.select,
   fireball: COLORS.fireball,
   reinforcement: COLORS.reinforcement,
+  shield: COLORS.shield,
   hint: COLORS.hint,
 };
 
@@ -31,6 +33,9 @@ export class NodeView extends Phaser.GameObjects.Container {
   private readonly countText: Phaser.GameObjects.Text;
   /** "/35" under the circle: capacity, shown only on the selected node. */
   private readonly capText: Phaser.GameObjects.Text;
+  /** Translucent dome while the node is shielded. */
+  private readonly shieldGfx: Phaser.GameObjects.Graphics;
+  private drawnShield = false;
   private drawnKey = '';
   private drawnCount = -1;
   private drawnCapKey = '';
@@ -46,7 +51,8 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.bodyGfx = scene.add.graphics();
     this.countText = scene.add.text(0, 0, '', textStyle(18)).setOrigin(0.5);
     this.capText = scene.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setVisible(false);
-    this.add([this.ring, this.capGfx, this.bodyGfx, this.countText, this.capText]);
+    this.shieldGfx = scene.add.graphics();
+    this.add([this.ring, this.capGfx, this.bodyGfx, this.countText, this.capText, this.shieldGfx]);
     scene.add.existing(this);
   }
 
@@ -61,6 +67,7 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.capText.setStroke('#1f2937', px(4));
     this.drawnKey = '';
     this.drawnCapKey = '';
+    this.drawnShield = false;
     this.drawHighlight();
     this.sync(node);
   }
@@ -78,6 +85,26 @@ export class NodeView extends Phaser.GameObjects.Container {
       this.countText.setText(String(troops));
     }
     this.syncCapacity(node);
+    this.syncShield(node);
+  }
+
+  /** Dome drawn once when the shield goes up; blinks during its last moments. */
+  private syncShield(node: NodeState): void {
+    const on = node.shieldTicks > 0;
+    if (on !== this.drawnShield) {
+      this.drawnShield = on;
+      const g = this.shieldGfx;
+      g.clear();
+      if (on) {
+        const r = this.radius * SHIELD_FX.radius;
+        g.fillStyle(COLORS.shield, SHIELD_FX.fillAlpha).fillCircle(0, 0, r);
+        g.lineStyle(Math.max(px(3), this.radius * 0.12), COLORS.shield, 0.95).strokeCircle(0, 0, r);
+        g.fillStyle(0xffffff, 0.45).fillEllipse(-r * 0.35, -r * 0.5, r * 0.6, r * 0.3);
+      }
+    }
+    if (!on) return;
+    const leftMs = node.shieldTicks * TICK_MS;
+    this.shieldGfx.setAlpha(leftMs < SHIELD_FX.blinkMs && Math.floor(leftMs / 250) % 2 === 0 ? 0.35 : 1);
   }
 
   /**

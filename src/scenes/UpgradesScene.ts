@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
-import { BONUSES, SPELL_UNLOCK_STARS, SPELL_UPGRADES, SPELL_IDS, type SpellId } from '../config/balance';
+import { BONUSES, SPELL_UPGRADES, SPELL_IDS, type SpellId } from '../config/balance';
 import { COLORS } from '../config/game';
-import { BONUS_IDS, unlockedSpells, type BonusId } from '../core/meta/Progress';
+import { BONUS_IDS, type BonusId } from '../core/meta/Progress';
+import { activeSpell, canOpenSpell, nextSlotStars, openSpell, setActiveSpell } from '../core/meta/spellbook';
 import { freeStars, totalStars } from '../core/meta/stars';
 import { bonusCost, buyBonus, buySpellUpgrade, spellUpgradeCost } from '../core/meta/upgrades';
 import { t } from '../i18n/i18n';
@@ -29,6 +30,10 @@ interface Row {
   currency: 'crystal' | 'star';
   balance: number;
   buy: () => void;
+  /** Spell not open yet but a slot is free: an "Open" button replaces the buy button. */
+  open?: () => void;
+  /** Open spells: a radio mark at the left; tapping the row makes the spell active. */
+  spell?: { active: boolean; select: () => void };
 }
 
 const ROW_H = 64;
@@ -87,15 +92,21 @@ export class UpgradesScene extends Phaser.Scene {
       buy: () => afterBuy(buyBonus(progress, id) === 'ok'),
     }));
 
-    const open = unlockedSpells(progress);
     const earned = totalStars(progress);
     const free = freeStars(progress);
+    const active = activeSpell(progress);
+    const slotFree = canOpenSpell(progress);
+    const nextSlot = nextSlotStars(progress);
+    const lockedText = nextSlot === null ? t('upgrades.noSlot') : t('upgrades.nextSlot', { need: nextSlot, have: earned });
     const spellRows: Row[] = SPELL_IDS.map((id: SpellId) => {
       const s = SPELL_UPGRADES.perLevel;
       const desc =
         id === 'fireball'
           ? t('spell.fireball.desc', { damage: Math.round(s.fireball.damageShare * 100), cooldown: -s.fireball.cooldownSec })
-          : t('spell.reinforcement.desc', { troops: s.reinforcement.troops, cooldown: -s.reinforcement.cooldownSec });
+          : id === 'reinforcement'
+            ? t('spell.reinforcement.desc', { troops: s.reinforcement.troops, cooldown: -s.reinforcement.cooldownSec })
+            : t('spell.shield.desc', { sec: s.shield.durationSec, cooldown: -s.shield.cooldownSec });
+      const isOpen = progress.openSpells.includes(id);
       return {
         title: t(`spell.${id}`),
         desc,
@@ -104,7 +115,9 @@ export class UpgradesScene extends Phaser.Scene {
         cost: spellUpgradeCost(progress.spellUpgrades[id]),
         currency: 'star',
         balance: free,
-        ...(open.includes(id) ? {} : { locked: t('upgrades.lockedStars', { need: SPELL_UNLOCK_STARS[id], have: earned }) }),
+        ...(isOpen ? { spell: { active: id === active, select: () => afterBuy(id !== active && setActiveSpell(progress, id)) } } : {}),
+        ...(!isOpen && slotFree ? { open: () => afterBuy(openSpell(progress, id) === 'ok') } : {}),
+        ...(!isOpen && !slotFree ? { locked: lockedText } : {}),
         buy: () => afterBuy(buySpellUpgrade(progress, id) === 'ok'),
       };
     });
@@ -136,35 +149,57 @@ export class UpgradesScene extends Phaser.Scene {
 
     header(t('upgrades.bonuses'));
     bonusRows.forEach(row);
-    header(t('upgrades.spells'), free);
+    header(slotFree ? t('upgrades.spellsChoose') : t('upgrades.spells'), free);
     spellRows.forEach(row);
   }
 
   private drawRow(r: Row, x: number, y: number, width: number, height: number): void {
     const panel = this.add.graphics();
     panel.fillStyle(COLORS.panel, r.locked ? 0.7 : 1).fillRoundedRect(x, y, width, height, px(12));
-    panel.lineStyle(px(2.5), COLORS.panelEdge, 1).strokeRoundedRect(x, y, width, height, px(12));
+    const active = r.spell?.active === true;
+    panel.lineStyle(px(active ? 4 : 2.5), active ? COLORS.gold : COLORS.panelEdge, 1).strokeRoundedRect(x, y, width, height, px(12));
 
     const buttonW = px(104);
-    const textX = x + px(12);
-    const textW = width - buttonW - px(36);
+    // Open spells get a radio mark; the whole row left of the button selects the spell.
+    const radio = r.spell ? px(30) : 0;
+    const textX = x + px(12) + radio;
+    const textW = width - buttonW - px(36) - radio;
+    if (r.spell) {
+      const mark = this.add.graphics();
+      const mx = x + px(12) + px(11);
+      mark.lineStyle(px(2.5), COLORS.textDark, 1).strokeCircle(mx, y + height / 2, px(11));
+      if (active) mark.fillStyle(COLORS.gold, 1).fillCircle(mx, y + height / 2, px(7));
+      const select = r.spell.select;
+      this.add
+        .zone(x, y, width - buttonW - px(16), height)
+        .setOrigin(0, 0)
+        .setInteractive({ useHandCursor: true })
+        .on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, select);
+    }
     const nameSize = height < px(50) ? 14 : 16;
     const name = this.add
       .text(textX, y + height * 0.3, `${r.title}  ${t('upgrades.level', { level: r.level, max: r.max })}`, textStyle(nameSize, COLORS.textDark))
       .setOrigin(0, 0.5);
     // Long names (narrow portrait) shrink instead of running under the buy button.
     if (name.width > textW) name.setScale(textW / name.width);
-    this.add
+    const desc = this.add
       .text(textX, y + height * 0.7, r.locked ?? r.desc, textStyle(nameSize - 3, COLORS.textDark))
       .setOrigin(0, 0.5)
-      .setAlpha(0.8)
-      .setWordWrapWidth(textW, true);
+      .setAlpha(0.8);
+    // The effect line stays on one line (shrinks); the longer lock hint wraps.
+    if (r.locked) desc.setWordWrapWidth(textW, true);
+    else if (desc.width > textW) desc.setScale(textW / desc.width);
 
     const bx = x + width - buttonW / 2 - px(8);
     const by = y + height / 2;
     if (r.locked) {
       const lock = this.add.graphics();
       drawLock(lock, bx, by, px(26));
+      return;
+    }
+    if (r.open) {
+      const openButton = new Button(this, bx, by, { width: buttonW, height: Math.max(px(48), height - px(10)), onClick: r.open });
+      openButton.add(this.add.text(0, -px(2), t('upgrades.open'), textStyle(16, COLORS.textDark)).setOrigin(0.5));
       return;
     }
     const button = new Button(this, bx, by, { width: buttonW, height: Math.max(px(48), height - px(10)), onClick: r.buy });

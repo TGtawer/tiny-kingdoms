@@ -1,4 +1,4 @@
-import { SPELLS, type SpellId } from '../../config/balance';
+import { SPELLS, TICK_MS, type SpellId } from '../../config/balance';
 import type { SideModifiers } from './World';
 
 // TODO(design): GDD lists a spell cost upgrade, but BALANCE.md has no numbers for it yet.
@@ -19,4 +19,9 @@ export function fireballKill(garrison: number, modifiers: SideModifiers): number
 
 export function reinforcementTroops(modifiers: SideModifiers): number {
   return SPELLS.reinforcement.troops + modifiers.spells.reinforcement.extraTroops;
+}
+
+/** How long a shield lasts, in ticks. */
+export function shieldTicks(modifiers: SideModifiers): number {
+  return Math.round(((SPELLS.shield.durationSec + modifiers.spells.shield.extraDurationSec) * 1000) / TICK_MS);
 }

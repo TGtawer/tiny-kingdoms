@@ -37,6 +37,7 @@ export function previewAttack(
   const sent = armies.reduce((sum, n) => sum + n, 0);
   if (target.owner === side) return { sent, defenders: 0, wins: true };
 
+  if (target.shieldTicks > 0) return { sent, defenders: visibleTroops(target.troops), wins: false };
   const damage = towerDamage(target);
   const attackers = armies.reduce((sum, n) => sum + Math.max(0, n - damage), 0);
   const wins =

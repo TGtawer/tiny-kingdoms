@@ -1,6 +1,5 @@
-import { SPELL_IDS, SPELL_UNLOCK_STARS, type SpellId } from '../../config/balance';
+import type { SpellId } from '../../config/balance';
 import type { LevelData } from '../level/schema';
-import { totalStars } from './stars';
 
 export type BonusId = 'startArmy' | 'troopProduction' | 'goldIncome' | 'unitStrength';
 export const BONUS_IDS: readonly BonusId[] = ['startArmy', 'troopProduction', 'goldIncome', 'unitStrength'];
@@ -16,6 +15,10 @@ export interface Progress {
   stars: Record<string, number>;
   /** Stars spent on spell upgrades; free stars = total earned - spent (see stars.ts). */
   spentStars: number;
+  /** Spells the player chose to open, in the order opened (see spellbook.ts). */
+  openSpells: SpellId[];
+  /** The open spell taken into battle; null until the first one is opened. */
+  activeSpell: SpellId | null;
 }
 
 export function defaultProgress(): Progress {
@@ -23,9 +26,11 @@ export function defaultProgress(): Progress {
     crystals: 0,
     completed: [],
     bonuses: { startArmy: 0, troopProduction: 0, goldIncome: 0, unitStrength: 0 },
-    spellUpgrades: { fireball: 0, reinforcement: 0 },
+    spellUpgrades: { fireball: 0, reinforcement: 0, shield: 0 },
     stars: {},
     spentStars: 0,
+    openSpells: [],
+    activeSpell: null,
   };
 }
 
@@ -50,12 +55,6 @@ export function isChapterCompleted(progress: Progress, levels: readonly LevelDat
   const chapterLevels = levels.filter((l) => l.chapter === chapter);
   const last = chapterLevels[chapterLevels.length - 1];
   return last !== undefined && isCompleted(progress, last.id);
-}
-
-/** GDD 3.8: a spell opens once the total of earned stars reaches its threshold. */
-export function unlockedSpells(progress: Progress): SpellId[] {
-  const stars = totalStars(progress);
-  return SPELL_IDS.filter((s) => stars >= SPELL_UNLOCK_STARS[s]);
 }
 
 export function markCompleted(progress: Progress, levelId: string): void {

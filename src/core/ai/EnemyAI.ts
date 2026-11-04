@@ -335,7 +335,7 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
 
     let best: { target: NodeState; picks: NodeState[]; score: number } | null = null;
     for (const target of Object.values(world.nodes)) {
-      if (target.owner === side) continue;
+      if (target.owner === side || target.shieldTicks > 0) continue;
 
       const reachable = sources
         .map((n) => ({ n, d: dist.get(n.id, target.id) }))

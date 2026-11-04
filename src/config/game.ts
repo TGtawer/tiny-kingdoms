@@ -39,6 +39,7 @@ export const COLORS = {
   select: 0xffffff,
   fireball: 0xff6a1a,
   reinforcement: 0x5ee07a,
+  shield: 0x7dd3fc,
   hint: 0xffe14d,
   /** Swipe line when the attack is predicted to capture the target / not enough troops. */
   attackWin: 0x4ade80,
@@ -181,3 +182,12 @@ export const MAX_FRAME_DELTA_MS = 250;
 export function cssColor(color: number): string {
   return `#${color.toString(16).padStart(6, '0')}`;
 }
+
+/** Shield dome over a protected node. */
+export const SHIELD_FX = {
+  /** Dome radius relative to the node radius. */
+  radius: 1.3,
+  fillAlpha: 0.22,
+  /** The dome blinks during the last ms of the shield. */
+  blinkMs: 2000,
+} as const;

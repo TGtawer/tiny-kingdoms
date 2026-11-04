@@ -1,6 +1,6 @@
 import { ARMY, BUILDINGS, type BuildingType, type SpellId } from '../../config/balance';
 import { armyPath } from './pathfinding';
-import { fireballKill, reinforcementTroops, spellCooldownMs, spellCost } from './spells';
+import { fireballKill, reinforcementTroops, shieldTicks, spellCooldownMs, spellCost } from './spells';
 import { isRival, type ArmyState, type BuildingLevel, type Side, type World } from './World';
 
 /** How the order was given: a swipe sends 75% of the troops, tap-tap sends 50% (GDD 3.5). */
@@ -116,9 +116,9 @@ export function validate(world: World, cmd: Command): RejectReason | null {
       if (!node) return 'unknownNode';
       if (!side.unlockedSpells.includes(cmd.spell)) return 'spellLocked';
       if (side.spellCooldowns[cmd.spell] > 0) return 'cooldown';
-      // Fireball hits the opponent's node; reinforcement targets an own node.
+      // Fireball hits a rival's node (not through a shield); reinforcement and shield target an own node.
       // TODO(design): can fireball target neutral nodes? GDD says "enemy node", so not for now.
-      const valid = cmd.spell === 'fireball' ? isRival(cmd.side, node.owner) : node.owner === cmd.side;
+      const valid = cmd.spell === 'fireball' ? isRival(cmd.side, node.owner) && node.shieldTicks <= 0 : node.owner === cmd.side;
       if (!valid) return 'invalidTarget';
       if (side.gold < spellCost(cmd.spell)) return 'notEnoughGold';
       return null;
@@ -164,8 +164,11 @@ export function apply(world: World, cmd: Command): ArmyState | null {
       side.spellCooldowns[cmd.spell] = spellCooldownMs(cmd.spell, side.modifiers);
       if (cmd.spell === 'fireball') {
         node.troops -= fireballKill(node.troops, side.modifiers);
-      } else {
+      } else if (cmd.spell === 'reinforcement') {
         node.troops += reinforcementTroops(side.modifiers);
+      } else {
+        // Casting again on a shielded node restarts the timer.
+        node.shieldTicks = shieldTicks(side.modifiers);
       }
       return null;
     }

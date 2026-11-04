@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SPELLS } from '../../../src/config/balance';
+import { SPELLS, TICK_MS } from '../../../src/config/balance';
 import { validate, type CastSpell } from '../../../src/core/sim/commands';
-import { fireballKill } from '../../../src/core/sim/spells';
-import { step } from '../../../src/core/sim/tick';
+import { fireballKill, shieldTicks } from '../../../src/core/sim/spells';
+import { step, type TickEvent } from '../../../src/core/sim/tick';
 import { defaultModifiers } from '../../../src/core/sim/World';
 import { freezeEconomy, lineWorld, run } from '../helpers';
 
@@ -10,7 +10,7 @@ const cast = (spell: CastSpell['spell'], nodeId: string): CastSpell => ({ type: 
 
 function spellWorld(overrides: Parameters<typeof lineWorld>[0] = {}, gold = 1000) {
   return freezeEconomy(
-    lineWorld(overrides, { playerStartGold: gold }, { player: { unlockedSpells: ['fireball', 'reinforcement'] } }),
+    lineWorld(overrides, { playerStartGold: gold }, { player: { unlockedSpells: ['fireball', 'reinforcement', 'shield'] } }),
   );
 }
 
@@ -95,5 +95,59 @@ describe('cost, cooldown, unlock', () => {
     step(world, [cast('fireball', 'E')]);
     expect(validate(world, cast('reinforcement', 'P'))).toBeNull();
     expect(world.sides.enemy.spellCooldowns.fireball).toBe(0);
+  });
+});
+
+describe('shield', () => {
+  const durationTicks = (SPELLS.shield.durationSec * 1000) / TICK_MS;
+
+  it('targets only own nodes and costs gold', () => {
+    const world = spellWorld();
+    expect(validate(world, cast('shield', 'E'))).toBe('invalidTarget');
+    expect(validate(world, cast('shield', 'N'))).toBe('invalidTarget');
+    step(world, [cast('shield', 'P')]);
+    expect(world.sides.player.gold).toBe(1000 - SPELLS.shield.cost);
+    expect(world.nodes.P!.shieldTicks).toBe(durationTicks - 1);
+  });
+
+  it('a hostile army breaks on the shield: no capture, no losses', () => {
+    const world = spellWorld({ P: { troops: 3 }, N: { owner: 'enemy', troops: 0 }, E: { troops: 40 } });
+    step(world, [cast('shield', 'P')]);
+    world.armies.push({ id: 'x', owner: 'enemy', count: 30, path: ['N', 'P'], segment: 0, progress: 0.999, targetId: 'P' });
+    const events: TickEvent[] = step(world);
+    expect(events).toContainEqual(expect.objectContaining({ type: 'arrived', armyId: 'x', outcome: 'shielded' }));
+    expect(world.nodes.P!.owner).toBe('player');
+    expect(world.nodes.P!.troops).toBe(3);
+    expect(world.armies).toHaveLength(0);
+  });
+
+  it('wears off after its duration; then the node can be attacked again', () => {
+    const world = spellWorld({ P: { troops: 3 } });
+    step(world, [cast('shield', 'P')]);
+    run(world, durationTicks - 1);
+    expect(world.nodes.P!.shieldTicks).toBe(0);
+    world.armies.push({ id: 'y', owner: 'enemy', count: 30, path: ['N', 'P'], segment: 0, progress: 0.999, targetId: 'P' });
+    step(world);
+    expect(world.nodes.P!.owner).toBe('enemy');
+  });
+
+  it('own armies still reinforce a shielded node', () => {
+    const world = spellWorld({ P: { troops: 3 } });
+    step(world, [cast('shield', 'P')]);
+    world.armies.push({ id: 'z', owner: 'player', count: 5, path: ['N', 'P'], segment: 0, progress: 0.999, targetId: 'P' });
+    step(world);
+    expect(world.nodes.P!.troops).toBe(8);
+  });
+
+  it('fireball cannot hit a shielded node', () => {
+    const world = spellWorld();
+    world.nodes.E!.shieldTicks = 10;
+    expect(validate(world, cast('fireball', 'E'))).toBe('invalidTarget');
+  });
+
+  it('duration grows with upgrades', () => {
+    const mods = defaultModifiers();
+    mods.spells.shield.extraDurationSec = 2;
+    expect(shieldTicks(mods)).toBe(((SPELLS.shield.durationSec + 2) * 1000) / TICK_MS);
   });
 });

@@ -114,6 +114,19 @@ describe('three sides', () => {
     expect(enemiesFought).toBeGreaterThan(0);
   });
 
+  it('the AI does not attack a shielded node', () => {
+    const world = createWorld(threeSideLevel());
+    world.nodes.B!.owner = 'enemy';
+    world.nodes.B!.troops = 30;
+    world.nodes.A!.owner = 'player';
+    world.nodes.A!.troops = 3;
+    world.nodes.A!.shieldTicks = 50;
+    world.tick = 10;
+    const ai = createAi('enemy', { thinkMs: 100, aggression: 1 });
+    ai.nextThinkTick = 10;
+    expect(aiStep(world, ai)).not.toContainEqual(expect.objectContaining({ type: 'send', side: 'enemy', to: 'A' }));
+  });
+
   it('the AI targets the second enemy like the player', () => {
     const world = createWorld(threeSideLevel());
     world.nodes.B!.owner = 'enemy';
