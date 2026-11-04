@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { ARMY_RADIUS_PX, COLORS } from '../config/game';
+import { ARMY_RADIUS_PX, COLORS, SQUAD_LIP } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import type { ArmyState, Owner, World } from '../core/sim/World';
 import { px, textStyle, type Point } from './layout';
@@ -48,8 +48,9 @@ export class ArmyView extends Phaser.GameObjects.Container {
  */
 export function drawSquad(g: Phaser.GameObjects.Graphics, r: number, owner: Owner, unit: number, shadow = true): void {
   if (shadow) g.fillStyle(0x000000, 0.2).fillEllipse(0, r * 0.9, r * 2, r * 0.6);
-  g.fillStyle(COLORS.factionDark[owner], 1).fillCircle(0, r * 0.12, r);
-  g.fillStyle(COLORS.faction[owner], 1).fillCircle(0, 0, r * 0.9);
+  // Rim exactly under the outline, the face a bit higher inside it (as on the nodes).
+  g.fillStyle(COLORS.factionDark[owner], 1).fillCircle(0, 0, r);
+  g.fillStyle(COLORS.faction[owner], 1).fillCircle(0, -r * SQUAD_LIP, r * (1 - SQUAD_LIP));
   g.lineStyle(2.5 * unit, COLORS.outline, 1).strokeCircle(0, 0, r);
   // Little banner pole to read as "marching squad".
   g.lineStyle(2 * unit, COLORS.outline, 1).lineBetween(r * 0.6, -r * 0.6, r * 0.6, -r * 1.7);

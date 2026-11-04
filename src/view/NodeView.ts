@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { TICK_MS } from '../config/balance';
-import { COLORS, SHIELD_FX } from '../config/game';
+import { COLORS, NODE_LIP, SHIELD_FX } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
 import type { NodeState } from '../core/sim/World';
@@ -171,8 +171,9 @@ export class NodeView extends Phaser.GameObjects.Container {
     }
     // Bandit camp: dark rim instead of the neutral one.
     const rim = node.kind === 'bandits' ? COLORS.bandits : COLORS.factionDark[owner];
-    g.fillStyle(rim, 1).fillCircle(0, r * 0.1, r);
-    g.fillStyle(COLORS.faction[owner], 1).fillCircle(0, 0, r * 0.92);
+    // Rim exactly under the outline; the face sits a bit higher inside it (no ground showing at the top edge).
+    g.fillStyle(rim, 1).fillCircle(0, 0, r);
+    g.fillStyle(COLORS.faction[owner], 1).fillCircle(0, -r * NODE_LIP, r * (1 - NODE_LIP));
     g.lineStyle(Math.max(2, r * 0.09), COLORS.outline, 1).strokeCircle(0, 0, r);
     g.fillStyle(0xffffff, 0.28).fillEllipse(-r * 0.3, -r * 0.45, r * 0.8, r * 0.38);
 

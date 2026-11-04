@@ -64,6 +64,14 @@ export const COLORS = {
   },
 } as const;
 
+/**
+ * Node body (battle and chapter map): the dark rim lies exactly under the outline, the face is this share of the
+ * radius smaller and higher inside it, so the rim shows as a lip below and nothing of the ground shows at the top.
+ */
+export const NODE_LIP = 0.08;
+/** The same for squads on the road. */
+export const SQUAD_LIP = 0.1;
+
 /** Node radius in field units (fraction of field width), clamped to CSS px bounds. */
 export const NODE_RADIUS: Record<NodeSize, number> = {
   small: 0.055,
@@ -123,7 +131,7 @@ export const MAP = {
   /** Side of the seamless meadow tile under the map, CSS px. */
   meadowTile: 280,
   /** The node face is this share of the radius smaller and higher than the rim: a dark lip shows below. */
-  nodeLip: 0.08,
+  nodeLip: NODE_LIP,
 } as const;
 
 /**
