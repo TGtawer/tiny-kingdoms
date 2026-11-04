@@ -3,7 +3,7 @@ import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
 import { validateLevel } from '../src/core/level/schema';
 import { step } from '../src/core/sim/tick';
 import { createWorld } from '../src/core/sim/World';
-import { ALL_LEVELS, CHAPTERS, DEV_LEVELS, getLevel, MENU_BACKGROUND, nextLevel } from '../src/levels';
+import { CHAPTERS, DEV_LEVELS, getLevel, nextLevel } from '../src/levels';
 
 describe('chapter 1', () => {
   const chapter = CHAPTERS[0]!;
@@ -69,27 +69,5 @@ describe('chapter 1 difficulty curve', () => {
     }
     expect(wins).toBeGreaterThanOrEqual(level.index <= 3 ? 9 : 4);
     if (level.index >= 7 && level.index <= 9) expect(wins).toBeLessThanOrEqual(8);
-  });
-});
-
-describe('menu background battle', () => {
-  const lvl = MENU_BACKGROUND;
-
-  it('is valid, has 7–8 nodes and is not a playable level', () => {
-    expect(validateLevel(lvl).ok).toBe(true);
-    expect(lvl.nodes.length).toBeGreaterThanOrEqual(7);
-    expect(lvl.nodes.length).toBeLessThanOrEqual(8);
-    expect(ALL_LEVELS).not.toContain(lvl);
-    expect(getLevel(lvl.id)).toBeUndefined();
-  });
-
-  it('AI vs AI with the same params ends for different seeds', () => {
-    for (let seed = 1; seed <= 6; seed++) {
-      const world = createWorld(lvl, { seed });
-      const blue = createAi('player', aiParamsFromLevel(lvl.enemy));
-      const red = createAi('enemy', aiParamsFromLevel(lvl.enemy));
-      while (!world.winner && world.tick < 6000) step(world, [...aiStep(world, blue), ...aiStep(world, red)]);
-      expect(world.winner, `seed ${seed}`).not.toBeNull();
-    }
   });
 });

@@ -410,3 +410,76 @@ export function drawLockHalf(g: Phaser.GameObjects.Graphics, x: number, y: numbe
   const radius = side < 0 ? { tl: r, tr: 0, bl: r, br: 0 } : { tl: 0, tr: r, bl: 0, br: r };
   g.fillStyle(COLORS.textDark, 1).fillRoundedRect(side < 0 ? x - s * 0.6 : x, y - s * 0.15, s * 0.6, s * 0.95, radius);
 }
+
+/** Strokes a closed polygon with the current line style. */
+function strokePolygon(g: Phaser.GameObjects.Graphics, points: ReadonlyArray<readonly [number, number]>): void {
+  g.beginPath();
+  points.forEach(([px, py], i) => (i === 0 ? g.moveTo(px, py) : g.lineTo(px, py)));
+  g.closePath().strokePath();
+}
+
+export type MenuIcon = 'play' | 'map' | 'hammer';
+
+/**
+ * Icons inside the main menu medallions (docs/prototypes/menu-mobile-tournament.html), centered at (x, y),
+ * `s` = icon box. Line widths are in the caller's units (the menu draws at reference scale).
+ */
+export function drawMenuIcon(g: Phaser.GameObjects.Graphics, kind: MenuIcon, x: number, y: number, s: number): void {
+  const line = 2.5;
+  if (kind === 'play') {
+    const tri = [
+      [x - s * 0.28, y - s * 0.42],
+      [x + s * 0.44, y],
+      [x - s * 0.28, y + s * 0.42],
+    ] as const;
+    g.fillStyle(0xffffff, 1);
+    fillPolygon(g, tri);
+    g.lineStyle(line, COLORS.outline, 1);
+    strokePolygon(g, tri);
+    return;
+  }
+  if (kind === 'map') {
+    const sheet = [
+      [-0.5, -0.32],
+      [-0.17, -0.44],
+      [0.17, -0.32],
+      [0.5, -0.44],
+      [0.5, 0.32],
+      [0.17, 0.44],
+      [-0.17, 0.32],
+      [-0.5, 0.44],
+    ].map(([px, py]) => [x + px! * s, y + py! * s] as const);
+    g.fillStyle(COLORS.panel, 1);
+    fillPolygon(g, sheet);
+    g.lineStyle(line, COLORS.outline, 1);
+    strokePolygon(g, sheet);
+    g.lineBetween(x - s * 0.17, y - s * 0.44, x - s * 0.17, y + s * 0.32);
+    g.lineBetween(x + s * 0.17, y - s * 0.32, x + s * 0.17, y + s * 0.44);
+    g.fillStyle(COLORS.faction.enemy, 1).fillCircle(x + s * 0.33, y - s * 0.05, s * 0.09);
+    return;
+  }
+  // Hammer, tilted by -0.6 rad around the icon center.
+  const a = -0.6;
+  const rot = (px: number, py: number): readonly [number, number] => [x + px * Math.cos(a) - py * Math.sin(a), y + px * Math.sin(a) + py * Math.cos(a)];
+  const rect = (rx: number, ry: number, rw: number, rh: number): ReadonlyArray<readonly [number, number]> => [
+    rot(rx, ry),
+    rot(rx + rw, ry),
+    rot(rx + rw, ry + rh),
+    rot(rx, ry + rh),
+  ];
+  const handle = rect(-s * 0.07, -s * 0.2, s * 0.14, s * 0.7);
+  const head = rect(-s * 0.38, -s * 0.44, s * 0.76, s * 0.28);
+  g.fillStyle(COLORS.panelEdge, 1);
+  fillPolygon(g, handle);
+  g.lineStyle(line, COLORS.outline, 1);
+  strokePolygon(g, handle);
+  g.fillStyle(0xcbd5e1, 1);
+  fillPolygon(g, head);
+  strokePolygon(g, head);
+}
+
+/** Lighter (f > 0) or darker (f < 0) version of a color, as in the prototypes' `shade`. */
+export function shade(color: number, f: number): number {
+  const m = (c: number): number => Math.max(0, Math.min(255, Math.round(f < 0 ? c * (1 + f) : c + (255 - c) * f)));
+  return (m((color >> 16) & 255) << 16) | (m((color >> 8) & 255) << 8) | m(color & 255);
+}

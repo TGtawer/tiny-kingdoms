@@ -12,7 +12,6 @@ import l08 from './chapter01/level08.json';
 import l09 from './chapter01/level09.json';
 import l10 from './chapter01/level10.json';
 import tutorials from './tutorials.json';
-import menuBackground from './menu_background.json';
 import devCitadel from './dev/dev_citadel.json';
 import devHold from './dev/dev_hold.json';
 import devSpecials from './dev/dev_specials.json';
@@ -33,13 +32,6 @@ export const FIRST_LEVEL: LevelData = ALL_LEVELS[0]!;
  * Not part of the chapters; open in dev with ?level=<id>, e.g. ?level=dev_specials.
  */
 export const DEV_LEVELS: readonly LevelData[] = [devSpecials, devHold, devSurvive, devCitadel, devThree].map(loadLevel);
-
-/**
- * AI-vs-AI battle behind the main menu (docs/VISUALS.md V-1). Not a playable level: not in the chapters
- * and not reachable with ?level=. Both sides use its `enemy` AI params. Coordinates are a 360x640 portrait
- * divided by 640 (x 0..0.5625, y 0..1); the backdrop stretches that frame to any screen.
- */
-export const MENU_BACKGROUND: LevelData = loadLevel(menuBackground);
 
 export const TUTORIALS: Readonly<Record<string, TutorialScript>> = tutorials as Record<string, TutorialScript>;
 

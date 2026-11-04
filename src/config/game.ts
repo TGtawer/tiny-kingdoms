@@ -115,6 +115,8 @@ export const MAP = {
   starSize: 18,
   /** White highlight on the level nodes (upper left). */
   nodeShineAlpha: 0.28,
+  /** Side of the seamless meadow tile under the map, CSS px. */
+  meadowTile: 280,
   /** The node face is this share of the radius smaller and higher than the rim: a dark lip shows below. */
   nodeLip: 0.08,
 } as const;
@@ -385,15 +387,6 @@ export const BUTTON_STYLE = {
 } as const;
 
 export const MENU_LAYOUT = {
-  panelPadding: 20,
-  /** Room left on each side of the buttons, CSS px. */
-  sideClearance: 30,
-  panelAlpha: 0.88,
-  /** Title drop shadow offset, CSS px. */
-  titleShadow: 5,
-  /** Flowers per (100 CSS px)^2 on the menu meadow. */
-  flowerDensity: 1.6,
-  flowerColors: [0xfde047, 0xf9a8d4, 0xffffff, 0xc4b5fd],
   /** Round sound / music toggles in the top-left corner, CSS px (drawn 44, touch area 48). */
   toggleSize: 44,
   toggleHit: 48,
@@ -410,72 +403,12 @@ export const MENU_LAYOUT = {
 } as const;
 
 /**
- * Living main menu (docs/VISUALS.md V-1, prototype docs/prototypes/living-screens.html).
- * Sizes are CSS px of a 360x640 portrait; times are ms. Each `show*` flag turns one effect off for profiling.
+ * Main menu with banners (docs/VISUALS.md V-4). Composition sizes are px of the reference screen
+ * (360x640 portrait / 1280x720 landscape), scaled to fit; times are ms.
  */
 export const MENU_FX = {
-  showBattle: true,
-  showVeil: true,
-  showCloudShadows: true,
-  showBirds: true,
+  /** Light band sweeping over the title letters (V-1.5); kept behind a flag until the playtest. */
   showShine: true,
-  showPulse: true,
-  showEntrance: true,
-
-  /** AI-vs-AI backdrop battle (src/levels/menu_background.json). */
-  battle: {
-    /** The level frame (its coordinates are this portrait divided by its height). */
-    frameW: 360,
-    frameH: 640,
-    /** Simulation speed: armies of a real battle look too fast on the small menu field. */
-    simSpeed: 0.6,
-    nodeRadius: { small: 18, medium: 21, large: 24 },
-    /** Nodes grow with the screen, but not beyond this factor. */
-    maxRadiusScale: 1.4,
-    armyScale: 0.85,
-    /** A battle that lasts longer than this is restarted anyway, s. */
-    maxSec: 120,
-    /** Pause after a battle is decided, then the fade-out, then a new battle. */
-    restartDelayMs: 3000,
-    fadeMs: 500,
-  },
-  /** Meadow-colored veil between the battle and the UI. */
-  veilAlpha: 0.42,
-  cloudShadows: {
-    color: 0x143c14,
-    alpha: 0.1,
-    /** One shadow = a few ellipses [dx, dy, rx]; ry = rx * flatten. */
-    blobs: [
-      [0, 0, 46],
-      [44, -8, 38],
-      [-40, 6, 34],
-      [20, 18, 36],
-    ],
-    flatten: 0.62,
-    /** Each shadow: start x and y as a share of the screen, size scale, speed px/s. */
-    items: [
-      { x: 0.11, y: 0.22, scale: 1.2, speed: 7 },
-      { x: 0.72, y: 0.66, scale: 1.6, speed: 5 },
-      { x: -0.33, y: 0.88, scale: 1, speed: 9 },
-    ],
-  },
-  birds: {
-    minGapMs: 6000,
-    maxGapMs: 12000,
-    flightMs: 7000,
-    /** Flight height band: top and height, CSS px. */
-    bandTop: 60,
-    bandHeight: 80,
-    /** Wing half-span and flap amplitude, CSS px; flap speed rad/s. */
-    wing: 7,
-    flapAmp: 4,
-    flapSpeed: 11,
-    lineWidth: 2,
-    /** The second bird: behind, lower, phase-shifted. */
-    followX: 16,
-    followY: 9,
-    followPhase: 1.3,
-  },
   shine: {
     periodMs: 4000,
     durationMs: 800,
@@ -483,27 +416,140 @@ export const MENU_FX = {
     angleDeg: 20,
     alpha: 0.75,
   },
-  pulse: {
-    scale: 1.035,
-    periodMs: 1600,
-    glowPad: 7,
-    glowColor: 0xffe078,
-    glowAlpha: 0.45,
-  },
+  /** Title: outline and drop shadow as shares of the font size; bob after the entrance. */
+  titleStroke: 0.17,
+  titleShadow: 0.1,
+  titleBob: 4,
+  titleBobSpeed: 2.2,
   entrance: {
-    titleDrop: 140,
-    titleMs: 600,
     /** Toggles and crystals fade in. */
     cornerMs: 300,
-    panelDelayMs: 150,
-    panelMs: 350,
-    panelFromScale: 0.9,
-    buttonDelaysMs: [300, 390, 480],
-    buttonMs: 320,
-    buttonRise: 60,
+    /** Title: fades in, drops from `titleFrom` (reference px above the top), then bobs. */
+    titleFadeMs: 200,
+    titleDropMs: 550,
+    titleFrom: -40,
+    titleBobFromMs: 700,
+    /** Tournament poles grow, night beam opens (Cubic.Out). */
+    framingFromMs: 100,
+    framingMs: 350,
+    nightBeamMs: 300,
+    /** Banners drop one by one: map, upgrades, play; their content fades in over the last quarter. */
+    bannerDelaysMs: [350, 450, 550],
+    bannerMs: 500,
+    contentFrom: 0.75,
+    pulseFromMs: 1400,
   },
-  /** Title bob after the entrance: CSS px and half-period. */
-  titleBob: 6,
-  titleBobMs: 1400,
+  /** Press: the banner swings and flashes; the scene changes after `leaveMs`. */
+  press: { leaveMs: 150, impulseDecay: 0.9, flashAlpha: 0.35, flashDecay: 4 },
+} as const;
+
+export type MenuBannerId = 'map' | 'play' | 'up';
+
+/** One banner = one button (docs/VISUALS.md V-4.2), reference px. */
+export const MENU_BANNER = {
+  /** Edges are polylines of this many segments; the tip hangs this far below the cloth. */
+  segments: 12,
+  tipH: 30,
+  /** sway(k) = sin(t * (speed + impSpeed * imp) + phase - lag * k) * (amp + impAmp * imp) * k */
+  sway: { speed: 1.8, impSpeed: 3, lag: 2.3, amp: 3, impAmp: 9 },
+  phase: { map: 1.7, play: 0, up: 3.1 },
+  outline: 3,
+  trimInset: 9,
+  /** Light highlights on the cloth (flat: rim along the left edge; rich: the light folds). Off: plain cloth. */
+  clothShine: false,
+  /** Flat style (portrait). */
+  flat: { shadowX: 3, shadowY: 3, shadowAlpha: 0.15, sleeve: 10, sleeveAlpha: 0.12, trim: 5, rimInset: 5, rimWidth: 3, rimAlpha: 0.22, rimFrom: 0.07, rimTo: 0.62 },
+  /** Rich style (landscape): folds and a stitched trim. */
+  rich: { shadowX: 4, shadowY: 7, shadowAlpha: 0.35, sleeve: 14, sleeveAlpha: 0.22, trim: 6, folds: 4, foldLight: 0.13, foldDark: 0.16, foldShift: 0.6, stitch: 1.5, stitchDash: 4, stitchGap: 3, stitchShade: -0.4 },
+  /** Medallion: radius share of the banner width, gap above the label line, glow of Play. */
+  medalMain: 0.23,
+  medalSide: 0.24,
+  medalGap: 6,
+  medalAt: 0.42,
+  /** The medallion and the labels follow the cloth at these shares of its length. */
+  medalSway: 0.45,
+  medalShine: { x: -0.32, y: -0.48, rx: 0.36, ry: 0.16, angle: -0.35, alpha: 0.3 },
+  medalRing: { inset: 5, width: 1.5, dash: 3, gap: 4, shade: -0.45, shadowY: 2, shadowShade: -0.35 },
+  iconScale: 1.1,
+  pulse: { pad: 8, color: 0xffe68c, alpha: 0.5, periodMs: 1600 },
+  /** Labels: font size share of the width (side banners capped), the second line smaller and yellow. */
+  labelMain: 0.2,
+  labelSide: 0.165,
+  labelSideMax: 20,
+  labelSecond: 0.65,
+  labelSecondColor: 0xfde68a,
+  labelStroke: 5,
+  labelSecondStroke: 4,
+  labelAt: 0.55,
+} as const;
+
+/** «Tournament» menu, portrait (docs/VISUALS.md V-4.3, docs/prototypes/menu-mobile-tournament.html). */
+export const MENU_TOURNAMENT = {
+  ref: { w: 360, h: 640 },
+  title: { x: 180, y: 120, size: 46 },
+  banners: [
+    // The side banners hang a little lower than Play.
+    { id: 'map', x: 62, y: 280, w: 92, len: 206 },
+    { id: 'up', x: 298, y: 280, w: 92, len: 206 },
+    { id: 'play', x: 180, y: 266, w: 124, len: 268 },
+  ],
+  colors: { main: 0xb91c1c, side: 0x1e40af, trim: 0xffc83d },
+  sky: { top: '#8fd0f5', bottom: '#e3f5ff', to: 330 },
+  grassFrom: 320,
+  tufts: { count: 34, from: 340, seed: 21 },
+  /** Posts every `postEvery`, placed symmetrically around the screen center. */
+  fence: { y: 352, h: 6, postEvery: 30, postTop: 340, postW: 6, postH: 26, color: '#c08a4b' },
+  tents: [
+    { x: 20, y: 330, w: 88, h: 98, color: '#dc2626' },
+    { x: 340, y: 330, w: 88, h: 98, color: '#2563eb' },
+    { x: 130, y: 324, w: 46, h: 52, color: '#2563eb' },
+    { x: 236, y: 324, w: 46, h: 52, color: '#dc2626' },
+  ],
+  garland: { ax: 20, ay: 232, bx: 340, by: 232, sag: 30, points: 40, flags: 13, flagW: 11, flagH: 12, colors: [0xdc2626, 0xffc83d, 0x2563eb] },
+  pole: { color: 0x8a5a2b, width: 7, outline: 2.5, above: 40, playAbove: 14, bottom: 620, below: 60 },
+  crossbar: { pad: 4, h: 10, y: -6, radius: 5, ball: 5 },
+} as const;
+
+/** «Night castle» menu, landscape (docs/VISUALS.md V-4.4, docs/prototypes/menu-desktop-night.html). */
+export const MENU_NIGHT = {
+  ref: { w: 1280, h: 720 },
+  title: { x: 640, y: 150, size: 64 },
+  beamY: 290,
+  banners: [
+    { id: 'map', x: 400, y: 290, w: 124, len: 236 },
+    { id: 'up', x: 880, y: 290, w: 124, len: 236 },
+    { id: 'play', x: 640, y: 290, w: 150, len: 300 },
+  ],
+  colors: { main: 0xb91c1c, mainTrim: 0xffc83d, side: 0x1e3a8a, sideTrim: 0xfcd34d },
+  lanterns: [300, 520, 760, 980],
+  moon: { x: 1060, y: 120, r: 36, halo: 110, color: '#fff4cf' },
+  sky: ['#0f1b3d', '#22356b', '#2d4a7a'],
+  castle: '#16233f',
+  /** Battlements: size and spacing; towers narrower than roofMaxW get a pointed roof of height roofH instead. */
+  merlon: { w: 7, h: 8, every: 11 },
+  roofMaxW: 50,
+  roofH: 40,
+  /** Walls between the towers [x, y, width, height]: deep enough to reach into the hill (no sky below them). */
+  walls: [
+    [90, 520, 330, 100],
+    [870, 520, 330, 100],
+  ],
+  ground: { y: 640, color: '#0d1630' },
+  /** [x, width, height] of each tower; narrow ones get a pointed roof. */
+  towers: [
+    [90, 40, 150],
+    [190, 70, 90],
+    [300, 34, 190],
+    [420, 80, 110],
+    [870, 80, 110],
+    [990, 34, 200],
+    [1100, 70, 95],
+    [1200, 40, 160],
+  ],
+  stars: { count: 170, maxY: 470, seed: 77, color: 0xfff7d6 },
+  windows: { seed: 3, color: 0xffcd6e },
+  fireflies: { count: 24, fromY: 330, height: 360, glow: 9, color: [230, 255, 140] as const },
+  beam: { pad: 50, h: 22, color: 0x5b3a1f },
+  lantern: { glow: 140, body: 0xffd56b, cap: 0x374151 },
 } as const;
 

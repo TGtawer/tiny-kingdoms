@@ -12,7 +12,7 @@ import { clamp, px, textStyle, type Point } from '../view/layout';
 import { MAP_DEPTH, MapScenery } from '../view/MapScenery';
 import { audioFiles, playMusic } from '../view/music';
 import { playSfx } from '../view/sound';
-import { drawMeadow, textButton, topBar } from '../view/ui';
+import { meadowTile, textButton, topBar } from '../view/ui';
 import { getStore } from './registry';
 
 /** A won battle to show on the map (docs/VISUALS.md V-3). Progress is already saved; this is only the picture. */
@@ -137,7 +137,6 @@ export class ChapterMapScene extends Phaser.Scene {
     cam.setSize(w, h);
     this.portrait = h > w;
 
-    drawMeadow(this.add.graphics().setScrollFactor(0).setDepth(MAP_DEPTH.meadow), w, h);
 
     const progress = getStore(this).progress;
     const levels = CHAPTERS[this.chapter - 1] ?? [];
@@ -172,6 +171,8 @@ export class ChapterMapScene extends Phaser.Scene {
     this.points = points;
     this.world = { width: worldW, height: worldH };
     cam.setBounds(0, 0, worldW, worldH);
+    // The meadow covers the whole world and scrolls with it, like the road and the decor.
+    this.add.tileSprite(0, 0, worldW, worldH, meadowTile(this, MAP.meadowTile)).setOrigin(0, 0).setDepth(MAP_DEPTH.meadow);
 
     // With a pending level-open animation the map starts as it was before the win.
     const reveal = this.reveal;
