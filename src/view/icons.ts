@@ -138,9 +138,18 @@ export function drawCheck(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   const s = size / 2;
   g.fillStyle(COLORS.reinforcement, 1).fillCircle(x, y, s);
   g.lineStyle(Math.max(1, size * 0.08), COLORS.outline, 1).strokeCircle(x, y, s);
-  g.lineStyle(Math.max(2, size * 0.16), 0xffffff, 1);
-  g.lineBetween(x - s * 0.45, y, x - s * 0.1, y + s * 0.35);
-  g.lineBetween(x - s * 0.1, y + s * 0.35, x + s * 0.5, y - s * 0.35);
+  // Two strokes with round ends and a round corner (discs at the three points hide the joint).
+  const w = Math.max(2, size * 0.16);
+  const pts = [
+    [x - s * 0.42, y + s * 0.02],
+    [x - s * 0.1, y + s * 0.32],
+    [x + s * 0.45, y - s * 0.3],
+  ] as const;
+  g.lineStyle(w, 0xffffff, 1);
+  g.lineBetween(pts[0][0], pts[0][1], pts[1][0], pts[1][1]);
+  g.lineBetween(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
+  g.fillStyle(0xffffff, 1);
+  for (const [px, py] of pts) g.fillCircle(px, py, w / 2);
 }
 
 /** Enemy leader portrait in a round frame, centered at (x, y). */
@@ -279,14 +288,32 @@ export function drawStar(g: Phaser.GameObjects.Graphics, x: number, y: number, s
   g.fillStyle(earned ? COLORS.gold : COLORS.starEmpty, 1).fillPath();
 }
 
+/** Five-point star path with rounded tips (and slightly rounded inner corners). */
 function starShape(g: Phaser.GameObjects.Graphics, x: number, y: number, outer: number, inner: number): void {
-  g.beginPath();
-  for (let i = 0; i < 10; i++) {
+  const corners = Array.from({ length: 10 }, (_, i) => {
     const r = i % 2 === 0 ? outer : inner;
     const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    if (i === 0) g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-    else g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-  }
+    return { x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, tip: i % 2 === 0 };
+  });
+  g.beginPath();
+  corners.forEach((c, i) => {
+    const prev = corners[(i + 9) % 10]!;
+    const next = corners[(i + 1) % 10]!;
+    // Cut the corner at share f of both edges and bend a quadratic curve through it.
+    const f = c.tip ? 0.22 : 0.1;
+    const ax = c.x + (prev.x - c.x) * f;
+    const ay = c.y + (prev.y - c.y) * f;
+    const bx = c.x + (next.x - c.x) * f;
+    const by = c.y + (next.y - c.y) * f;
+    const steps = c.tip ? 5 : 2;
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      const px = (1 - t) * (1 - t) * ax + 2 * (1 - t) * t * c.x + t * t * bx;
+      const py = (1 - t) * (1 - t) * ay + 2 * (1 - t) * t * c.y + t * t * by;
+      if (i === 0 && k === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+  });
   g.closePath();
 }
 

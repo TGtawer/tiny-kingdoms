@@ -260,8 +260,9 @@ export class ChapterMapScene extends Phaser.Scene {
     const g = this.add.graphics();
     const owner = look.open ? 'player' : 'neutral';
     g.fillStyle(0x000000, 0.18).fillEllipse(0, r * 0.82, r * 1.9, r * 0.6);
-    g.fillStyle(look.current ? COLORS.goldDark : COLORS.factionDark[owner], 1).fillCircle(0, r * 0.1, r);
-    g.fillStyle(look.current ? COLORS.gold : COLORS.faction[owner], 1).fillCircle(0, 0, r * 0.92);
+    // Rim exactly under the outline; the face sits a bit higher inside it, so the rim shows as a lip below.
+    g.fillStyle(look.current ? COLORS.goldDark : COLORS.factionDark[owner], 1).fillCircle(0, 0, r);
+    g.fillStyle(look.current ? COLORS.gold : COLORS.faction[owner], 1).fillCircle(0, -r * MAP.nodeLip, r * (1 - MAP.nodeLip));
     g.lineStyle(Math.max(2, r * 0.09), COLORS.outline, 1).strokeCircle(0, 0, r);
     // Glossy highlight, as on the battle nodes.
     g.fillStyle(0xffffff, MAP.nodeShineAlpha).fillEllipse(-r * 0.3, -r * 0.45, r * 0.8, r * 0.38);
