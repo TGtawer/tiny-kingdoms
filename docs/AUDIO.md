@@ -29,7 +29,7 @@
 | `music_battle_1` | Бой (обычные уровни), ротация — см. A-2 | Бодрая, не напряжённая; без вокала | 🔍 файл есть, ждёт ссылку и проверку Content ID | «Button Jingle» / ncone (Pixabay, id 535722) | TODO: ссылка | Pixabay Content License (предположительно) | ? | `public/audio/music_battle_1.mp3` |
 | `music_battle_2` | Бой (обычные уровни), ротация — см. A-2 | Бодрая, не напряжённая; без вокала | 🔍 файл есть, ждёт ссылку и проверку Content ID | «Pizzicato Optimistic» / Sonican (Pixabay, id 275651) | TODO: ссылка | Pixabay Content License (предположительно) | ? | `public/audio/music_battle_2.mp3` |
 | `music_battle_3` | Бой (обычные уровни), ротация — см. A-2 | Бодрая, не напряжённая; без вокала | 🔍 файл есть, ждёт ссылку и проверку Content ID | «Fairytail Quest for Game» / Good_B_Music (Pixabay, id 394561) | TODO: ссылка | Pixabay Content License (предположительно) | ? | `public/audio/music_battle_3.mp3` |
-| `music_boss` | Бой на 10-х уровнях (дракон, цитадель) | Как боевые, но напряжённее; тот же стиль | ⬜ | — | — | — | — | — |
+| `music_boss` | Бой на 10-х уровнях (злой маг, цитадель) | Как боевые, но напряжённее; тот же стиль | ⬜ | — | — | — | — | — |
 
 ### Джинглы (один раз, без цикла)
 
