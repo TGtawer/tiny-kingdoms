@@ -1,0 +1,132 @@
+{
+  "id": "dev_pass",
+  "chapter": 0,
+  "index": 7,
+  "playerStartGold": 30,
+  "enemy": {
+    "productionMult": 0.7,
+    "startGold": 20,
+    "leader": "baron",
+    "aiStartDelayMs": 18000
+  },
+  "goal": {
+    "type": "survive",
+    "seconds": 90
+  },
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.1,
+      "y": 0.5,
+      "size": "large",
+      "owner": "player",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "p1",
+      "x": 0.27,
+      "y": 0.24,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "p2",
+      "x": 0.27,
+      "y": 0.76,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "neck",
+      "x": 0.5,
+      "y": 0.5,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "q1",
+      "x": 0.73,
+      "y": 0.24,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "e2",
+      "x": 0.73,
+      "y": 0.76,
+      "size": "medium",
+      "owner": "enemy",
+      "troops": 12,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "enemy",
+      "x": 0.9,
+      "y": 0.5,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 30,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "p1"
+    ],
+    [
+      "player",
+      "p2"
+    ],
+    [
+      "player",
+      "neck"
+    ],
+    [
+      "p1",
+      "neck"
+    ],
+    [
+      "p2",
+      "neck"
+    ],
+    [
+      "neck",
+      "q1"
+    ],
+    [
+      "neck",
+      "e2"
+    ],
+    [
+      "neck",
+      "enemy"
+    ],
+    [
+      "q1",
+      "enemy"
+    ],
+    [
+      "e2",
+      "enemy"
+    ]
+  ]
+}

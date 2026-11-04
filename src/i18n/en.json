@@ -110,7 +110,6 @@
   "tut.swipeMany": "Swipe through both circles to the target",
   "tut.tapCastle": "Tap your castle",
   "tut.takePass": "Take the pass",
-  "tut.towerHold": "The tower hits every enemy army. Hold on!",
   "tut.tapSpell": "Tap the spell",
   "tut.castSpell": "Choose your circle",
   "tut.spellCost": "Spells cost gold and need to recharge",
@@ -121,5 +120,6 @@
   "tour.done": "Done! Back to battle",
   "tut.mage": "An evil mage! Take his tower",
   "tut.mageFireball": "Fireball! Move your troops out",
-  "boss.mage": "Take the mage tower · fire in {sec} s"
+  "boss.mage": "Take the mage tower · fire in {sec} s",
+  "tut.tower": "The tower hits every enemy army"
 }

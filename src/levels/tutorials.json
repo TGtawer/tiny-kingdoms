@@ -55,7 +55,7 @@
         "until": { "type": "build", "building": "tower", "node": "neck" },
         "slow": true
       },
-      { "hint": "tut.towerHold", "highlight": [{ "node": "neck" }, { "ui": "goal" }], "until": { "type": "time", "sec": 4 } }
+      { "hint": "tut.tower", "highlight": [{ "node": "neck" }], "until": { "type": "time", "sec": 4 } }
     ]
   },
   "c01_l07": {

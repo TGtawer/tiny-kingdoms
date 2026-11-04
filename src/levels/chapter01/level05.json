@@ -10,10 +10,6 @@
     "aiStartDelayMs": 18000
   },
   "tutorial": "c01_l05",
-  "goal": {
-    "type": "survive",
-    "seconds": 90
-  },
   "nodes": [
     {
       "id": "player",
@@ -71,7 +67,7 @@
       "x": 0.73,
       "y": 0.76,
       "size": "medium",
-      "owner": "enemy",
+      "owner": "neutral",
       "troops": 12,
       "hasGoldVein": false,
       "building": null

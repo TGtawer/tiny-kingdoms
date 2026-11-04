@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS } from '../src/config/balance';
 import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
 import { validateLevel, type LevelData } from '../src/core/level/schema';
-import type { Command } from '../src/core/sim/commands';
 import { step } from '../src/core/sim/tick';
 import { createWorld } from '../src/core/sim/World';
 import { CHAPTERS, DEV_LEVELS, getLevel, nextLevel } from '../src/levels';
@@ -62,15 +60,14 @@ describe('dev sandbox levels', () => {
 /**
  * Difficulty curve (TUTORIAL.md T-5, BALANCE.md), measured with an AI playing for the player (an active player
  * without meta bonuses: decides every 1.2 s, aggression 0.6) against the level AI, 10 seeds per level.
- * Lessons 1–3: 10/10; consolidation 4 and 6: 8–9/10; 7–9: 6–8/10; 10: 5–7/10. Battles end within 10 minutes.
- * Level 5 is the tower lesson: the player who follows it (a tower on the pass) wins 10/10,
- * a player who never builds a tower loses more often.
+ * Lessons 1–3 and 5: 10/10; consolidation 4 and 6: 8–9/10; 7–9: 6–8/10; 10: 5–7/10. Battles end within 10 minutes.
  */
 const WIN_CORRIDOR: Record<number, readonly [number, number]> = {
   1: [10, 10],
   2: [10, 10],
   3: [10, 10],
   4: [8, 9],
+  5: [10, 10],
   6: [8, 9],
   7: [6, 8],
   8: [6, 8],
@@ -78,27 +75,14 @@ const WIN_CORRIDOR: Record<number, readonly [number, number]> = {
   10: [5, 7],
 };
 
-type PlayerMode = 'ai' | 'towerOnPass' | 'noTower';
-
 /** Wins of the AI player over seeds 1..10. */
-function wins(level: LevelData, mode: PlayerMode = 'ai'): number {
+function wins(level: LevelData): number {
   let won = 0;
   for (let seed = 1; seed <= 10; seed++) {
     const world = createWorld(level, { seed });
     const player = createAi('player', { thinkMs: 1200, aggression: 0.6 });
     const enemy = createAi('enemy', aiParamsFromLevel(level.enemy, world.goal, world.capitals.player));
-    let towerBuilt = false;
-    while (!world.winner && world.tick < 6000) {
-      let cmds: Command[] = aiStep(world, player);
-      if (mode === 'noTower') cmds = cmds.filter((c) => !(c.type === 'build' && c.building === 'tower'));
-      const pass = world.nodes.neck;
-      if (mode === 'towerOnPass' && !towerBuilt && pass?.owner === 'player' && !pass.building && world.sides.player.gold >= BUILDINGS.cost[0]) {
-        // What the lesson teaches: the first building goes on the pass, as a tower.
-        cmds = [{ type: 'build', side: 'player', nodeId: 'neck', building: 'tower' }, ...cmds.filter((c) => c.type !== 'build')];
-        towerBuilt = true;
-      }
-      step(world, [...cmds, ...aiStep(world, enemy)]);
-    }
+    while (!world.winner && world.tick < 6000) step(world, [...aiStep(world, player), ...aiStep(world, enemy)]);
     expect(world.winner, `${level.id} seed ${seed} did not finish in 10 min`).not.toBeNull();
     if (world.winner === 'player') won++;
   }
@@ -106,19 +90,10 @@ function wins(level: LevelData, mode: PlayerMode = 'ai'): number {
 }
 
 describe('chapter 1 difficulty curve', () => {
-  it.each(CHAPTERS[0]!.filter((l) => l.index !== 5).map((l) => [l.id, l] as const))('%s', (_id, level) => {
+  it.each(CHAPTERS[0]!.map((l) => [l.id, l] as const))('%s', (_id, level) => {
     const [min, max] = WIN_CORRIDOR[level.index]!;
     const won = wins(level);
     expect(won, `${level.id}: ${won}/10`).toBeGreaterThanOrEqual(min);
     expect(won, `${level.id}: ${won}/10`).toBeLessThanOrEqual(max);
-  });
-
-  it('c01_l05: a tower on the pass holds; without towers the player loses more often', () => {
-    const level = getLevel('c01_l05')!;
-    expect(level.goal).toEqual({ type: 'survive', seconds: 90 });
-    const withTower = wins(level, 'towerOnPass');
-    const without = wins(level, 'noTower');
-    expect(withTower).toBe(10);
-    expect(without).toBeLessThanOrEqual(withTower - 3);
   });
 });
