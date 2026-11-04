@@ -69,6 +69,25 @@ describe('validateLevel', () => {
     expect(result.ok ? [] : result.errors).toContainEqual(expect.stringContaining('cross'));
   });
 
+  it('accepts one capital per side', () => {
+    expect(
+      errorsOf((l) => {
+        l.nodes[0]!.capital = true;
+        l.nodes[2]!.capital = true;
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects a neutral capital and a second capital of a side', () => {
+    expect(errorsOf((l) => (l.nodes[1]!.capital = true))).toEqual(['test: node n: capital must start as player or enemy']);
+    const errors = errorsOf((l) => {
+      l.nodes[0]!.capital = true;
+      l.nodes[1]!.owner = 'player';
+      l.nodes[1]!.capital = true;
+    });
+    expect(errors).toEqual(['test: more than one player capital']);
+  });
+
   it('rejects non-objects', () => {
     expect(validateLevel(null).ok).toBe(false);
     expect(validateLevel({ id: 'x' }).ok).toBe(false);

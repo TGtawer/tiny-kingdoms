@@ -7,7 +7,8 @@
     "productionMult": 0.7,
     "aiThinkMs": 1500,
     "aggression": 0.75,
-    "startGold": 20
+    "startGold": 20,
+    "leader": "king"
   },
   "nodes": [
     {
@@ -18,7 +19,8 @@
       "owner": "player",
       "troops": 20,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "capital": true
     },
     {
       "id": "enemy",
@@ -28,7 +30,8 @@
       "owner": "enemy",
       "troops": 35,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "capital": true
     },
     {
       "id": "c",
@@ -78,7 +81,8 @@
       "owner": "neutral",
       "troops": 10,
       "hasGoldVein": true,
-      "building": null
+      "building": null,
+      "kind": "chest"
     },
     {
       "id": "a3",

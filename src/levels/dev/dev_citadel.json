@@ -1,0 +1,118 @@
+{
+  "id": "dev_citadel",
+  "chapter": 0,
+  "index": 4,
+  "playerStartGold": 20,
+  "enemy": {
+    "productionMult": 0.6,
+    "startGold": 0,
+    "leader": "king"
+  },
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.08,
+      "y": 0.5,
+      "size": "large",
+      "owner": "player",
+      "troops": 30,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "a",
+      "x": 0.3,
+      "y": 0.3,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": true,
+      "building": null
+    },
+    {
+      "id": "b",
+      "x": 0.3,
+      "y": 0.7,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "m",
+      "x": 0.55,
+      "y": 0.5,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 8,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "f",
+      "x": 0.75,
+      "y": 0.25,
+      "size": "small",
+      "owner": "enemy",
+      "troops": 8,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "citadel",
+      "x": 0.9,
+      "y": 0.55,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 150,
+      "hasGoldVein": false,
+      "building": {
+        "type": "barracks",
+        "level": 3
+      },
+      "kind": "fortress",
+      "capital": true
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "a"
+    ],
+    [
+      "player",
+      "b"
+    ],
+    [
+      "a",
+      "m"
+    ],
+    [
+      "b",
+      "m"
+    ],
+    [
+      "m",
+      "citadel"
+    ],
+    [
+      "a",
+      "f"
+    ],
+    [
+      "f",
+      "citadel"
+    ]
+  ],
+  "special": {
+    "type": "citadel",
+    "params": {
+      "nodeId": "citadel"
+    }
+  },
+  "goal": {
+    "type": "capital"
+  }
+}

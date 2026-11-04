@@ -1,7 +1,7 @@
 import { ARMY, BUILDINGS, type BuildingType, type SpellId } from '../../config/balance';
 import { armyPath } from './pathfinding';
 import { fireballKill, reinforcementTroops, spellCooldownMs, spellCost } from './spells';
-import type { ArmyState, BuildingLevel, Side, World } from './World';
+import { isRival, type ArmyState, type BuildingLevel, type Side, type World } from './World';
 
 /** How the order was given: a swipe sends 75% of the troops, tap-tap sends 50% (GDD 3.5). */
 export type SendMode = 'swipe' | 'tap';
@@ -47,6 +47,7 @@ export type RejectReason =
   | 'noPath'
   | 'occupied'
   | 'noGoldVein'
+  | 'notBuildable'
   | 'noBuilding'
   | 'maxLevel'
   | 'notEnoughGold'
@@ -94,6 +95,7 @@ export function validate(world: World, cmd: Command): RejectReason | null {
       const node = world.nodes[cmd.nodeId];
       if (!node) return 'unknownNode';
       if (node.owner !== cmd.side) return 'notOwner';
+      if (node.kind === 'temple') return 'notBuildable';
       if (node.building) return 'occupied';
       if (cmd.building === 'mine' && !node.hasGoldVein) return 'noGoldVein';
       if (side.gold < buildCost(0)!) return 'notEnoughGold';
@@ -116,8 +118,8 @@ export function validate(world: World, cmd: Command): RejectReason | null {
       if (side.spellCooldowns[cmd.spell] > 0) return 'cooldown';
       // Fireball hits the opponent's node; reinforcement targets an own node.
       // TODO(design): can fireball target neutral nodes? GDD says "enemy node", so not for now.
-      const expectedOwner = cmd.spell === 'fireball' ? (cmd.side === 'player' ? 'enemy' : 'player') : cmd.side;
-      if (node.owner !== expectedOwner) return 'invalidTarget';
+      const valid = cmd.spell === 'fireball' ? isRival(cmd.side, node.owner) : node.owner === cmd.side;
+      if (!valid) return 'invalidTarget';
       if (side.gold < spellCost(cmd.spell)) return 'notEnoughGold';
       return null;
     }

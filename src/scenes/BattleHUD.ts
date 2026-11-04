@@ -1,15 +1,18 @@
 import * as Phaser from 'phaser';
-import { SPELLS, type SpellId } from '../config/balance';
-import { COLORS, HUD } from '../config/game';
+import { SPELLS, type LeaderId, type SpellId } from '../config/balance';
+import { COLORS, cssColor, HUD, LEADER_CARD, RESULT_PANEL } from '../config/game';
+import { sideGoldRate } from '../core/sim/economy';
 import { spellCooldownMs } from '../core/sim/spells';
 import type { Side, World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { Button } from '../view/Button';
-import { drawCoin, drawCrystal, drawPause, drawSpell } from '../view/icons';
+import { drawCoin, drawCrystal, drawLeader, drawPause, drawSpell, drawStar } from '../view/icons';
 import { px, textStyle } from '../view/layout';
 
 export interface HudCallbacks {
   onPause(): void;
+  /** Speed-up button: toggles ×1 / ×SPEED_UP.multiplier. */
+  onSpeed(): void;
   onSpell(spell: SpellId): void;
 }
 
@@ -29,8 +32,20 @@ export class BattleHUD {
   private readonly topBar: Phaser.GameObjects.Graphics;
   private readonly coin: Phaser.GameObjects.Graphics;
   private readonly goldText: Phaser.GameObjects.Text;
+  /** "+N/s" next to the gold counter. */
+  private readonly rateText: Phaser.GameObjects.Text;
+  private shownRate = -1;
   private readonly title: Phaser.GameObjects.Text;
   private readonly pauseButton: Button;
+  private readonly speedButton: Button;
+  private readonly speedText: Phaser.GameObjects.Text;
+  private readonly speedRing: Phaser.GameObjects.Graphics;
+  private shownSpeed = '';
+  /** Enemy leader portrait next to the title. */
+  private readonly leaderIcon: Phaser.GameObjects.Graphics;
+  private leader: LeaderId | null = null;
+  /** Level goal plaque under the top bar. */
+  private readonly goalText: Phaser.GameObjects.Text;
   private readonly spells: SpellButton[] = [];
   private overlay: Phaser.GameObjects.Container | null = null;
   private shownGold = -1;
@@ -42,6 +57,7 @@ export class BattleHUD {
     this.topBar = scene.add.graphics();
     this.coin = scene.add.graphics();
     this.goldText = scene.add.text(0, 0, '0', textStyle(24)).setOrigin(0, 0.5).setStroke('#1f2937', px(5));
+    this.rateText = scene.add.text(0, 0, '', textStyle(15, COLORS.gold)).setOrigin(0, 0.5).setStroke('#1f2937', px(4));
     this.title = scene.add.text(0, 0, title, textStyle(20)).setOrigin(0.5).setStroke('#1f2937', px(5));
 
     const pauseSize = px(HUD.pauseButton);
@@ -50,7 +66,22 @@ export class BattleHUD {
     drawPause(pauseIcon, 0, 0, pauseSize * 0.5);
     this.pauseButton.add(pauseIcon);
 
-    this.root.add([this.topBar, this.coin, this.goldText, this.title, this.pauseButton]);
+    // Speed-up: hidden until the player holds enough nodes (see BattleScene).
+    this.speedButton = new Button(scene, 0, 0, { width: pauseSize, height: pauseSize, onClick: callbacks.onSpeed });
+    this.speedText = scene.add.text(0, -px(2), '', textStyle(20, COLORS.textDark)).setOrigin(0.5);
+    this.speedButton.add(this.speedText);
+    this.speedRing = scene.add.graphics();
+    this.speedButton.setVisible(false);
+    this.speedRing.setVisible(false);
+
+    this.leaderIcon = scene.add.graphics();
+    this.goalText = scene.add
+      .text(0, 0, '', textStyle(15, COLORS.textDark))
+      .setOrigin(0.5)
+      .setBackgroundColor(cssColor(COLORS.panel))
+      .setPadding(px(10), px(3), px(10), px(3))
+      .setVisible(false);
+    this.root.add([this.topBar, this.coin, this.goldText, this.rateText, this.title, this.leaderIcon, this.goalText, this.speedRing, this.pauseButton, this.speedButton]);
 
     for (const spell of spells) {
       const size = px(HUD.spellButton);
@@ -79,8 +110,90 @@ export class BattleHUD {
     this.layout();
   }
 
+  /** Goal line under the top bar; null hides it. Cheap to call every frame. */
+  setGoal(text: string | null): void {
+    if (text === null) {
+      this.goalText.setVisible(false);
+      return;
+    }
+    if (this.goalText.text !== text) this.goalText.setText(text);
+    this.goalText.setVisible(true);
+  }
+
+  /** Shows the enemy leader's portrait in the top bar. */
+  setLeader(leader: LeaderId | null): void {
+    this.leader = leader;
+    this.layout();
+  }
+
+  /**
+   * Leader card before the battle: portrait, name, one line. Closes on tap or after LEADER_CARD.autoCloseMs.
+   */
+  showLeaderCard(leader: LeaderId, onClose: () => void): void {
+    const scene = this.scene;
+    const w = scene.scale.width;
+    const h = scene.scale.height;
+    const card = scene.add.container(0, 0).setDepth(210);
+    const dim = scene.add.rectangle(w / 2, h / 2, w, h, COLORS.dim, 0.55).setInteractive();
+    const panelW = Math.min(w - px(32), px(320));
+    const panelH = px(LEADER_CARD.portrait) + px(130);
+    const x0 = w / 2 - panelW / 2;
+    const y0 = h / 2 - panelH / 2;
+    const panel = scene.add.graphics();
+    panel.fillStyle(COLORS.outline, 0.4).fillRoundedRect(x0 + px(4), y0 + px(6), panelW, panelH, px(22));
+    panel.fillStyle(COLORS.panel, 1).fillRoundedRect(x0, y0, panelW, panelH, px(22));
+    panel.lineStyle(px(4), COLORS.faction.enemy, 1).strokeRoundedRect(x0, y0, panelW, panelH, px(22));
+    const portrait = scene.add.graphics();
+    drawLeader(portrait, leader, w / 2, y0 + px(16) + px(LEADER_CARD.portrait) / 2, px(LEADER_CARD.portrait));
+    const name = scene.add
+      .text(w / 2, y0 + px(LEADER_CARD.portrait) + px(36), t(`leader.${leader}`), textStyle(24, COLORS.faction.enemy))
+      .setOrigin(0.5)
+      .setStroke('#1f2937', px(4));
+    const quote = scene.add
+      .text(w / 2, y0 + px(LEADER_CARD.portrait) + px(66), t(`leader.${leader}.quote`), textStyle(16, COLORS.textDark))
+      .setOrigin(0.5, 0)
+      .setAlign('center')
+      .setWordWrapWidth(panelW - px(32), true);
+    card.add([dim, panel, portrait, name, quote]);
+    card.setAlpha(0);
+    scene.tweens.add({ targets: card, alpha: 1, duration: 160 });
+
+    let closed = false;
+    const close = (): void => {
+      if (closed) return;
+      closed = true;
+      scene.tweens.add({ targets: card, alpha: 0, duration: 160, onComplete: () => card.destroy() });
+      onClose();
+    };
+    dim.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, close);
+    scene.time.delayedCall(LEADER_CARD.autoCloseMs, close);
+  }
+
   get hasSpellBar(): boolean {
     return this.spells.length > 0;
+  }
+
+  /**
+   * Speed-up button state: hidden when not available; `multiplier` is the current speed (1 = normal).
+   * Cheap to call every frame.
+   */
+  setSpeed(available: boolean, multiplier: number): void {
+    const key = available ? String(multiplier) : '';
+    if (key === this.shownSpeed) return;
+    const appearing = available && this.shownSpeed === '';
+    this.shownSpeed = key;
+    this.speedButton.setVisible(available);
+    this.speedRing.setVisible(available && multiplier > 1);
+    if (!available) return;
+
+    this.speedText.setText(t('battle.speed', { mult: multiplier }));
+    const size = this.speedButton.buttonWidth;
+    this.speedRing.clear();
+    this.speedRing.lineStyle(px(4), COLORS.hint, 1).strokeRoundedRect(-size / 2 - px(4), -size / 2 - px(2), size + px(8), size + px(8), px(16));
+    if (appearing) {
+      this.speedButton.setScale(0.6);
+      this.scene.tweens.add({ targets: this.speedButton, scale: 1, duration: 220, ease: 'Back.Out' });
+    }
   }
 
   /** Hides the spell buttons while another panel (the build menu) takes the bottom bar. */
@@ -101,8 +214,15 @@ export class BattleHUD {
 
     drawCoinAt(this.coin, px(16) + px(14), barH / 2, px(28));
     this.goldText.setPosition(px(16) + px(34), barH / 2);
-    this.title.setPosition(w / 2, barH / 2);
+    this.placeRate();
+    this.goalText.setPosition(w / 2, barH + px(HUD.goalBar) / 2);
     this.pauseButton.setPosition(w - px(12) - this.pauseButton.buttonWidth / 2, barH / 2);
+    this.speedButton.setPosition(
+      this.pauseButton.x - this.pauseButton.buttonWidth / 2 - px(HUD.topBarGap) - this.speedButton.buttonWidth / 2,
+      barH / 2,
+    );
+    this.speedRing.setPosition(this.speedButton.x, this.speedButton.y);
+    this.placeTitle();
 
     const size = px(HUD.spellButton);
     const gap = px(16);
@@ -125,6 +245,21 @@ export class BattleHUD {
     if (gold !== this.shownGold) {
       this.shownGold = gold;
       this.goldText.setText(String(gold));
+      this.placeRate();
+    }
+
+    // Rounded to 0.1 so the label only changes when the income really changes.
+    const rate = Math.round(sideGoldRate(world, side) * 10) / 10;
+    if (rate !== this.shownRate) {
+      const grew = this.shownRate >= 0 && rate > this.shownRate;
+      this.shownRate = rate;
+      this.rateText.setText(t('hud.goldRate', { rate: rate.toFixed(1) }));
+      this.placeTitle();
+      if (grew) {
+        this.scene.tweens.killTweensOf(this.rateText);
+        this.rateText.setScale(1.4);
+        this.scene.tweens.add({ targets: this.rateText, scale: 1, duration: 350, ease: 'Back.Out' });
+      }
     }
 
     for (const s of this.spells) {
@@ -154,18 +289,78 @@ export class BattleHUD {
     }
   }
 
-  showPause(onResume: () => void, onRestart: () => void, onExit: () => void): void {
-    this.showPanel(t('pause.title'), [
-      { label: t('pause.resume'), onClick: onResume },
-      { label: t('pause.restart'), onClick: onRestart },
-      { label: t('pause.toMap'), onClick: onExit },
-    ]);
+  /** Pause panel; `sound` adds the sound on/off toggle (redraws the panel in place). */
+  showPause(
+    onResume: () => void,
+    onRestart: () => void,
+    onExit: () => void,
+    sound: { on: boolean; toggle: () => void },
+    fade = true,
+  ): void {
+    this.showPanel(
+      t('pause.title'),
+      [
+        { label: t('pause.resume'), onClick: onResume },
+        {
+          label: t(sound.on ? 'pause.soundOn' : 'pause.soundOff'),
+          onClick: () => {
+            sound.toggle();
+            this.showPause(onResume, onRestart, onExit, { on: !sound.on, toggle: sound.toggle }, false);
+          },
+        },
+        { label: t('pause.restart'), onClick: onRestart },
+        { label: t('pause.toMap'), onClick: onExit },
+      ],
+      { fade },
+    );
   }
 
-  /** Result panel with the crystal reward; buttons are listed top to bottom. */
-  showResult(title: string, won: boolean, crystals: number, buttons: Array<{ label: string; onClick: () => void }>): void {
+  /**
+   * Result panel with the crystal reward; buttons are listed top to bottom, the first one is the main action.
+   * On victory the reward crystals fly into the total counter, which counts up to `totalCrystals`.
+   */
+  showResult(
+    title: string,
+    won: boolean,
+    crystals: number,
+    totalCrystals: number,
+    buttons: Array<{ label: string; onClick: () => void }>,
+    extras: { stars?: number; tip?: string } = {},
+  ): void {
     // TODO(stage-6): "double for a rewarded ad" button on victory.
-    this.showPanel(title, buttons, won, crystals);
+    this.showPanel(title, buttons, { celebrate: won, crystals, totalCrystals, primary: won, ...extras });
+  }
+
+  private placeRate(): void {
+    this.rateText.setPosition(this.goldText.x + this.goldText.width + px(8), px(HUD.topBar) / 2 + px(2));
+    this.placeTitle();
+  }
+
+  /**
+   * Title and leader portrait share the free space between the gold block and the speed button
+   * (reserved even while hidden, so nothing jumps when it appears). Centered when it fits;
+   * on narrow screens the title shrinks and is dropped if it would get too small, the portrait stays.
+   */
+  private placeTitle(): void {
+    const barH = px(HUD.topBar);
+    const gap = px(HUD.topBarGap);
+    const left = this.rateText.x + this.rateText.width + gap;
+    const right = this.speedButton.x - this.speedButton.buttonWidth / 2 - gap;
+    const portrait = this.leader ? px(LEADER_CARD.hudPortrait) : 0;
+    const portraitW = portrait > 0 ? portrait + gap : 0;
+
+    this.title.setScale(1);
+    const scale = Math.min(1, (right - left - portraitW) / this.title.width);
+    const showTitle = scale >= HUD.titleMinScale;
+    this.title.setVisible(showTitle).setScale(showTitle ? scale : 1);
+    const titleW = showTitle ? this.title.displayWidth : 0;
+    const groupW = portraitW + titleW - (titleW === 0 && portrait > 0 ? gap : 0);
+
+    const w = this.scene.scale.width;
+    const x0 = Math.max(left, Math.min(w / 2 - groupW / 2, right - groupW));
+    if (showTitle) this.title.setPosition(x0 + portraitW + titleW / 2, barH / 2);
+    this.leaderIcon.clear();
+    if (this.leader) drawLeader(this.leaderIcon, this.leader, x0 + portrait / 2, barH / 2, portrait);
   }
 
   /** Screen position of the gold counter (for tutorial highlights). */
@@ -181,13 +376,24 @@ export class BattleHUD {
   private showPanel(
     title: string,
     buttons: Array<{ label: string; onClick: () => void }>,
-    celebrate = false,
-    crystals: number | null = null,
+    options: {
+      celebrate?: boolean;
+      crystals?: number;
+      totalCrystals?: number;
+      primary?: boolean;
+      fade?: boolean;
+      /** Star rating row under the title (victory). */
+      stars?: number;
+      /** One advice line above the buttons (defeat). */
+      tip?: string;
+    } = {},
   ): void {
     this.hideOverlay();
     const scene = this.scene;
     const overlay = scene.add.container(0, 0).setDepth(200);
     this.overlay = overlay;
+    const crystals = options.crystals ?? null;
+    let animated = false;
 
     const build = (): void => {
       overlay.removeAll(true);
@@ -198,10 +404,17 @@ export class BattleHUD {
       const dim = scene.add.rectangle(w / 2, h / 2, w, h, COLORS.dim, 0.5).setInteractive();
       const panelW = Math.min(w - px(32), px(320));
       const bh = px(56);
+      const mainH = options.primary ? px(RESULT_PANEL.primaryButtonHeight) : bh;
       const gap = px(12);
       const rewardH = crystals === null ? 0 : px(44);
-      const top = px(96) + rewardH;
-      const panelH = top + buttons.length * (bh + gap);
+      const starsH = options.stars === undefined ? 0 : px(RESULT_PANEL.starSize + 14);
+      const tipText = options.tip
+        ? scene.add.text(w / 2, 0, options.tip, textStyle(16, COLORS.textDark)).setOrigin(0.5, 0).setAlign('center')
+        : null;
+      tipText?.setWordWrapWidth(panelW - px(40), true);
+      const tipH = tipText ? tipText.height + px(14) : 0;
+      const top = px(96) + starsH + rewardH + tipH;
+      const panelH = top + mainH + gap + (buttons.length - 1) * (bh + gap);
       const panel = scene.add.graphics();
       const px0 = w / 2 - panelW / 2;
       const py0 = h / 2 - panelH / 2;
@@ -209,36 +422,140 @@ export class BattleHUD {
       panel.fillStyle(COLORS.panel, 1).fillRoundedRect(px0, py0, panelW, panelH, px(22));
       panel.lineStyle(px(4), COLORS.panelEdge, 1).strokeRoundedRect(px0, py0, panelW, panelH, px(22));
 
-      const titleColor = celebrate ? COLORS.gold : COLORS.text;
+      const titleColor = options.celebrate ? COLORS.gold : COLORS.text;
       const titleText = scene.add
         .text(w / 2, py0 + px(48), title, textStyle(32, titleColor))
         .setOrigin(0.5)
         .setStroke('#1f2937', px(6));
       overlay.add([dim, panel, titleText]);
 
+      if (options.stars !== undefined) this.drawStars(overlay, w / 2, py0 + px(96) + starsH / 2 - px(10), options.stars, !animated);
+      if (tipText) {
+        tipText.setY(py0 + px(96) + starsH + rewardH);
+        overlay.add(tipText);
+      }
+
+      let rewardAt: { x: number; y: number } | null = null;
       if (crystals !== null) {
-        const ry = py0 + px(96) + rewardH / 2 - px(8);
+        const ry = py0 + px(96) + starsH + rewardH / 2 - px(8);
         const label = scene.add.text(w / 2 + px(14), ry, `+${crystals}`, textStyle(28, COLORS.text)).setOrigin(0.5).setStroke('#1f2937', px(6));
         const icon = scene.add.graphics();
-        drawCrystal(icon, label.x - label.width / 2 - px(20), ry, px(28));
+        rewardAt = { x: label.x - label.width / 2 - px(20), y: ry };
+        drawCrystal(icon, rewardAt.x, rewardAt.y, px(28));
         overlay.add([icon, label]);
       }
 
+      let y = py0 + top;
       buttons.forEach((b, i) => {
-        const button = new Button(scene, w / 2, py0 + top + bh / 2 + i * (bh + gap), {
-          width: panelW - px(48),
-          height: bh,
+        const main = i === 0 && options.primary === true;
+        const height = main ? mainH : bh;
+        const button = new Button(scene, w / 2, y + height / 2, {
+          width: main ? panelW - px(32) : panelW - px(48),
+          height,
           onClick: b.onClick,
+          ...(options.primary && !main ? { color: COLORS.buttonSecondary } : {}),
         });
-        button.add(scene.add.text(0, 0, b.label, textStyle(20, COLORS.textDark)).setOrigin(0.5));
+        button.add(scene.add.text(0, -px(2), b.label, textStyle(main ? 26 : 20, COLORS.textDark)).setOrigin(0.5));
         overlay.add(button);
+        y += height + gap;
       });
+
+      // Total crystals at the top right; on victory the reward flies into it (only on the first build).
+      if (options.totalCrystals !== undefined && rewardAt) {
+        const total = options.totalCrystals;
+        const before = total - (crystals ?? 0);
+        const cx = w - px(14);
+        const cy = px(HUD.topBar) / 2;
+        const fly = !animated && options.celebrate === true && (crystals ?? 0) > 0;
+        animated = true;
+        const text = scene.add
+          .text(cx, cy, String(fly ? before : total), textStyle(24))
+          .setOrigin(1, 0.5)
+          .setStroke('#1f2937', px(5));
+        const icon = scene.add.graphics();
+        drawCrystal(icon, 0, 0, px(24));
+        const iconAt = (): { x: number; y: number } => ({ x: cx - text.width - px(18), y: cy });
+        icon.setPosition(iconAt().x, iconAt().y);
+        overlay.add([icon, text]);
+        if (fly) this.flyCrystals(overlay, rewardAt, iconAt(), before, total, text, icon, iconAt);
+      }
     };
 
     overlay.setData('rebuild', build);
     build();
-    overlay.setAlpha(0);
-    scene.tweens.add({ targets: overlay, alpha: 1, duration: 160 });
+    if (options.fade !== false) {
+      overlay.setAlpha(0);
+      scene.tweens.add({ targets: overlay, alpha: 1, duration: 160 });
+    }
+  }
+
+  /** Row of three stars; earned ones pop in one by one the first time. */
+  private drawStars(overlay: Phaser.GameObjects.Container, cx: number, cy: number, stars: number, animate: boolean): void {
+    const size = px(RESULT_PANEL.starSize);
+    const gap = px(RESULT_PANEL.starGap);
+    for (let i = 0; i < 3; i++) {
+      const x = cx + (i - 1) * (size + gap);
+      const empty = this.scene.add.graphics();
+      drawStar(empty, 0, 0, size, false);
+      empty.setPosition(x, cy);
+      overlay.add(empty);
+      if (i >= stars) continue;
+      const star = this.scene.add.graphics();
+      drawStar(star, 0, 0, size, true);
+      star.setPosition(x, cy);
+      overlay.add(star);
+      if (animate) {
+        star.setScale(0);
+        this.scene.tweens.add({ targets: star, scale: 1, delay: 200 + i * RESULT_PANEL.starStaggerMs, duration: 260, ease: 'Back.Out' });
+      }
+    }
+  }
+
+  /** Reward crystals fly from the reward label to the counter, which counts up as they land. */
+  private flyCrystals(
+    overlay: Phaser.GameObjects.Container,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    before: number,
+    total: number,
+    text: Phaser.GameObjects.Text,
+    icon: Phaser.GameObjects.Graphics,
+    iconAt: () => { x: number; y: number },
+  ): void {
+    const scene = this.scene;
+    const count = Math.min(RESULT_PANEL.flyingCrystals, total - before);
+    for (let i = 0; i < count; i++) {
+      const g = scene.add.graphics();
+      drawCrystal(g, 0, 0, px(22));
+      g.setPosition(from.x, from.y).setScale(1.2);
+      overlay.add(g);
+      scene.tweens.add({
+        targets: g,
+        x: to.x,
+        y: to.y,
+        scale: 0.8,
+        delay: RESULT_PANEL.flyDelayMs + i * RESULT_PANEL.flyStaggerMs,
+        duration: RESULT_PANEL.flyDurationMs,
+        ease: 'Cubic.In',
+        onComplete: () => {
+          g.destroy();
+          if (icon.active) scene.tweens.add({ targets: icon, scale: 1.25, duration: 70, yoyo: true });
+        },
+      });
+    }
+    const shown = { value: before };
+    scene.tweens.add({
+      targets: shown,
+      value: total,
+      delay: RESULT_PANEL.flyDelayMs + RESULT_PANEL.flyDurationMs,
+      duration: Math.max(1, (count - 1) * RESULT_PANEL.flyStaggerMs),
+      onUpdate: () => {
+        if (!text.active) return;
+        text.setText(String(Math.round(shown.value)));
+        const p = iconAt();
+        icon.setPosition(p.x, p.y);
+      },
+    });
   }
 
   destroy(): void {

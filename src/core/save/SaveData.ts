@@ -1,24 +1,43 @@
-import { BONUSES, SPELL_IDS, SPELL_UPGRADES, type SpellId } from '../../config/balance';
+import { BONUSES, SPELL_IDS, SPELL_UPGRADES, STARS, type SpellId } from '../../config/balance';
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
+import { totalStars } from '../meta/stars';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 4;
 
 export interface SaveData {
   version: number;
   /** ms since epoch; the newer of cloud/local wins on load. */
   updatedAt: number;
   progress: Progress;
-  // TODO(stage-6): purchases (remove_ads); TODO(stage-7): settings (sound, music, language).
+  settings: Settings;
+  // TODO(stage-6): purchases (remove_ads); TODO(stage-7): music and language settings.
+}
+
+/** Player settings kept between sessions. */
+export interface Settings {
+  /** Sound effects and vibration. */
+  sound: boolean;
+}
+
+export function defaultSettings(): Settings {
+  return { sound: true };
 }
 
 export function defaultSave(now = 0): SaveData {
-  return { version: SAVE_VERSION, updatedAt: now, progress: defaultProgress() };
+  return { version: SAVE_VERSION, updatedAt: now, progress: defaultProgress(), settings: defaultSettings() };
 }
 
 /** Migrations by source version: MIGRATIONS[n] turns a version-n object into version n+1. */
 export type Migration = (data: Record<string, unknown>) => Record<string, unknown>;
-export const MIGRATIONS: Record<number, Migration> = {};
+export const MIGRATIONS: Record<number, Migration> = {
+  // v2 added settings; v1 saves start with the defaults.
+  1: (d) => ({ ...d, version: 2, settings: defaultSettings() }),
+  // v3 added progress.stars; older saves have no stars yet (sanitizeProgress fills an empty map).
+  2: (d) => ({ ...d, version: 3 }),
+  // v4: spell upgrades cost stars; progress.spentStars starts at 0 (levels bought with crystals are kept).
+  3: (d) => ({ ...d, version: 4 }),
+};
 
 /**
  * Turns anything read from storage into valid SaveData: runs migrations, fills missing fields
@@ -47,7 +66,14 @@ export function parseSave(raw: unknown, migrations: Record<number, Migration> = 
     version: SAVE_VERSION,
     updatedAt: num(obj.updatedAt, 0),
     progress: sanitizeProgress(obj.progress),
+    settings: sanitizeSettings(obj.settings),
   };
+}
+
+function sanitizeSettings(raw: unknown): Settings {
+  const settings = defaultSettings();
+  if (isObject(raw) && typeof raw.sound === 'boolean') settings.sound = raw.sound;
+  return settings;
 }
 
 function sanitizeProgress(raw: unknown): Progress {
@@ -63,6 +89,13 @@ function sanitizeProgress(raw: unknown): Progress {
   if (isObject(raw.spellUpgrades)) {
     for (const id of SPELL_IDS) progress.spellUpgrades[id as SpellId] = level(raw.spellUpgrades[id], SPELL_UPGRADES.maxLevel);
   }
+  if (isObject(raw.stars)) {
+    for (const [id, value] of Object.entries(raw.stars)) {
+      const stars = level(value, STARS.max);
+      if (stars > 0) progress.stars[id] = stars;
+    }
+  }
+  progress.spentStars = Math.min(totalStars(progress), Math.max(0, Math.floor(num(raw.spentStars, 0))));
   return progress;
 }
 

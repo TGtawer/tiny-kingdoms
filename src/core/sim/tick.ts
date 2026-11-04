@@ -3,8 +3,11 @@ import { resolveClashes, type ClashResult } from './clash';
 import { arrive, type ArrivalResult } from './combat';
 import { apply, validate, type Command, type RejectReason } from './commands';
 import { produce } from './economy';
-import { distance } from './pathfinding';
-import { checkWinner } from './victory';
+import { segmentLength } from './pathfinding';
+import { stepBandits, type BanditRaid } from './bandits';
+import { stepCitadel, type CitadelWave } from './specials/citadel';
+import { stepDragon, type DragonEvent } from './specials/dragon';
+import { checkOutcome, updateGoal, type OutcomeReason } from './victory';
 import type { ArmyState, Side, World } from './World';
 
 export const TICK_SEC = TICK_MS / 1000;
@@ -14,7 +17,10 @@ export type TickEvent =
   | { type: 'applied'; command: Command; armyId?: string }
   | ({ type: 'arrived' } & ArrivalResult)
   | ({ type: 'clash' } & ClashResult)
-  | { type: 'gameOver'; winner: Side };
+  | ({ type: 'raid' } & BanditRaid)
+  | DragonEvent
+  | CitadelWave
+  | { type: 'gameOver'; winner: Side; reason: OutcomeReason };
 
 /**
  * Moves an army along its path. Returns true when it reaches the target.
@@ -24,9 +30,7 @@ export type TickEvent =
 function moveArmy(world: World, army: ArmyState, distanceLeft: number): boolean {
   let remaining = distanceLeft;
   while (army.segment < army.path.length - 1) {
-    const a = world.nodes[army.path[army.segment]!]!;
-    const b = world.nodes[army.path[army.segment + 1]!]!;
-    const length = distance(a, b);
+    const length = segmentLength(world, army.path[army.segment]!, army.path[army.segment + 1]!);
     const toEnd = (1 - army.progress) * length;
     if (remaining < toEnd) {
       army.progress += remaining / length;
@@ -65,6 +69,9 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
   }
 
   produce(world, TICK_SEC);
+  for (const raid of stepBandits(world)) events.push({ type: 'raid', ...raid });
+  if (world.boss?.type === 'dragon') events.push(...stepDragon(world, world.boss));
+  else if (world.boss?.type === 'citadel') events.push(...stepCitadel(world, world.boss));
 
   for (const side of Object.values(world.sides)) {
     for (const spell of SPELL_IDS) {
@@ -88,10 +95,11 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
 
   world.tick += 1;
 
-  const winner = checkWinner(world);
-  if (winner) {
-    world.winner = winner;
-    events.push({ type: 'gameOver', winner });
+  updateGoal(world);
+  const outcome = checkOutcome(world);
+  if (outcome) {
+    world.winner = outcome.winner;
+    events.push({ type: 'gameOver', winner: outcome.winner, reason: outcome.reason });
   }
   return events;
 }

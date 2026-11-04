@@ -14,12 +14,24 @@ describe('balance config', () => {
     for (const [path, n] of numbers(balance)) expect(Number.isFinite(n), path).toBe(true);
   });
 
-  it('all numbers are positive except cooldown reductions', () => {
+  it('all numbers are positive except cooldown reductions (leader presets are checked below)', () => {
     for (const [path, n] of numbers(balance)) {
+      if (path.startsWith('LEADERS.')) continue;
       if (path.endsWith('cooldownSec') && path.includes('SPELL_UPGRADES')) {
         expect(n, path).toBeLessThan(0);
       } else {
         expect(n, path).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('leader presets are sane', () => {
+    for (const [id, preset] of Object.entries(balance.LEADERS)) {
+      expect(preset.aggression, id).toBeGreaterThanOrEqual(0);
+      expect(preset.aggression, id).toBeLessThanOrEqual(1);
+      expect(preset.thinkMs, id).toBeGreaterThan(0);
+      for (const key of ['buildReserve', 'retaliateMs', 'attackAfterMs', 'weakenedBonus'] as const) {
+        expect(preset[key], `${id}.${key}`).toBeGreaterThanOrEqual(0);
       }
     }
   });

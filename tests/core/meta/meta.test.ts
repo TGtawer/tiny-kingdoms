@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BONUSES, SPELLS, SPELL_UPGRADES } from '../../../src/config/balance';
+import { BONUSES, SPELLS, SPELL_UNLOCK_STARS, SPELL_UPGRADES } from '../../../src/config/balance';
 import {
   currentLevel,
   defaultProgress,
@@ -9,6 +9,7 @@ import {
   type Progress,
 } from '../../../src/core/meta/Progress';
 import { applyBattleResult, baseReward, rewardFor } from '../../../src/core/meta/rewards';
+import { freeStars, totalStars } from '../../../src/core/meta/stars';
 import {
   bonusCost,
   buyBonus,
@@ -49,11 +50,34 @@ describe('level order', () => {
   });
 });
 
-describe('spell unlocks by chapter', () => {
-  it('fireball opens after chapter 1 is completed', () => {
-    expect(unlockedSpells(completeUpTo(9), L)).toEqual([]);
+/** Progress with `n` stars earned, spread over fake level ids (3 per level). */
+const withStars = (n: number): Progress => {
+  const p = defaultProgress();
+  for (let i = 0; n > 0; i++, n -= 3) p.stars[`l${i}`] = Math.min(3, n);
+  return p;
+};
+
+describe('chapters', () => {
+  it('chapter 1 counts as completed after its last level', () => {
+    expect(isChapterCompleted(completeUpTo(9), L, 1)).toBe(false);
     expect(isChapterCompleted(completeUpTo(10), L, 1)).toBe(true);
-    expect(unlockedSpells(completeUpTo(10), L)).toEqual(['fireball']);
+  });
+});
+
+describe('spell unlocks by stars', () => {
+  it('each spell opens at its total-stars threshold', () => {
+    const fire = SPELL_UNLOCK_STARS.fireball;
+    const reinf = SPELL_UNLOCK_STARS.reinforcement;
+    expect(unlockedSpells(withStars(fire - 1))).toEqual([]);
+    expect(unlockedSpells(withStars(fire))).toEqual(['fireball']);
+    expect(unlockedSpells(withStars(reinf))).toEqual(['fireball', 'reinforcement']);
+  });
+
+  it('spending stars does not close a spell again', () => {
+    const p = withStars(SPELL_UNLOCK_STARS.fireball);
+    p.spentStars = totalStars(p);
+    expect(freeStars(p)).toBe(0);
+    expect(unlockedSpells(p)).toEqual(['fireball']);
   });
 });
 
@@ -110,26 +134,36 @@ describe('permanent bonuses', () => {
     expect(m.goldIncomeMult).toBeCloseTo(1.1);
     expect(m.unitStrengthMult).toBeCloseTo(1.12);
 
-    const world = createWorld(L[0]!, { player: playerSetupFrom(p, L) });
+    const world = createWorld(L[0]!, { player: playerSetupFrom(p) });
     const start = L[0]!.nodes.find((n) => n.owner === 'player')!;
     expect(world.nodes[start.id]!.troops).toBe(start.troops + 6);
   });
 });
 
 describe('spell upgrades', () => {
-  it('cost round(80 × 1.4^(n−1)), 5 levels', () => {
-    expect(spellUpgradeCost(0)).toBe(80);
-    expect(spellUpgradeCost(1)).toBe(112);
+  it('cost 2, 3, 4, 5, 6 stars, 5 levels', () => {
+    expect([0, 1, 2, 3, 4].map(spellUpgradeCost)).toEqual([2, 3, 4, 5, 6]);
     expect(spellUpgradeCost(SPELL_UPGRADES.maxLevel)).toBeNull();
   });
 
   it('locked until the spell is open', () => {
-    const p = completeUpTo(9);
+    const p = withStars(SPELL_UNLOCK_STARS.fireball - 1);
+    expect(buySpellUpgrade(p, 'fireball')).toBe('locked');
+    p.stars.extra = 1;
+    expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
+    expect(buySpellUpgrade(p, 'reinforcement')).toBe('locked');
+  });
+
+  it('spends free stars, not crystals', () => {
+    const p = withStars(SPELL_UNLOCK_STARS.fireball + 2);
     p.crystals = 1000;
-    expect(buySpellUpgrade(p, L, 'fireball')).toBe('locked');
-    p.completed = L.map((l) => l.id);
-    expect(buySpellUpgrade(p, L, 'fireball')).toBe('ok');
-    expect(buySpellUpgrade(p, L, 'reinforcement')).toBe('locked');
+    expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
+    expect(p.crystals).toBe(1000);
+    expect(p.spentStars).toBe(2);
+    expect(freeStars(p)).toBe(SPELL_UNLOCK_STARS.fireball);
+    expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
+    expect(buySpellUpgrade(p, 'fireball')).toBe('notEnoughStars');
+    expect(p.spellUpgrades.fireball).toBe(2);
   });
 
   it('fireball: +5% damage and −1 s cooldown per level', () => {

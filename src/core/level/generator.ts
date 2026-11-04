@@ -109,6 +109,7 @@ function tryGenerate(params: GeneratorParams, rng: Rng): LevelData | null {
     troops: params.baseTroops,
     hasGoldVein: false,
     building: null,
+    capital: true,
   };
   add(base, mirrored(base, 'enemy'));
 

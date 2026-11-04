@@ -1,6 +1,6 @@
 import { resolveBattle } from './combat';
-import { distance } from './pathfinding';
-import type { ArmyState, World } from './World';
+import { distance, isPortalLink } from './pathfinding';
+import { strengthOf, type ArmyState, type World } from './World';
 
 /** Below this, a remainder counts as zero. */
 const EPSILON = 1e-9;
@@ -34,6 +34,8 @@ function onRoad(world: World, army: ArmyState): OnRoad | null {
   const from = army.path[army.segment];
   const to = army.path[army.segment + 1];
   if (from === undefined || to === undefined) return null;
+  // Inside a portal there is no road to meet on.
+  if (isPortalLink(world, from, to)) return null;
   const [a, b] = from < to ? [from, to] : [to, from];
   const na = world.nodes[a]!;
   const nb = world.nodes[b]!;
@@ -97,8 +99,8 @@ export function resolveClashes(world: World, stepDistance: number): ClashResult[
     const b = back.army;
     if (dead.has(a.id) || dead.has(b.id)) continue;
 
-    const strengthA = world.sides[a.owner].modifiers.unitStrengthMult;
-    const strengthB = world.sides[b.owner].modifiers.unitStrengthMult;
+    const strengthA = strengthOf(world, a.owner);
+    const strengthB = strengthOf(world, b.owner);
     const { attackersLeft, defendersLeft } = resolveBattle(a.count, strengthA, b.count, strengthB);
     a.count = attackersLeft;
     b.count = defendersLeft;

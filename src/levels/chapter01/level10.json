@@ -18,7 +18,8 @@
       "owner": "player",
       "troops": 20,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "capital": true
     },
     {
       "id": "enemy",
@@ -28,7 +29,8 @@
       "owner": "enemy",
       "troops": 35,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "capital": true
     },
     {
       "id": "c",
@@ -150,5 +152,10 @@
       "c",
       "a1"
     ]
-  ]
+  ],
+  "special": {
+    "type": "dragon",
+    "params": {}
+  },
+  "tutorial": "c01_l10"
 }

@@ -1,5 +1,5 @@
 import type { Progress } from '../core/meta/Progress';
-import { newerSave, parseSave, serializeSave, type SaveData } from '../core/save/SaveData';
+import { newerSave, parseSave, serializeSave, type SaveData, type Settings } from '../core/save/SaveData';
 import type { Platform } from '../platform/Platform';
 
 const LOCAL_KEY = 'tiny-kingdoms.save';
@@ -42,7 +42,11 @@ export class SaveStore {
     return this.data.progress;
   }
 
-  /** Call after changing progress (level end, upgrade, purchase). */
+  get settings(): Settings {
+    return this.data.settings;
+  }
+
+  /** Call after changing progress or settings (level end, upgrade, purchase). */
   commit(): void {
     this.data.updatedAt = Date.now();
     this.dirty = true;

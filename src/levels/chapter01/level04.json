@@ -20,7 +20,8 @@
       "owner": "player",
       "troops": 15,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "capital": true
     },
     {
       "id": "v",
@@ -90,7 +91,8 @@
       "owner": "enemy",
       "troops": 35,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "capital": true
     }
   ],
   "roads": [

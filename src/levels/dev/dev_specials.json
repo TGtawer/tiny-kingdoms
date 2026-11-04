@@ -1,0 +1,141 @@
+{
+  "id": "dev_specials",
+  "chapter": 0,
+  "index": 1,
+  "playerStartGold": 20,
+  "enemy": {
+    "productionMult": 0.8,
+    "startGold": 20,
+    "leader": "witch"
+  },
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.08,
+      "y": 0.5,
+      "size": "large",
+      "owner": "player",
+      "troops": 25,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "pa",
+      "x": 0.25,
+      "y": 0.5,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 3,
+      "hasGoldVein": false,
+      "building": null,
+      "kind": "portal",
+      "portalPair": "x"
+    },
+    {
+      "id": "t",
+      "x": 0.3,
+      "y": 0.15,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 15,
+      "hasGoldVein": false,
+      "building": null,
+      "kind": "temple"
+    },
+    {
+      "id": "f",
+      "x": 0.3,
+      "y": 0.85,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 8,
+      "hasGoldVein": false,
+      "building": null,
+      "kind": "fortress"
+    },
+    {
+      "id": "c",
+      "x": 0.5,
+      "y": 0.5,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 4,
+      "hasGoldVein": false,
+      "building": null,
+      "kind": "chest"
+    },
+    {
+      "id": "k",
+      "x": 0.7,
+      "y": 0.2,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null,
+      "kind": "bandits"
+    },
+    {
+      "id": "pb",
+      "x": 0.75,
+      "y": 0.8,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 3,
+      "hasGoldVein": false,
+      "building": null,
+      "kind": "portal",
+      "portalPair": "x"
+    },
+    {
+      "id": "enemy",
+      "x": 0.92,
+      "y": 0.5,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 25,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "pa"
+    ],
+    [
+      "player",
+      "t"
+    ],
+    [
+      "player",
+      "f"
+    ],
+    [
+      "pa",
+      "c"
+    ],
+    [
+      "t",
+      "c"
+    ],
+    [
+      "c",
+      "k"
+    ],
+    [
+      "k",
+      "enemy"
+    ],
+    [
+      "c",
+      "enemy"
+    ],
+    [
+      "pb",
+      "enemy"
+    ]
+  ]
+}

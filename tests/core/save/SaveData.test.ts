@@ -44,6 +44,32 @@ describe('parseSave', () => {
   });
 });
 
+describe('settings (v2)', () => {
+  it('a v1 save gets default settings', () => {
+    const save = parseSave({ version: 1, updatedAt: 1, progress: { crystals: 5 } });
+    expect(save.version).toBe(SAVE_VERSION);
+    expect(save.settings).toEqual({ sound: true });
+    expect(save.progress.crystals).toBe(5);
+  });
+
+  it('keeps a stored sound setting and drops bad values', () => {
+    expect(parseSave({ version: 2, settings: { sound: false } }).settings.sound).toBe(false);
+    expect(parseSave({ version: 2, settings: { sound: 'no' } }).settings.sound).toBe(true);
+  });
+});
+
+describe('spent stars (v4)', () => {
+  it('a v3 save starts with nothing spent', () => {
+    const save = parseSave({ version: 3, updatedAt: 1, progress: { stars: { a: 3 } } });
+    expect(save.progress.spentStars).toBe(0);
+  });
+
+  it('spent stars are clamped to 0..earned', () => {
+    expect(parseSave({ version: 4, progress: { stars: { a: 3, b: 2 }, spentStars: 99 } }).progress.spentStars).toBe(5);
+    expect(parseSave({ version: 4, progress: { stars: { a: 3 }, spentStars: -4 } }).progress.spentStars).toBe(0);
+  });
+});
+
 describe('newerSave', () => {
   it('prefers the one with the larger updatedAt', () => {
     const a = defaultSave(100);

@@ -3,12 +3,15 @@
 export type NodeSize = 'small' | 'medium' | 'large';
 export type BuildingType = 'mine' | 'barracks' | 'tower';
 export type SpellId = 'fireball' | 'reinforcement';
+/** Special node kinds (GDD 3.12); 'normal' is the default. */
+export type NodeKind = 'normal' | 'temple' | 'fortress' | 'chest' | 'portal' | 'bandits';
+export const NODE_KINDS: readonly NodeKind[] = ['normal', 'temple', 'fortress', 'chest', 'portal', 'bandits'];
 export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement'];
 
-/** GDD 3.8: a spell becomes available after completing this chapter. */
-export const SPELL_UNLOCK_AFTER_CHAPTER: Record<SpellId, number> = {
-  fireball: 1,
-  reinforcement: 2,
+/** GDD 3.8: a spell opens once the player has earned this many stars in total (stars are not spent on it). */
+export const SPELL_UNLOCK_STARS: Record<SpellId, number> = {
+  fireball: 3,
+  reinforcement: 12,
 };
 
 /** Simulation fixed timestep. */
@@ -52,6 +55,85 @@ export const ARMY = {
   minTroopsToSend: 2,
 } as const;
 
+/** Enemy leaders (GDD 3.10, CONTENT.md C-2). */
+export type LeaderId = 'king' | 'baron' | 'dwarf' | 'witch';
+export const LEADER_IDS: readonly LeaderId[] = ['king', 'baron', 'dwarf', 'witch'];
+
+/**
+ * How the AI spends gold:
+ * normal — mines, towers on threatened nodes, barracks, upgrades;
+ * defensive — mines, then towers on every front-line node, towers upgraded first;
+ * economy — mines and barracks everywhere, towers only on threatened nodes, mines upgraded first;
+ * rare — builds only with a big gold reserve, barracks only.
+ */
+export type BuildStyle = 'normal' | 'defensive' | 'economy' | 'rare';
+
+export interface LeaderPreset {
+  /** Used when the level does not set them. */
+  aggression: number;
+  thinkMs: number;
+  build: BuildStyle;
+  /** Gold kept in reserve before building ('rare' style). */
+  buildReserve: number;
+  /** Added to the attack margin against opponent nodes (big advantage needed). */
+  opponentMarginExtra: number;
+  /** After being attacked, the extra margin is dropped for this long (counter-attacks), ms. */
+  retaliateMs: number;
+  /** No attacks before this battle time (defense still works), ms. */
+  attackAfterMs: number;
+  /** Target value multiplier bonus for opponent nodes that recently lost troops. */
+  weakenedBonus: number;
+}
+
+/** Starting presets; level fields (aggression, aiThinkMs) override them. */
+export const LEADERS: Record<LeaderId, LeaderPreset> = {
+  // Defender: towers on the border, attacks only in response or with a big advantage.
+  king: { aggression: 0.35, thinkMs: 1800, build: 'defensive', buildReserve: 0, opponentMarginExtra: 0.8, retaliateMs: 20000, attackAfterMs: 0, weakenedBonus: 0 },
+  // Aggressor: attacks early and often, hardly builds.
+  baron: { aggression: 0.9, thinkMs: 1100, build: 'rare', buildReserve: 90, opponentMarginExtra: -0.05, retaliateMs: 0, attackAfterMs: 0, weakenedBonus: 0 },
+  // Builder: mines and barracks first, attacks late with a big army.
+  dwarf: { aggression: 0.6, thinkMs: 1600, build: 'economy', buildReserve: 0, opponentMarginExtra: 0.3, retaliateMs: 0, attackAfterMs: 50000, weakenedBonus: 0 },
+  // Opportunist: hits player nodes that just sent their troops away.
+  witch: { aggression: 0.65, thinkMs: 1200, build: 'normal', buildReserve: 0, opponentMarginExtra: 0, retaliateMs: 0, attackAfterMs: 0, weakenedBonus: 3 },
+};
+
+/** Special nodes (GDD 3.12, CONTENT.md C-1). Starting values, tuned in playtests. */
+export const SPECIAL_NODES = {
+  /** Owner's whole gold income +50% per temple (two temples: +100%). Temples produce nothing themselves. */
+  temple: { goldBonus: 0.5 },
+  /** Each defender counts this many times (after the tower hits, together with unit strength). */
+  fortress: { defenseMult: 2 },
+  /** Gold given once to whoever captures the chest; then it is a normal small node. */
+  chest: { gold: 60 },
+  /** Travel time through a portal pair, ms (no clashes inside). */
+  portal: { delayMs: 1000 },
+  /** Bandit camp: produces like a small node and raids the nearest non-neutral neighbour. */
+  bandits: { raidEveryMs: 20000 },
+} as const;
+
+/** Boss of chapter 1 level 10 (GDD 4.1, CONTENT.md C-4.1). */
+export const DRAGON = {
+  everyMs: 20000,
+  /** Share of the target's troops burned. */
+  burnShare: 0.5,
+  /** The target is shown this long before the strike. */
+  warnMs: 3000,
+} as const;
+
+/** Boss of chapter 2 level 10 (CONTENT.md C-4.2). */
+export const CITADEL = {
+  waveEveryMs: 15000,
+  /** Extra troops per wave, on top of the garrison. */
+  waveSize: 20,
+} as const;
+
+/** Battle speed-up button (GDD 3.11): offered while the player owns more than `unlockShare` of all nodes. */
+export const SPEED_UP = {
+  unlockShare: 0.65,
+  /** Simulation ticks per real tick while sped up. */
+  multiplier: 2,
+} as const;
+
 export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
   fireball: { killShare: number; minKill: number };
   reinforcement: { troops: number };
@@ -92,6 +174,23 @@ export const AI = {
   consolidateAt: 0.85,
   /** Below this aggression the AI prefers towers on the front line, above it barracks. */
   towerAggressionThreshold: 0.5,
+  /** "Recently weakened" (witch): look back this many seconds, troops sampled once a second. */
+  weakenedWindowSec: 6,
+  /** A node counts as weakened after losing this share of its recent maximum (and at least weakenedMinDrop troops). */
+  weakenedShare: 0.4,
+  weakenedMinDrop: 4,
+  /** Extra target value of goal nodes: the node to hold (deny it) and the player's capital. */
+  goalTargetValue: 3,
+  /** Extra target value of special nodes. */
+  templeValue: 1.5,
+  chestValue: 2.5,
+} as const;
+
+/** Star rating of a won level (GDD 4.2). */
+export const STARS = {
+  max: 3,
+  /** Win faster than this for the "fast" star, unless the level sets starTimeSec. Simulation seconds. */
+  defaultTimeSec: 180,
 } as const;
 
 export const CRYSTALS = {
@@ -118,9 +217,8 @@ export const BONUSES = {
 
 export const SPELL_UPGRADES = {
   maxLevel: 5,
-  /** Cost of level n: round(costBase * costGrowth^(n-1)). */
-  costBase: 80,
-  costGrowth: 1.4,
+  /** Stars spent on level n = starCosts[n - 1] (GDD 4.3). */
+  starCosts: [2, 3, 4, 5, 6],
   perLevel: {
     fireball: { damageShare: 0.05, cooldownSec: -1 },
     reinforcement: { troops: 3, cooldownSec: -1 },

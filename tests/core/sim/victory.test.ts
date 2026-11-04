@@ -17,7 +17,7 @@ describe('victory and defeat', () => {
     const events: TickEvent[] = [...step(world, [{ type: 'send', side: 'player', from: 'P', to: 'E' }])];
     while (!world.winner && world.tick < 200) events.push(...step(world));
     expect(world.winner).toBe('player');
-    expect(events).toContainEqual({ type: 'gameOver', winner: 'player' });
+    expect(events).toContainEqual({ type: 'gameOver', winner: 'player', reason: 'conquer' });
   });
 
   it('neutral nodes do not need to be captured', () => {

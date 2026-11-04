@@ -20,7 +20,8 @@
       "owner": "player",
       "troops": 15,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "capital": true
     },
     {
       "id": "n1",
@@ -50,7 +51,8 @@
       "owner": "enemy",
       "troops": 5,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "capital": true
     },
     {
       "id": "n3",

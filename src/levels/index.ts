@@ -1,4 +1,4 @@
-import { loadChapter } from '../core/level/loader';
+import { loadChapter, loadLevel } from '../core/level/loader';
 import type { LevelData } from '../core/level/schema';
 import type { TutorialScript } from '../core/tutorial/tutorial';
 import l01 from './chapter01/level01.json';
@@ -12,6 +12,11 @@ import l08 from './chapter01/level08.json';
 import l09 from './chapter01/level09.json';
 import l10 from './chapter01/level10.json';
 import tutorials from './tutorials.json';
+import devCitadel from './dev/dev_citadel.json';
+import devHold from './dev/dev_hold.json';
+import devSpecials from './dev/dev_specials.json';
+import devSurvive from './dev/dev_survive.json';
+import devThree from './dev/dev_three.json';
 
 // Levels are validated on load: a broken JSON fails fast in dev and in tests.
 export const CHAPTERS: readonly (readonly LevelData[])[] = [
@@ -22,10 +27,16 @@ export const ALL_LEVELS: readonly LevelData[] = CHAPTERS.flat();
 
 export const FIRST_LEVEL: LevelData = ALL_LEVELS[0]!;
 
+/**
+ * Sandbox levels for mechanics that no chapter uses yet (special nodes, goals, citadel, three sides).
+ * Not part of the chapters; open in dev with ?level=<id>, e.g. ?level=dev_specials.
+ */
+export const DEV_LEVELS: readonly LevelData[] = [devSpecials, devHold, devSurvive, devCitadel, devThree].map(loadLevel);
+
 export const TUTORIALS: Readonly<Record<string, TutorialScript>> = tutorials as Record<string, TutorialScript>;
 
 export function getLevel(id: string): LevelData | undefined {
-  return ALL_LEVELS.find((l) => l.id === id);
+  return ALL_LEVELS.find((l) => l.id === id) ?? DEV_LEVELS.find((l) => l.id === id);
 }
 
 /** The level after `id` in play order, or null after the last one. */

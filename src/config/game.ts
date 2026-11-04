@@ -30,35 +30,54 @@ export const COLORS = {
   button: 0xffb53d,
   buttonPressed: 0xe8962a,
   buttonDisabled: 0xc9bfae,
+  /** Secondary buttons next to a main one (result panel). */
+  buttonSecondary: 0xf2dcae,
+  starEmpty: 0x8b8578,
+  portal: 0xa855f7,
+  bandits: 0x3f3f46,
   dim: 0x000000,
   select: 0xffffff,
   fireball: 0xff6a1a,
   reinforcement: 0x5ee07a,
   hint: 0xffe14d,
+  /** Swipe line when the attack is predicted to capture the target / not enough troops. */
+  attackWin: 0x4ade80,
+  attackShort: 0xfacc15,
   faction: {
     player: 0x3b82f6,
     enemy: 0xef4444,
+    /** Second enemy: green, contrasts with blue, red and grey. */
+    enemy2: 0x22c55e,
     neutral: 0x9ca3af,
   },
   factionDark: {
     player: 0x1e4fb8,
     enemy: 0xa82020,
+    enemy2: 0x15803d,
     neutral: 0x5f6672,
   },
 } as const;
 
 /** Node radius in field units (fraction of field width), clamped to CSS px bounds. */
 export const NODE_RADIUS: Record<NodeSize, number> = {
-  small: 0.038,
-  medium: 0.047,
-  large: 0.058,
+  small: 0.055,
+  medium: 0.068,
+  large: 0.084,
 };
-export const NODE_RADIUS_MIN_PX = 20;
+export const NODE_RADIUS_MIN_PX = 26;
 export const NODE_RADIUS_MAX_PX = 58;
 /** Extra touch slop around a node, CSS px; hit radius is never below MIN_TOUCH_PX / 2. */
 export const NODE_HIT_SLOP_PX = 8;
 
 export const ARMY_RADIUS_PX = 13;
+
+/** Marching army look: scale bob and trail dots behind it (CSS px, ms). */
+export const ARMY_FX = {
+  bob: 0.07,
+  bobPeriodMs: 110,
+  trailDots: 3,
+  trailSpacing: 10,
+} as const;
 
 export const HUD = {
   /** Top bar height, CSS px. */
@@ -69,6 +88,12 @@ export const HUD = {
   fieldMargin: 12,
   spellButton: 64,
   pauseButton: 52,
+  /** Gap between buttons in the top bar (speed-up and pause), CSS px. */
+  topBarGap: 8,
+  /** The level title in the top bar shrinks to fit; below this scale it is hidden. */
+  titleMinScale: 0.75,
+  /** Goal plaque under the top bar (non-conquer goals), CSS px. */
+  goalBar: 30,
   /** Tutorial hint panel height reserved at the bottom, CSS px. */
   hintBar: 88,
   hintMaxWidth: 560,
@@ -85,6 +110,8 @@ export const MAP = {
   amplitude: 110,
   /** Phase step of the swing per level, radians. */
   waveStep: 1.1,
+  /** Star size under completed levels. */
+  starSize: 18,
 } as const;
 
 /** Build menu strip in the bottom HUD bar, CSS px. */
@@ -100,6 +127,45 @@ export const BUILD_MENU = {
   /** Min vertical space between a button and the bar edges. */
   barInset: 6,
 } as const;
+
+/** Victory/defeat panel, CSS px and ms. */
+export const RESULT_PANEL = {
+  primaryButtonHeight: 68,
+  /** At most this many crystal icons fly to the counter. */
+  flyingCrystals: 8,
+  flyDelayMs: 450,
+  flyStaggerMs: 90,
+  flyDurationMs: 520,
+  starSize: 40,
+  starGap: 10,
+  /** Delay between stars appearing one by one. */
+  starStaggerMs: 260,
+} as const;
+
+/** Sound and haptics. */
+export const SFX = {
+  /** Master volume, 0..1. */
+  volume: 0.5,
+} as const;
+export const HAPTICS = {
+  /** Own node captured or lost, ms. */
+  short: 35,
+  /** Victory pattern, ms (vibrate, pause, vibrate). */
+  victory: [90, 60, 180],
+  /** Camera shake on a fireball or an enemy capital captured. */
+  shakeMs: 150,
+  shakeIntensity: 0.004,
+} as const;
+
+/** Enemy leader card before the battle and the HUD portrait, CSS px / ms. */
+export const LEADER_CARD = {
+  autoCloseMs: 2500,
+  portrait: 96,
+  hudPortrait: 34,
+} as const;
+
+/** How long the special node info label stays, ms. */
+export const INFO_LABEL_MS = 2500;
 
 /** Pointer travel (CSS px) after which a press becomes a swipe. */
 export const DRAG_THRESHOLD_PX = 12;

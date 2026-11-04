@@ -1,9 +1,20 @@
-import { SPELL_IDS, type BuildingType, type NodeSize, type SpellId } from '../../config/balance';
+import { SPECIAL_NODES, SPELL_IDS, TICK_MS, type BuildingType, type NodeKind, type NodeSize, type SpellId } from '../../config/balance';
 import type { LevelData } from '../level/schema';
+import type { Goal } from './victory';
+import { createCitadel, type CitadelState } from './specials/citadel';
+import { createDragon, type DragonState } from './specials/dragon';
 import { nextRandom, seedState } from './rng';
 
-export type Owner = 'player' | 'enemy' | 'neutral';
+export type Owner = 'player' | 'enemy' | 'enemy2' | 'neutral';
 export type Side = Exclude<Owner, 'neutral'>;
+/** All sides; 'enemy2' is the optional second enemy (GDD 3.2) and stays inert without nodes. */
+export const SIDES: readonly Side[] = ['player', 'enemy', 'enemy2'];
+export const ENEMY_SIDES: readonly Side[] = ['enemy', 'enemy2'];
+
+/** Whether `owner` is a hostile side for `side` (another non-neutral side). */
+export function isRival(side: Side, owner: Owner): boolean {
+  return owner !== 'neutral' && owner !== side;
+}
 export type BuildingLevel = 1 | 2 | 3;
 
 export interface Building {
@@ -22,11 +33,17 @@ export interface NodeState {
   troops: number;
   hasGoldVein: boolean;
   building: Building | null;
+  kind: NodeKind;
+  /** Portal pair id (portals only). */
+  portalPair: string | null;
+  /** Bandit camps: tick of the next raid. */
+  raidTick: number | null;
 }
 
 export interface ArmyState {
   id: string;
-  owner: Side;
+  /** 'neutral' for bandit raids. */
+  owner: Owner;
   count: number;
   /** Node ids from source to target. */
   path: string[];
@@ -63,11 +80,20 @@ export interface World {
   tick: number;
   nodes: Record<string, NodeState>;
   roads: Array<[string, string]>;
+  /** Portal links (invisible roads between the two nodes of a pair). */
+  portals: Array<[string, string]>;
   armies: ArmyState[];
   sides: Record<Side, SideState>;
   nextArmyId: number;
   rngState: number;
   winner: Side | null;
+  goal: Goal;
+  /** Hold goal: ticks the player has held the node in a row. */
+  goalTicks: number;
+  /** Start capitals of the sides (level `capital` flags), for the capital goal. */
+  capitals: Record<Side, string | null>;
+  /** Boss mechanic of the level, if any. */
+  boss: DragonState | CitadelState | null;
 }
 
 export function defaultModifiers(): SideModifiers {
@@ -113,16 +139,27 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
       troops: n.troops + (n.owner === 'player' ? startArmyBonus : 0),
       hasGoldVein: n.hasGoldVein,
       building: n.building ? { ...n.building } : null,
+      kind: n.kind ?? 'normal',
+      portalPair: n.portalPair ?? null,
+      raidTick: n.kind === 'bandits' ? Math.round(SPECIAL_NODES.bandits.raidEveryMs / TICK_MS) : null,
     };
   }
+  const pairs = new Map<string, string[]>();
+  for (const n of level.nodes) if (n.portalPair) pairs.set(n.portalPair, [...(pairs.get(n.portalPair) ?? []), n.id]);
+  const portals = [...pairs.values()].filter((ids) => ids.length === 2).map(([a, b]) => [a!, b!] as [string, string]);
 
-  const enemyModifiers = defaultModifiers();
-  enemyModifiers.troopProductionMult = level.enemy.productionMult;
+  const enemySide = (params: LevelData['enemy'] | undefined): SideState => {
+    const modifiers = defaultModifiers();
+    modifiers.troopProductionMult = params?.productionMult ?? 1;
+    // TODO(design): GDD does not say whether the enemy AI uses spells; it has none for now.
+    return { gold: params?.startGold ?? 0, unlockedSpells: [], spellCooldowns: zeroCooldowns(), modifiers };
+  };
 
   return {
     tick: 0,
     nodes,
     roads: level.roads.map(([a, b]) => [a, b]),
+    portals,
     armies: [],
     sides: {
       player: {
@@ -131,26 +168,47 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
         spellCooldowns: zeroCooldowns(),
         modifiers: structuredClone(player.modifiers ?? defaultModifiers()),
       },
-      enemy: {
-        gold: level.enemy.startGold,
-        // TODO(design): GDD does not say whether the enemy AI uses spells; it has none for now.
-        unlockedSpells: [],
-        spellCooldowns: zeroCooldowns(),
-        modifiers: enemyModifiers,
-      },
+      enemy: enemySide(level.enemy),
+      enemy2: enemySide(level.enemy2),
     },
     nextArmyId: 1,
     rngState: seedState(options.seed ?? 1),
     winner: null,
+    goal: level.goal ? structuredClone(level.goal) : { type: 'conquer' },
+    goalTicks: 0,
+    capitals: {
+      player: level.nodes.find((n) => n.capital && n.owner === 'player')?.id ?? null,
+      enemy: level.nodes.find((n) => n.capital && n.owner === 'enemy')?.id ?? null,
+      enemy2: level.nodes.find((n) => n.capital && n.owner === 'enemy2')?.id ?? null,
+    },
+    boss:
+      level.special?.type === 'dragon'
+        ? createDragon()
+        : level.special?.type === 'citadel'
+          ? createCitadel(String(level.special.params.nodeId))
+          : null,
   };
 }
 
-export function opponentOf(side: Side): Side {
-  return side === 'player' ? 'enemy' : 'player';
-}
 
 export function nodesOf(world: World, owner: Owner): NodeState[] {
   return Object.values(world.nodes).filter((n) => n.owner === owner);
+}
+
+/** Unit strength of an owner in combat (neutrals and bandits: 1). */
+export function strengthOf(world: World, owner: Owner): number {
+  return owner === 'neutral' ? 1 : world.sides[owner].modifiers.unitStrengthMult;
+}
+
+/** How much one defender of `node` is worth: unit strength times the fortress bonus. */
+export function defenseStrength(world: World, node: NodeState): number {
+  return strengthOf(world, node.owner) * (node.kind === 'fortress' ? SPECIAL_NODES.fortress.defenseMult : 1);
+}
+
+/** Share of all nodes (neutrals included) owned by `owner`, 0..1. */
+export function ownedShare(world: World, owner: Owner): number {
+  const all = Object.values(world.nodes);
+  return all.length === 0 ? 0 : all.filter((n) => n.owner === owner).length / all.length;
 }
 
 /** Random number in [0, 1) from the world's seeded RNG. */

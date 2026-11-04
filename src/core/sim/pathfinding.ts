@@ -1,4 +1,24 @@
+import { ARMY, SPECIAL_NODES } from '../../config/balance';
 import type { NodeState, Side, World } from './World';
+
+/** Length of the invisible portal road, field units: the distance an army covers in portal.delayMs. */
+export const PORTAL_LENGTH = (ARMY.speed * SPECIAL_NODES.portal.delayMs) / 1000;
+
+export function isPortalLink(world: World, a: string, b: string): boolean {
+  return world.portals.some(([p, q]) => (p === a && q === b) || (p === b && q === a));
+}
+
+/** Length of one step of a route: a road (straight line) or a portal link. */
+export function segmentLength(world: World, a: string, b: string): number {
+  return isPortalLink(world, a, b) ? PORTAL_LENGTH : distance(world.nodes[a]!, world.nodes[b]!);
+}
+
+/** Route length with portals counted by their travel time. */
+export function routeLength(world: World, path: readonly string[]): number {
+  let total = 0;
+  for (let i = 0; i + 1 < path.length; i++) total += segmentLength(world, path[i]!, path[i + 1]!);
+  return total;
+}
 
 /** Armies of `side` may only travel through its own nodes. */
 export function passableFor(side: Side): (node: NodeState) => boolean {
@@ -7,7 +27,20 @@ export function passableFor(side: Side): (node: NodeState) => boolean {
 
 /** Route an army of `side` would take from `from` to `to`, or null if there is none. */
 export function armyPath(world: World, side: Side, from: string, to: string): string[] | null {
-  return findPath(world.nodes, world.roads, from, to, passableFor(side));
+  return findPath(world.nodes, world.roads, from, to, passableFor(side), world.portals);
+}
+
+/**
+ * Why `side` has no route: the first foreign (neutral or enemy) node on the shortest road path from `from` to `to`
+ * when ownership is ignored. Null if the target is not reachable over roads at all, or nothing is in the way.
+ */
+export function blockingNode(world: World, side: Side, from: string, to: string): string | null {
+  const path = findPath(world.nodes, world.roads, from, to, () => true, world.portals);
+  if (!path) return null;
+  for (const id of path.slice(1, -1)) {
+    if (world.nodes[id]!.owner !== side) return id;
+  }
+  return null;
 }
 
 export function distance(a: Pick<NodeState, 'x' | 'y'>, b: Pick<NodeState, 'x' | 'y'>): number {
@@ -28,15 +61,21 @@ export function findPath(
   from: string,
   to: string,
   canPass: (node: NodeState) => boolean = () => true,
+  /** Portal links: extra edges of length PORTAL_LENGTH. */
+  portals: ReadonlyArray<readonly [string, string]> = [],
 ): string[] | null {
   if (!nodes[from] || !nodes[to]) return null;
   if (from === to) return [from];
 
-  const adjacency = new Map<string, string[]>();
+  const adjacency = new Map<string, Array<{ id: string; length: number | null }>>();
   for (const id of Object.keys(nodes)) adjacency.set(id, []);
   for (const [a, b] of roads) {
-    adjacency.get(a)?.push(b);
-    adjacency.get(b)?.push(a);
+    adjacency.get(a)?.push({ id: b, length: null });
+    adjacency.get(b)?.push({ id: a, length: null });
+  }
+  for (const [a, b] of portals) {
+    adjacency.get(a)?.push({ id: b, length: PORTAL_LENGTH });
+    adjacency.get(b)?.push({ id: a, length: PORTAL_LENGTH });
   }
 
   const dist = new Map<string, number>([[from, 0]]);
@@ -59,10 +98,11 @@ export function findPath(
     visited.add(current);
 
     const currentNode = nodes[current]!;
-    for (const next of adjacency.get(current) ?? []) {
+    for (const edge of adjacency.get(current) ?? []) {
+      const next = edge.id;
       if (visited.has(next)) continue;
       if (next !== to && !canPass(nodes[next]!)) continue;
-      const candidate = best + distance(currentNode, nodes[next]!);
+      const candidate = best + (edge.length ?? distance(currentNode, nodes[next]!));
       const known = dist.get(next);
       if (known === undefined || candidate < known) {
         dist.set(next, candidate);

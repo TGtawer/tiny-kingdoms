@@ -1,14 +1,38 @@
-import { AI, ARMY, BUILDINGS, TICK_MS, type BuildingType } from '../../config/balance';
+import { AI, ARMY, BUILDINGS, LEADERS, TICK_MS, type BuildingType, type LeaderId, type LeaderPreset } from '../../config/balance';
 import { towerDamage } from '../sim/combat';
 import { buildCost, sendAmount, validate, type Command, type SendMode } from '../sim/commands';
 import { nodeCapacity, troopRate } from '../sim/economy';
-import { armyPath, pathLength } from '../sim/pathfinding';
-import { opponentOf, random, type NodeState, type Side, type World } from '../sim/World';
+import { armyPath, routeLength, segmentLength } from '../sim/pathfinding';
+import { defenseStrength, isRival, random, strengthOf, type NodeState, type Side, type World } from '../sim/World';
 import type { EnemyParams } from '../level/schema';
+import type { Goal } from '../sim/victory';
 
-/** AI params from level data. */
-export function aiParamsFromLevel(enemy: EnemyParams): AiParams {
-  return { thinkMs: enemy.aiThinkMs, aggression: enemy.aggression, startDelayMs: enemy.aiStartDelayMs ?? 0 };
+/** Behaviour knobs of a leader; a leaderless AI uses these neutral values. */
+const NO_LEADER: Omit<LeaderPreset, 'aggression' | 'thinkMs'> = {
+  build: 'normal',
+  buildReserve: 0,
+  opponentMarginExtra: 0,
+  retaliateMs: 0,
+  attackAfterMs: 0,
+  weakenedBonus: 0,
+};
+
+/** AI params from level data: the leader preset, overridden by the level's own aggression and think interval. */
+export function aiParamsFromLevel(enemy: EnemyParams, goal?: Goal, playerCapital?: string | null): AiParams {
+  const preset = enemy.leader ? LEADERS[enemy.leader] : null;
+  // Goals give the enemy something to go for: deny the node to hold, take the player's capital.
+  const goalTargets = goal?.type === 'hold' ? [goal.nodeId] : goal?.type === 'capital' && playerCapital ? [playerCapital] : [];
+  return {
+    thinkMs: enemy.aiThinkMs ?? preset?.thinkMs ?? 1500,
+    aggression: enemy.aggression ?? preset?.aggression ?? 0.5,
+    startDelayMs: enemy.aiStartDelayMs ?? 0,
+    ...(enemy.leader ? { leader: enemy.leader } : {}),
+    ...(goalTargets.length ? { goalTargets } : {}),
+  };
+}
+
+function styleOf(params: AiParams): Omit<LeaderPreset, 'aggression' | 'thinkMs'> {
+  return params.leader ? LEADERS[params.leader] : NO_LEADER;
 }
 
 export interface AiParams {
@@ -18,6 +42,10 @@ export interface AiParams {
   aggression: number;
   /** No decisions before this time, ms (tutorial levels). */
   startDelayMs?: number;
+  /** Character preset (build style, attack rules); none = the default behaviour. */
+  leader?: LeaderId;
+  /** Nodes the level goal makes important (worth AI.goalTargetValue more). */
+  goalTargets?: string[];
 }
 
 /** Serializable AI state; the AI itself is the pure function `aiStep`. */
@@ -25,12 +53,46 @@ export interface AiState {
   side: Side;
   params: AiParams;
   nextThinkTick: number;
+  /** Troops per node, sampled once a second, newest last (for "recently weakened"). */
+  snapshots: Array<Record<string, number>>;
+  /** Last tick a hostile army was heading to one of our nodes (for counter-attacks). */
+  lastAttackedTick: number;
 }
 
 export function createAi(side: Side, params: AiParams): AiState {
   // First decision after one think interval (or the start delay), so the player gets a moment at the start.
   const firstMs = Math.max(params.thinkMs, params.startDelayMs ?? 0);
-  return { side, params: { ...params }, nextThinkTick: Math.max(1, Math.round(firstMs / TICK_MS)) };
+  return {
+    side,
+    params: { ...params },
+    nextThinkTick: Math.max(1, Math.round(firstMs / TICK_MS)),
+    snapshots: [],
+    lastAttackedTick: -Infinity,
+  };
+}
+
+const SNAPSHOT_TICKS = Math.round(1000 / TICK_MS);
+
+/**
+ * How many troops the node lost compared to its maximum over the snapshots; counts only a drop of at least
+ * AI.weakenedShare of that maximum and AI.weakenedMinDrop troops, else 0.
+ */
+export function recentDrop(snapshots: ReadonlyArray<Record<string, number>>, nodeId: string, troops: number): number {
+  let max = troops;
+  for (const s of snapshots) max = Math.max(max, s[nodeId] ?? 0);
+  const drop = max - troops;
+  return drop >= AI.weakenedMinDrop && drop >= max * AI.weakenedShare ? drop : 0;
+}
+
+function observe(world: World, ai: AiState): void {
+  if (world.armies.some((a) => a.owner !== ai.side && world.nodes[a.targetId]?.owner === ai.side)) {
+    ai.lastAttackedTick = world.tick;
+  }
+  if (world.tick % SNAPSHOT_TICKS !== 0) return;
+  const snap: Record<string, number> = {};
+  for (const n of Object.values(world.nodes)) snap[n.id] = n.troops;
+  ai.snapshots.push(snap);
+  if (ai.snapshots.length > AI.weakenedWindowSec) ai.snapshots.shift();
 }
 
 /**
@@ -38,7 +100,9 @@ export function createAi(side: Side, params: AiParams): AiState {
  * Plays by the same rules as the player: every command goes through `validate`.
  */
 export function aiStep(world: World, ai: AiState): Command[] {
-  if (world.winner || world.tick < ai.nextThinkTick) return [];
+  if (world.winner) return [];
+  observe(world, ai);
+  if (world.tick < ai.nextThinkTick) return [];
   const jitter = 1 + (random(world) * 2 - 1) * AI.thinkJitter;
   ai.nextThinkTick = world.tick + Math.max(1, Math.round((ai.params.thinkMs * jitter) / TICK_MS));
   return think(world, ai);
@@ -56,7 +120,7 @@ class Distances {
     const key = from < to ? `${from}|${to}` : `${to}|${from}`;
     if (!this.cache.has(key)) {
       const path = armyPath(this.world, this.side, from, to);
-      this.cache.set(key, path ? pathLength(this.world.nodes, path) : null);
+      this.cache.set(key, path ? routeLength(this.world, path) : null);
     }
     return this.cache.get(key)!;
   }
@@ -75,9 +139,10 @@ function think(world: World, ai: AiState): Command[] {
   const dist = new Distances(world, side);
   const plan: Plan = { commands: [], sent: new Map(), gold: world.sides[side].gold };
 
+  evadeDragon(world, side, dist, plan);
   const threatened = defend(world, side, dist, plan);
-  spendGold(world, side, ai.params.aggression, threatened, plan);
-  attack(world, ai, threatened, dist, plan);
+  spendGold(world, side, ai.params.aggression, styleOf(ai.params), threatened, plan);
+  if (world.tick * TICK_MS >= styleOf(ai.params).attackAfterMs) attack(world, ai, threatened, dist, plan);
   consolidate(world, side, threatened, dist, plan);
 
   // Same rules as the player: drop anything the simulation would reject.
@@ -109,10 +174,25 @@ function etaSec(distance: number): number {
   return distance / ARMY.speed;
 }
 
-/** Troop strength ratio: how many own troops one defender is worth. */
+/** Troop strength ratio: how many own troops one defender is worth (fortresses count double). */
 function strengthRatio(world: World, attacker: Side, defender: NodeState): number {
-  const defStrength = defender.owner === 'neutral' ? 1 : world.sides[defender.owner].modifiers.unitStrengthMult;
-  return defStrength / world.sides[attacker].modifiers.unitStrengthMult;
+  return defenseStrength(world, defender) / strengthOf(world, attacker);
+}
+
+// ---- Dragon -------------------------------------------------------------------------------------
+
+/** The dragon has marked one of our nodes: move most troops to the nearest own node (if there is one). */
+function evadeDragon(world: World, side: Side, dist: Distances, plan: Plan): void {
+  const boss = world.boss;
+  if (boss?.type !== 'dragon' || !boss.targetId) return;
+  const marked = world.nodes[boss.targetId]!;
+  if (marked.owner !== side) return;
+  const refuge = own(world, side)
+    .filter((n) => n.id !== marked.id)
+    .map((n) => ({ n, d: dist.get(marked.id, n.id) }))
+    .filter((r): r is { n: NodeState; d: number } => r.d !== null)
+    .sort((a, b) => a.d - b.d)[0];
+  if (refuge) send(plan, side, marked, refuge.n.id);
 }
 
 // ---- Defense ------------------------------------------------------------------------------------
@@ -120,10 +200,10 @@ function strengthRatio(world: World, attacker: Side, defender: NodeState): numbe
 /** Reinforces own nodes that incoming hostile armies would capture. Returns ids of threatened nodes. */
 function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<string> {
   const threatened = new Set<string>();
-  const enemy = opponentOf(side);
 
   for (const node of own(world, side)) {
-    const incoming = world.armies.filter((a) => a.owner === enemy && a.targetId === node.id);
+    // Any hostile army counts: the opponent's and bandit raids.
+    const incoming = world.armies.filter((a) => a.owner !== side && a.targetId === node.id);
     if (incoming.length === 0) continue;
 
     let hostile = 0;
@@ -131,7 +211,7 @@ function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<stri
     for (const army of incoming) {
       const eta = armyEtaSec(world, army.path, army.segment, army.progress);
       if (eta > AI.defendLookaheadSec) continue;
-      hostile += Math.max(0, army.count - towerDamage(node)) * (1 / strengthRatio(world, enemy, node));
+      hostile += (Math.max(0, army.count - towerDamage(node)) * strengthOf(world, army.owner)) / defenseStrength(world, node);
       soonest = Math.min(soonest, eta);
     }
     if (hostile === 0) continue;
@@ -161,9 +241,7 @@ function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<stri
 function armyEtaSec(world: World, path: readonly string[], segment: number, progress: number): number {
   let remaining = 0;
   for (let i = segment; i + 1 < path.length; i++) {
-    const a = world.nodes[path[i]!]!;
-    const b = world.nodes[path[i + 1]!]!;
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const len = segmentLength(world, path[i]!, path[i + 1]!);
     remaining += i === segment ? len * (1 - progress) : len;
   }
   return etaSec(remaining);
@@ -178,35 +256,52 @@ function isFrontier(world: World, node: NodeState, side: Side): boolean {
   });
 }
 
-/** One build or upgrade per decision, by priority: mines, front-line defense, barracks, upgrades. */
-function spendGold(world: World, side: Side, aggression: number, threatened: Set<string>, plan: Plan): void {
+/** One build or upgrade per decision; the order depends on the leader's build style (see BuildStyle). */
+function spendGold(
+  world: World,
+  side: Side,
+  aggression: number,
+  style: Omit<LeaderPreset, 'aggression' | 'thinkMs'>,
+  threatened: Set<string>,
+  plan: Plan,
+): void {
   const nodes = own(world, side);
-  const empty = nodes.filter((n) => !n.building);
+  // Temples can't hold buildings.
+  const empty = nodes.filter((n) => !n.building && n.kind !== 'temple');
   const buildPrice = buildCost(0)!;
+  const reserve = style.build === 'rare' ? style.buildReserve : 0;
 
   const tryBuild = (node: NodeState | undefined, building: BuildingType): boolean => {
-    if (!node || plan.gold < buildPrice) return false;
+    if (!node || plan.gold < buildPrice + reserve) return false;
     plan.gold -= buildPrice;
     plan.commands.push({ type: 'build', side, nodeId: node.id, building });
     return true;
   };
 
-  // 1. Mines pay for everything else.
-  if (tryBuild(empty.find((n) => n.hasGoldVein), 'mine')) return;
-
-  // 2. Front line: towers on threatened nodes.
-  const threatenedEmpty = empty.find((n) => threatened.has(n.id));
-  if (tryBuild(threatenedEmpty, 'tower')) return;
-
-  // 3. Barracks on the biggest empty rear node; on the front, towers for cautious AIs and barracks for aggressive ones.
   const bySize = [...empty].sort((a, b) => nodeCapacity(b) - nodeCapacity(a));
   const rear = bySize.find((n) => !isFrontier(world, n, side));
-  if (tryBuild(rear, 'barracks')) return;
-  const frontBuilding: BuildingType = aggression < AI.towerAggressionThreshold ? 'tower' : 'barracks';
-  if (tryBuild(bySize[0], frontBuilding)) return;
+  const front = bySize.find((n) => isFrontier(world, n, side));
+  const threatenedEmpty = empty.find((n) => threatened.has(n.id));
 
-  // 4. Upgrades: mines first, then barracks, then towers, lowest level first.
-  const order: BuildingType[] = ['mine', 'barracks', 'tower'];
+  if (style.build === 'rare') {
+    // Barracks only, and only with gold to spare.
+    if (tryBuild(rear ?? bySize[0], 'barracks')) return;
+  } else {
+    // 1. Mines pay for everything else.
+    if (tryBuild(empty.find((n) => n.hasGoldVein), 'mine')) return;
+    // 2. Front line: towers on threatened nodes (defensive: on every front-line node).
+    if (tryBuild(threatenedEmpty, 'tower')) return;
+    if (style.build === 'defensive' && tryBuild(front, 'tower')) return;
+    // 3. Barracks on the biggest empty rear node; on the front, towers for cautious AIs and barracks for aggressive ones.
+    if (tryBuild(rear, 'barracks')) return;
+    const frontBuilding: BuildingType =
+      style.build === 'economy' ? 'barracks' : aggression < AI.towerAggressionThreshold ? 'tower' : 'barracks';
+    if (tryBuild(bySize[0], frontBuilding)) return;
+  }
+  if (plan.gold < reserve) return;
+
+  // 4. Upgrades, lowest level first: mines, barracks, towers (defensive: towers first).
+  const order: BuildingType[] = style.build === 'defensive' ? ['tower', 'mine', 'barracks'] : ['mine', 'barracks', 'tower'];
   const upgradable = nodes
     .filter((n) => n.building && n.building.level < BUILDINGS.maxLevel)
     .sort(
@@ -215,7 +310,7 @@ function spendGold(world: World, side: Side, aggression: number, threatened: Set
     );
   for (const node of upgradable) {
     const cost = buildCost(node.building!.level)!;
-    if (plan.gold < cost) continue;
+    if (plan.gold < cost + reserve) continue;
     plan.gold -= cost;
     plan.commands.push({ type: 'upgrade', side, nodeId: node.id });
     return;
@@ -227,7 +322,11 @@ function spendGold(world: World, side: Side, aggression: number, threatened: Set
 function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distances, plan: Plan): void {
   const side = ai.side;
   const aggression = ai.params.aggression;
-  const margin = AI.attackMarginMax + (AI.attackMarginMin - AI.attackMarginMax) * aggression;
+  const style = styleOf(ai.params);
+  const baseMargin = AI.attackMarginMax + (AI.attackMarginMin - AI.attackMarginMax) * aggression;
+  // Leaders like the king need a big advantage against the opponent, except right after being attacked.
+  const retaliating = (world.tick - ai.lastAttackedTick) * TICK_MS <= style.retaliateMs;
+  const opponentMargin = Math.max(0, baseMargin + (retaliating ? 0 : style.opponentMarginExtra));
   const maxAttacks = 1 + Math.round((AI.maxAttacksPerThink - 1) * aggression);
 
   for (let launched = 0; launched < maxAttacks; launched++) {
@@ -252,6 +351,7 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
       let force = alreadyComing;
       let required = Infinity;
       let farthest = 0;
+      const margin = isRival(side, target.owner) ? opponentMargin : baseMargin;
       for (const { n, d } of reachable) {
         picks.push(n);
         force += available(n, plan);
@@ -261,7 +361,13 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
       }
       if (force < required) continue;
 
-      const score = targetValue(side, target, aggression) / (required + farthest * AI.distanceCost);
+      let value = targetValue(side, target, aggression);
+      if (ai.params.goalTargets?.includes(target.id)) value += AI.goalTargetValue;
+      // Opportunists (witch) go for opponent nodes that just sent their troops away.
+      if (style.weakenedBonus > 0 && isRival(side, target.owner) && recentDrop(ai.snapshots, target.id, target.troops) > 0) {
+        value *= 1 + style.weakenedBonus;
+      }
+      const score = value / (required + farthest * AI.distanceCost);
       if (!best || score > best.score) best = { target, picks, score };
     }
     if (!best) return;
@@ -283,7 +389,10 @@ function targetValue(side: Side, target: NodeState, aggression: number): number 
   let value = AI.sizeValue[target.size];
   if (target.hasGoldVein) value += AI.goldVeinValue;
   if (target.building) value += AI.buildingLevelValue * target.building.level;
-  if (target.owner === opponentOf(side)) value *= 1 + aggression * AI.opponentTargetBonus;
+  if (target.kind === 'temple') value += AI.templeValue;
+  if (target.kind === 'chest') value += AI.chestValue;
+  // The player and a second enemy are equal targets (GDD 3.2).
+  if (isRival(side, target.owner)) value *= 1 + aggression * AI.opponentTargetBonus;
   return value;
 }
 
