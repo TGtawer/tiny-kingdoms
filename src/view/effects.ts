@@ -1,5 +1,6 @@
 import type * as Phaser from 'phaser';
-import { COLORS, cssColor, INFO_LABEL_MS } from '../config/game';
+import { COLORS, INFO_LABEL_MS } from '../config/game';
+import { hintLabel } from './hintPlaque';
 import { px, textStyle } from './layout';
 
 /** Expanding ring that fades out. */
@@ -25,17 +26,10 @@ export function pop(scene: Phaser.Scene, target: Phaser.GameObjects.Components.T
  * Short label on a panel that fades after INFO_LABEL_MS (e.g. "Opens at level 3" on a locked button).
  * Screen coordinates (does not scroll with the camera), kept inside the screen; `y` is the bottom edge.
  */
-export function toast(scene: Phaser.Scene, x: number, y: number, text: string, depth = 300): Phaser.GameObjects.Text {
-  const label = scene.add
-    .text(x, y, text, textStyle(15, COLORS.textDark))
-    .setOrigin(0.5, 1)
-    .setAlign('center')
-    .setBackgroundColor(cssColor(COLORS.panel))
-    .setPadding(px(10), px(6), px(10), px(6))
-    .setScrollFactor(0)
-    .setDepth(depth);
+export function toast(scene: Phaser.Scene, x: number, y: number, text: string, depth = 300): Phaser.GameObjects.Container {
+  const label = hintLabel(scene, text, 15).setScrollFactor(0, 0, true).setDepth(depth);
   const w = scene.scale.width;
-  label.setX(Math.min(Math.max(x, label.width / 2 + px(6)), w - label.width / 2 - px(6)));
+  label.setPosition(Math.min(Math.max(x, label.width / 2 + px(6)), w - label.width / 2 - px(6)), y - label.height / 2);
   scene.tweens.add({ targets: label, alpha: 0, delay: INFO_LABEL_MS, duration: 300, onComplete: () => label.destroy() });
   return label;
 }

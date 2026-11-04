@@ -3,6 +3,7 @@ import { COLORS, HUD } from '../config/game';
 import { SPECIAL_NODES, type BuildingType } from '../config/balance';
 import { dragPath, type FingerHint, type TutorialStep, type UiAnchor } from '../core/tutorial/tutorial';
 import { t } from '../i18n/i18n';
+import { drawHintPlaque } from './hintPlaque';
 import { drawFinger } from './icons';
 import { px, textStyle, type Point } from './layout';
 
@@ -84,11 +85,8 @@ export class TutorialView {
 
     this.text.setWordWrapWidth(panelW - px(28), true);
     this.text.setPosition(cx, cy);
-    const g = this.panel;
-    g.clear();
-    g.fillStyle(COLORS.outline, 0.35).fillRoundedRect(cx - panelW / 2 + px(3), cy - panelH / 2 + px(4), panelW, panelH, px(18));
-    g.fillStyle(COLORS.panel, 1).fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, px(18));
-    g.lineStyle(px(3), COLORS.hint, 1).strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, px(18));
+    this.panel.clear();
+    drawHintPlaque(this.panel, cx, cy, panelW, panelH);
   }
 
   /** Per-frame animation of the finger and UI highlights. Animations run at normal speed during the slow-down. */

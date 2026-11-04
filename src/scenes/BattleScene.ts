@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DRAGON, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
+import { ARMY_FX, COLORS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -40,6 +40,7 @@ import { NodeView, type Highlight } from '../view/NodeView';
 import { RoadView } from '../view/RoadView';
 import { audioFiles, canPlayJingle, isMusicEnabled, playJingle, playMusic, setMusicDucked, setMusicEnabled, stopMusic } from '../view/music';
 import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
+import { hintLabel } from '../view/hintPlaque';
 import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
 import type { ChapterMapData, MapReveal } from './ChapterMapScene';
@@ -84,7 +85,7 @@ export class BattleScene extends Phaser.Scene {
   private ownersBefore = new Map<string, Owner>();
   private capitals = new Set<string>();
   /** Short info label for a special node (shown on tap). */
-  private infoLabel: Phaser.GameObjects.Text | null = null;
+  private infoLabel: Phaser.GameObjects.Container | null = null;
   /** Armies currently inside a portal (hidden). */
   private inPortal = new Set<string>();
   /** Battle facts for the star rating and the defeat tip. */
@@ -899,15 +900,10 @@ export class BattleScene extends Phaser.Scene {
     this.infoLabel = null;
     if (node.kind === 'normal') return;
     const view = this.nodeViews.get(node.id)!;
-    const label = this.add
-      .text(view.x, view.y - view.radius * 1.5 - px(24), `${t(`kind.${node.kind}`)}\n${t(`kind.${node.kind}.desc`)}`, textStyle(14, COLORS.textDark))
-      .setOrigin(0.5, 1)
-      .setAlign('center')
-      .setBackgroundColor(cssColor(COLORS.panel))
-      .setPadding(px(8), px(5), px(8), px(5))
-      .setDepth(95);
-    label.setX(Math.min(Math.max(view.x, label.width / 2 + px(4)), this.scale.width - label.width / 2 - px(4)));
-    label.setY(Math.max(label.y, px(HUD.topBar) + label.height + px(4)));
+    const label = hintLabel(this, `${t(`kind.${node.kind}`)}\n${t(`kind.${node.kind}.desc`)}`, 14).setDepth(95);
+    // Above the node, inside the screen and below the top bar.
+    const bottom = Math.max(view.y - view.radius * 1.5 - px(24), px(HUD.topBar) + label.height + px(4));
+    label.setPosition(Math.min(Math.max(view.x, label.width / 2 + px(4)), this.scale.width - label.width / 2 - px(4)), bottom - label.height / 2);
     this.infoLabel = label;
     this.tweens.add({ targets: label, alpha: 0, delay: INFO_LABEL_MS, duration: 300, onComplete: () => label.destroy() });
   }

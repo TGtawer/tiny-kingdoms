@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { BONUSES, SPELL_UPGRADES, SPELL_IDS, type SpellId } from '../config/balance';
+import { BONUSES, SPELLS, SPELL_UPGRADES, SPELL_IDS, type SpellId } from '../config/balance';
 import { COLORS, HUD } from '../config/game';
 import { BONUS_IDS, type BonusId } from '../core/meta/Progress';
 import { activeSpell, claimableSpell, setActiveSpell, spellUnlockLevel, unlockSpell } from '../core/meta/spellbook';
@@ -43,6 +43,18 @@ interface Row {
 }
 
 const ROW_H = 64;
+
+/** What a spell does (its level 1 numbers), for spells the player has not unlocked yet. */
+function spellAbout(id: SpellId): string {
+  switch (id) {
+    case 'fireball':
+      return t('spell.fireball.about', { share: Math.round(SPELLS.fireball.killShare * 100) });
+    case 'reinforcement':
+      return t('spell.reinforcement.about', { troops: SPELLS.reinforcement.troops });
+    case 'shield':
+      return t('spell.shield.about', { sec: SPELLS.shield.durationSec });
+  }
+}
 const HEADER_H = 30;
 
 /** Permanent bonuses bought with crystals and spell upgrades bought with stars (GDD 4.3, BALANCE.md). */
@@ -130,7 +142,7 @@ export class UpgradesScene extends Phaser.Scene {
       const isOpen = progress.unlockedSpells.includes(id);
       return {
         title: t(`spell.${id}`),
-        desc,
+        desc: isOpen ? desc : spellAbout(id),
         level: progress.spellUpgrades[id],
         max: SPELL_UPGRADES.maxLevel,
         cost: spellUpgradeCost(progress.spellUpgrades[id]),

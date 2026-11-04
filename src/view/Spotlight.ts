@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
-import { COLORS, cssColor, MIN_TOUCH_PX, SPOTLIGHT } from '../config/game';
+import { COLORS, MIN_TOUCH_PX, SPOTLIGHT } from '../config/game';
+import { hintLabel } from './hintPlaque';
 import { drawFinger } from './icons';
-import { px, textStyle } from './layout';
+import { px } from './layout';
 
 export interface SpotRect {
   x: number;
@@ -70,17 +71,11 @@ export class Spotlight {
 
     // One line of text on a panel, on the roomier side of the hole.
     const below = h - (hole.y + hole.h) > hole.y;
-    const text = scene.add
-      .text(w / 2, 0, options.text, textStyle(17, COLORS.textDark))
-      .setOrigin(0.5, below ? 0 : 1)
-      .setAlign('center')
-      .setWordWrapWidth(Math.min(w - px(40), px(S.textMaxWidth)), true)
-      .setBackgroundColor(cssColor(COLORS.panel))
-      .setPadding(px(14), px(8), px(14), px(8))
-      .setScrollFactor(0)
+    const text = hintLabel(scene, options.text, 17, Math.min(w - px(40), px(S.textMaxWidth)))
+      .setScrollFactor(0, 0, true)
       .setDepth(depth + 3);
     const gap = px(S.textGap) + (options.finger && below ? px(S.fingerRoom) : 0);
-    text.setY(below ? hole.y + hole.h + gap : hole.y - gap);
+    text.setPosition(w / 2, below ? hole.y + hole.h + gap + text.height / 2 : hole.y - gap - text.height / 2);
     this.objects.push(text);
 
     if (options.finger) {

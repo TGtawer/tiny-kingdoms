@@ -372,6 +372,17 @@ export const SPOTLIGHT = {
 /** Evil mage fireball flight from the tower to its target, ms (the damage is already applied). */
 export const MAGE_FX = { flightMs: 380 } as const;
 
+/** Look of every hint plaque (view/hintPlaque.ts), CSS px: as the tutorial hint bar. */
+export const HINT_PLAQUE = {
+  radius: 18,
+  outline: 3,
+  shadowX: 3,
+  shadowY: 4,
+  shadowAlpha: 0.35,
+  padX: 14,
+  padY: 8,
+} as const;
+
 /** How long the special node info label stays, ms. */
 export const INFO_LABEL_MS = 2500;
 

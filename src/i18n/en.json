@@ -121,5 +121,8 @@
   "tut.mage": "An evil mage! Take his tower",
   "tut.mageFireball": "Fireball! Move your troops out",
   "boss.mage": "Take the mage tower · fire in {sec} s",
-  "tut.tower": "The tower hits every enemy army"
+  "tut.tower": "The tower hits every enemy army",
+  "spell.fireball.about": "Burns {share}% of the troops in an enemy node",
+  "spell.reinforcement.about": "Instantly adds {troops} troops to your node",
+  "spell.shield.about": "Your node is safe from the enemy for {sec} s"
 }
