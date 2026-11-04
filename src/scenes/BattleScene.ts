@@ -4,7 +4,7 @@ import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
-import { sendAmount, type Command, type SendMode } from '../core/sim/commands';
+import { sendAmount, type Command } from '../core/sim/commands';
 import { armyPath, blockingNode, isPortalLink } from '../core/sim/pathfinding';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
@@ -80,7 +80,7 @@ export class BattleScene extends Phaser.Scene {
   private stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
   /** After a win: what the chapter map animates when the player goes there from the result panel (V-3). */
   private mapReveal: MapReveal | null = null;
-  /** "How many will leave" badge for a swipe or a selected node; one reused Text. */
+  /** "How many will leave" badge at the end of a swipe; one reused Text. */
   private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
   private nodeViews = new Map<string, NodeView>();
@@ -92,6 +92,7 @@ export class BattleScene extends Phaser.Scene {
   private accumulator = 0;
   private paused = false;
   private ended = false;
+  /** Own node whose build menu is open (sends are swipe-only, there is no tap-to-send selection). */
   private selected: string | null = null;
   private menu: BuildMenu | null = null;
   private drag: DragState | null = null;
@@ -623,36 +624,26 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /** Badge with the troops that will leave: at the swipe end, or above the selected node (tap-tap). */
+  /** Badge with the troops that will leave, at the end of the swipe line. */
   private drawSendBadge(): void {
     const badge = this.sendBadge;
     const drag = this.drag;
-    let count = 0;
-    let x = 0;
-    let y = 0;
-    let text = '';
-    if (drag?.moved) {
-      const hover = this.nodeAt(drag.x, drag.y);
-      const end = hover ? this.nodeViews.get(hover.id)! : null;
-      count = hover
-        ? previewAttack(this.world, 'player', drag.sources, 'swipe', hover.id).sent
-        : drag.sources.reduce((sum, id) => sum + sendAmount(this.world.nodes[id]!.troops, 'swipe'), 0);
-      x = end ? end.x : drag.x;
-      y = end ? end.y - end.radius * 1.34 - px(16) : drag.y - px(36);
-      text = String(count);
-    } else if (this.selected) {
-      const view = this.nodeViews.get(this.selected)!;
-      count = sendAmount(this.world.nodes[this.selected]!.troops, 'tap');
-      x = view.x;
-      y = view.y - view.radius * 1.34 - px(16);
-      text = t('battle.sendCount', { count });
+    if (!drag?.moved) {
+      badge.setVisible(false);
+      return;
     }
+    const hover = this.nodeAt(drag.x, drag.y);
+    const end = hover ? this.nodeViews.get(hover.id)! : null;
+    const count = hover
+      ? previewAttack(this.world, 'player', drag.sources, 'swipe', hover.id).sent
+      : drag.sources.reduce((sum, id) => sum + sendAmount(this.world.nodes[id]!.troops, 'swipe'), 0);
     if (count <= 0) {
       badge.setVisible(false);
       return;
     }
+    const text = String(count);
     if (badge.text !== text) badge.setText(text);
-    badge.setPosition(x, y).setVisible(true);
+    badge.setPosition(end ? end.x : drag.x, end ? end.y - end.radius * 1.34 - px(16) : drag.y - px(36)).setVisible(true);
   }
 
   /** Whether a player army from `from` has a route to `to` (only through own nodes). */
@@ -702,10 +693,9 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    // Tap-tap: a node is selected, the second tap on a foreign node sends the army.
-    if (node && this.selected) this.sendFrom([this.selected], node.id, 'tap');
-    else if (node) this.showInfo(node);
+    // Sends are swipe-only: a tap on a foreign node only closes the menu (and labels special nodes, GDD 3.12).
     this.deselect();
+    if (node) this.showInfo(node);
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
@@ -732,24 +722,19 @@ export class BattleScene extends Phaser.Scene {
 
     if (drag.moved) {
       const target = this.nodeAt(pointer.x, pointer.y);
-      if (target) this.sendFrom(drag.sources, target.id, 'swipe');
+      if (target) this.sendFrom(drag.sources, target.id);
       return;
     }
 
-    // A tap on an own node.
-    if (this.selected && this.selected !== drag.downNode) {
-      this.sendFrom([this.selected], drag.downNode, 'tap');
-      this.deselect();
-    } else if (this.selected === drag.downNode) {
-      this.deselect();
-    } else {
-      this.select(drag.downNode);
-    }
+    // A tap on an own node opens its build menu; a second tap on the same node closes it.
+    if (this.selected === drag.downNode) this.deselect();
+    else this.select(drag.downNode);
   }
 
-  private sendFrom(sources: readonly string[], target: string, mode: SendMode): void {
+  /** The player's only way to send troops: a swipe, 75% from every source (GDD 3.5). */
+  private sendFrom(sources: readonly string[], target: string): void {
     for (const from of sources) {
-      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target, mode });
+      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target, mode: 'swipe' });
     }
   }
 

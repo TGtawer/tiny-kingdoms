@@ -3,15 +3,18 @@ import { armyPath } from './pathfinding';
 import { fireballKill, reinforcementTroops, shieldTicks, spellCooldownMs, spellCost } from './spells';
 import { isRival, type ArmyState, type BuildingLevel, type Side, type World } from './World';
 
-/** How the order was given: a swipe sends 75% of the troops, tap-tap sends 50% (GDD 3.5). */
-export type SendMode = 'swipe' | 'tap';
+/**
+ * How many troops an order takes (GDD 3.5): `swipe` sends 75% (the only player gesture);
+ * `pull` sends 50% and is used only by the AI to move troops up from the rear.
+ */
+export type SendMode = 'swipe' | 'pull';
 
 export interface SendArmy {
   type: 'send';
   side: Side;
   from: string;
   to: string;
-  /** Defaults to 'tap'. */
+  /** Defaults to 'swipe'. */
   mode?: SendMode;
 }
 
@@ -61,10 +64,10 @@ export function visibleTroops(troops: number): number {
 }
 
 /**
- * Troops an order takes from a node: 75% (swipe) or 50% (tap-tap) of the visible troops, rounded down,
+ * Troops an order takes from a node: 75% (swipe) or 50% (AI pull) of the visible troops, rounded down,
  * at least minSend; 0 if the node cannot send. At least one troop always stays behind.
  */
-export function sendAmount(troops: number, mode: SendMode = 'tap'): number {
+export function sendAmount(troops: number, mode: SendMode = 'swipe'): number {
   const visible = visibleTroops(troops);
   if (visible < ARMY.minTroopsToSend) return 0;
   return Math.min(visible - 1, Math.max(ARMY.minSend, Math.floor(visible * ARMY.sendShare[mode])));

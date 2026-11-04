@@ -14,12 +14,6 @@
   "c01_l02": {
     "steps": [
       { "hint": "tut.produce", "highlight": [{ "node": "player" }], "until": { "type": "time", "sec": 5 } },
-      {
-        "hint": "tut.tapTap",
-        "highlight": [{ "node": "player" }, { "node": "b" }],
-        "finger": { "kind": "tapTap", "from": "player", "to": "b" },
-        "until": { "type": "send" }
-      },
       { "hint": "tut.grow", "until": { "type": "capture" } },
       { "hint": "tut.goal", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 8 } }
     ]

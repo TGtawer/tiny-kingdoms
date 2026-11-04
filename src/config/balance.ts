@@ -48,8 +48,11 @@ export const BUILDINGS = {
 export const ARMY = {
   /** Field widths per second. */
   speed: 0.12,
-  /** Share of node troops sent per order (rounded down): swipe sends more than tap-tap (GDD 3.5). */
-  sendShare: { swipe: 0.75, tap: 0.5 },
+  /**
+   * Share of node troops sent per order (rounded down, GDD 3.5): the player only swipes (75%);
+   * `pull` (50%) is the AI's internal mode for moving troops up from the rear.
+   */
+  sendShare: { swipe: 0.75, pull: 0.5 },
   minSend: 1,
   /** A node with this many troops or fewer cannot send. */
   minTroopsToSend: 2,

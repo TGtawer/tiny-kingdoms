@@ -113,21 +113,11 @@ export class TutorialView {
     }
     g.setVisible(true).setScale(1);
 
-    if (finger.kind === 'drag') {
-      // Press on the source, slide to the target, fade out.
-      const move = Math.min(1, Math.max(0, (phase - 0.15) / 0.6));
-      const eased = move * move * (3 - 2 * move);
-      g.setPosition(from.x + (to.x - from.x) * eased, from.y + (to.y - from.y) * eased + px(6));
-      g.setAlpha(phase > 0.85 ? (1 - phase) / 0.15 : 1);
-      return;
-    }
-
-    // tapTap: tap the source, then the target.
-    const onFirst = phase < 0.5;
-    const local = onFirst ? phase / 0.5 : (phase - 0.5) / 0.5;
-    const press = local < 0.5 ? Math.sin(local * 2 * Math.PI) : 0;
-    const p = onFirst ? from : to;
-    g.setPosition(p.x, p.y + px(6) - press * px(6)).setScale(1 - press * 0.12).setAlpha(1);
+    // Drag: press on the source, slide to the target, fade out.
+    const move = Math.min(1, Math.max(0, (phase - 0.15) / 0.6));
+    const eased = move * move * (3 - 2 * move);
+    g.setPosition(from.x + (to.x - from.x) * eased, from.y + (to.y - from.y) * eased + px(6));
+    g.setAlpha(phase > 0.85 ? (1 - phase) / 0.15 : 1);
   }
 
   /** Cartoon pointing hand; the fingertip is at (0, 0). */

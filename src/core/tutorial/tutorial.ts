@@ -12,8 +12,7 @@ export type TutorialAnchor = { node: string } | { ui: 'gold' };
 
 export type FingerHint =
   | { kind: 'drag'; from: string; to: string }
-  | { kind: 'tap'; node: string }
-  | { kind: 'tapTap'; from: string; to: string };
+  | { kind: 'tap'; node: string };
 
 export type StepCondition =
   | { type: 'send'; to?: string }
@@ -122,7 +121,7 @@ export function validateTutorial(script: TutorialScript, level: LevelData, hasKe
     for (const h of step.highlight ?? []) if ('node' in h) node(h.node, where);
     const f = step.finger;
     if (f?.kind === 'tap') node(f.node, where);
-    if (f && f.kind !== 'tap') {
+    if (f?.kind === 'drag') {
       node(f.from, where);
       node(f.to, where);
     }

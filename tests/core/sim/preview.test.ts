@@ -14,12 +14,12 @@ describe('previewAttack', () => {
 
   it('predicts a loss when the garrison is too strong', () => {
     const world = lineWorld({ P: { troops: 10 }, N: { troops: 12 } });
-    expect(previewAttack(world, 'player', ['P'], 'tap', 'N')).toEqual({ sent: 5, defenders: 12, wins: false });
+    expect(previewAttack(world, 'player', ['P'], 'pull', 'N')).toEqual({ sent: 5, defenders: 12, wins: false });
   });
 
   it('a tie is not a win', () => {
     const world = lineWorld({ P: { troops: 10 }, N: { troops: 5 } });
-    expect(previewAttack(world, 'player', ['P'], 'tap', 'N').wins).toBe(false);
+    expect(previewAttack(world, 'player', ['P'], 'pull', 'N').wins).toBe(false);
   });
 
   it('counts only sources that have a route', () => {
@@ -50,9 +50,9 @@ describe('previewAttack', () => {
 
   it('takes unit strength into account', () => {
     const world = lineWorld({ P: { troops: 10 }, N: { troops: 6 } });
-    expect(previewAttack(world, 'player', ['P'], 'tap', 'N').wins).toBe(false);
+    expect(previewAttack(world, 'player', ['P'], 'pull', 'N').wins).toBe(false);
     world.sides.player.modifiers.unitStrengthMult = 1.5;
-    expect(previewAttack(world, 'player', ['P'], 'tap', 'N').wins).toBe(true);
+    expect(previewAttack(world, 'player', ['P'], 'pull', 'N').wins).toBe(true);
   });
 
   it('an own target is a reinforcement', () => {
