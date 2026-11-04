@@ -1,8 +1,11 @@
 import * as Phaser from 'phaser';
 import { BUTTON_STYLE, COLORS, MENU_FX, MENU_LAYOUT, type MenuBannerId } from '../config/game';
+import { FEATURE_UNLOCKS } from '../config/balance';
 import { currentLevel } from '../core/meta/Progress';
+import { isUpgradesOpen } from '../core/meta/unlocks';
 import { t } from '../i18n/i18n';
-import { ALL_LEVELS, FIRST_LEVEL } from '../levels';
+import { ALL_LEVELS, FIRST_LEVEL, getLevel } from '../levels';
+import { toast } from '../view/effects';
 import { drawNote, drawOff, drawSpeaker } from '../view/icons';
 import { px } from '../view/layout';
 import { backOut, frameX, frameY, seg } from '../view/MenuBanner';
@@ -86,7 +89,11 @@ export class MenuScene extends Phaser.Scene {
       play: [t('menu.play'), t('menu.levelN', { index: level.index })],
       up: [t('menu.upgrades')],
     };
-    const options = { labels, onPress: (id: MenuBannerId) => this.press(id, level.id) };
+    const options = {
+      labels,
+      onPress: (id: MenuBannerId) => this.press(id, level.id),
+      locked: { up: !isUpgradesOpen(getStore(this).progress) },
+    };
     this.screen = h > w ? new TournamentScreen(this, w, h, options) : new NightScreen(this, w, h, options);
 
     const T = this.screen.title;
@@ -99,6 +106,13 @@ export class MenuScene extends Phaser.Scene {
   /** A banner was pressed: it swings and flashes, the scene changes a moment later. */
   private press(id: MenuBannerId, levelId: string): void {
     if (this.leaving) return;
+    if (id === 'up' && !isUpgradesOpen(getStore(this).progress)) {
+      // Locked until the first win on its level: the banner swings, a label says when it opens.
+      playSfx('click');
+      const afterIndex = getLevel(FEATURE_UNLOCKS.upgrades.afterWin)?.index ?? 0;
+      toast(this, this.scale.width / 2, this.scale.height - px(24), t('lock.afterLevel', { index: afterIndex }), MENU_DEPTH.ui + 1);
+      return;
+    }
     this.leaving = true;
     playSfx('click');
     this.time.delayedCall(MENU_FX.press.leaveMs, () => {

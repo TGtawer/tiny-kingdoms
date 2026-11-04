@@ -4,7 +4,7 @@ import { step, type TickEvent } from '../../../src/core/sim/tick';
 import { createWorld, type World } from '../../../src/core/sim/World';
 import { freezeEconomy, level, node } from '../helpers';
 
-/** P(player) — E(enemy), one road of length 0.8. */
+/** P(player) — E(enemy), one road of length 0.8. Sends use the AI `pull` mode (50%). */
 function duel(playerTroops: number, enemyTroops: number): World {
   return freezeEconomy(
     createWorld(
@@ -17,8 +17,8 @@ function duel(playerTroops: number, enemyTroops: number): World {
 }
 
 const sendBoth = [
-  { type: 'send', side: 'player', from: 'P', to: 'E' },
-  { type: 'send', side: 'enemy', from: 'E', to: 'P' },
+  { type: 'send', side: 'player', from: 'P', to: 'E', mode: 'pull' },
+  { type: 'send', side: 'enemy', from: 'E', to: 'P', mode: 'pull' },
 ] as const;
 
 /** Runs until the first clash; returns it and the tick it happened on. */
@@ -89,8 +89,8 @@ describe('road clashes', () => {
       ),
     );
     step(world, [
-      { type: 'send', side: 'player', from: 'A', to: 'B' },
-      { type: 'send', side: 'player', from: 'B', to: 'A' },
+      { type: 'send', side: 'player', from: 'A', to: 'B', mode: 'pull' },
+      { type: 'send', side: 'player', from: 'B', to: 'A', mode: 'pull' },
     ]);
     for (let i = 0; i < 80; i++) expect(step(world).some((e) => e.type === 'clash')).toBe(false);
     expect(world.nodes.A!.troops).toBe(20);
@@ -116,8 +116,8 @@ describe('road clashes', () => {
     );
     const events: TickEvent[] = [
       ...step(world, [
-        { type: 'send', side: 'player', from: 'P', to: 'N' },
-        { type: 'send', side: 'enemy', from: 'E', to: 'N' },
+        { type: 'send', side: 'player', from: 'P', to: 'N', mode: 'pull' },
+        { type: 'send', side: 'enemy', from: 'E', to: 'N', mode: 'pull' },
       ]),
     ];
     for (let i = 0; i < 60; i++) events.push(...step(world));
@@ -126,10 +126,10 @@ describe('road clashes', () => {
 
   it('one big army can beat two smaller ones in a row', () => {
     const world = duel(40, 8); // player sends 20
-    step(world, [{ type: 'send', side: 'player', from: 'P', to: 'E' }]);
-    step(world, [{ type: 'send', side: 'enemy', from: 'E', to: 'P' }]); // 4
+    step(world, [{ type: 'send', side: 'player', from: 'P', to: 'E', mode: 'pull' }]);
+    step(world, [{ type: 'send', side: 'enemy', from: 'E', to: 'P', mode: 'pull' }]); // 4
     for (let i = 0; i < 5; i++) step(world);
-    step(world, [{ type: 'send', side: 'enemy', from: 'E', to: 'P' }]); // 2
+    step(world, [{ type: 'send', side: 'enemy', from: 'E', to: 'P', mode: 'pull' }]); // 2
     let clashes = 0;
     for (let i = 0; i < 100 && clashes < 2; i++) clashes += step(world).filter((e) => e.type === 'clash').length;
     expect(clashes).toBe(2);

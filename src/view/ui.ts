@@ -1,7 +1,7 @@
 import type * as Phaser from 'phaser';
 import { COLORS, HUD } from '../config/game';
 import { Button } from './Button';
-import { drawBack, drawCrystal } from './icons';
+import { drawBack, drawCrystal, drawLock } from './icons';
 import { px, textStyle } from './layout';
 
 /** Meadow background with deterministic grass tufts. */
@@ -83,6 +83,32 @@ export function textButton(
     ...(color !== undefined ? { color } : {}),
   });
   button.add(scene.add.text(0, -px(2), label, textStyle(size, COLORS.textDark)).setOrigin(0.5));
+  return button;
+}
+
+/**
+ * A button for something not opened yet (TUTORIAL.md T-3): dark face, lock icon before the label.
+ * It stays pressable: `onClick` explains when it opens.
+ */
+export function lockedButton(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  label: string,
+  onClick: () => void,
+  size = 20,
+): Button {
+  const button = new Button(scene, x, y, { width, height, color: COLORS.locked, onClick });
+  const text = scene.add.text(0, -px(2), label, textStyle(size, COLORS.text)).setOrigin(0.5).setAlpha(0.75);
+  const lockSize = px(size + 4);
+  const total = lockSize + px(8) + text.width;
+  text.setX(-total / 2 + lockSize + px(8) + text.width / 2);
+  const lock = scene.add.graphics();
+  lock.fillStyle(COLORS.panel, 0.9).fillCircle(-total / 2 + lockSize / 2, -px(2), lockSize * 0.62);
+  drawLock(lock, -total / 2 + lockSize / 2, -px(2), lockSize * 0.8);
+  button.add([lock, text]);
   return button;
 }
 

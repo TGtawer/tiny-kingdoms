@@ -3,6 +3,7 @@ import type { LevelData } from '../level/schema';
 import type { Goal } from './victory';
 import { createCitadel, type CitadelState } from './specials/citadel';
 import { createDragon, type DragonState } from './specials/dragon';
+import { createMage, type MageState } from './specials/mage';
 import { nextRandom, seedState } from './rng';
 
 export type Owner = 'player' | 'enemy' | 'enemy2' | 'neutral';
@@ -96,7 +97,7 @@ export interface World {
   /** Start capitals of the sides (level `capital` flags), for the capital goal. */
   capitals: Record<Side, string | null>;
   /** Boss mechanic of the level, if any. */
-  boss: DragonState | CitadelState | null;
+  boss: DragonState | CitadelState | MageState | null;
 }
 
 export function defaultModifiers(): SideModifiers {
@@ -191,7 +192,9 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
         ? createDragon()
         : level.special?.type === 'citadel'
           ? createCitadel(String(level.special.params.nodeId))
-          : null,
+          : level.special?.type === 'mage'
+            ? createMage(level.nodes.find((n) => n.capital && n.owner === 'enemy')!.id)
+            : null,
   };
 }
 

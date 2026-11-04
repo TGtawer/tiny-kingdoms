@@ -26,6 +26,8 @@ export interface MenuScreenOptions {
   /** Labels per banner (the Play banner has two lines). */
   labels: Record<MenuBannerId, readonly string[]>;
   onPress: (id: MenuBannerId) => void;
+  /** Banners not opened yet (TUTORIAL.md T-3). */
+  locked?: Partial<Record<MenuBannerId, boolean>>;
 }
 
 export interface MenuScreen {
@@ -113,7 +115,16 @@ abstract class Screen implements MenuScreen {
           this.scene,
           layer,
           this.frame,
-          { ...b, color, trim, tip, icon: ICONS[id], labels: o.labels[id], dropDelayMs: E.bannerDelaysMs[i] ?? 0 },
+          {
+            ...b,
+            color,
+            trim,
+            tip,
+            icon: ICONS[id],
+            labels: o.labels[id],
+            dropDelayMs: E.bannerDelaysMs[i] ?? 0,
+            locked: o.locked?.[id] === true,
+          },
           flat,
           depth + 0.2,
           () => o.onPress(id),

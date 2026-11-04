@@ -155,8 +155,8 @@ function own(world: World, side: Side): NodeState[] {
 
 /**
  * Troops a node can still send in this decision (one send per node per decision).
- * Same rules as the player: attacks and defense are swipes (75%), pushing troops to the front is a tap (50%),
- * so the rear is never emptied.
+ * Attacks and defense are swipes (75%) like the player's; pushing troops to the front is the AI-only
+ * `pull` mode (50%), so the rear is never emptied.
  */
 function available(node: NodeState, plan: Plan, mode: SendMode = 'swipe'): number {
   return plan.sent.has(node.id) ? 0 : sendAmount(node.troops, mode);
@@ -181,10 +181,10 @@ function strengthRatio(world: World, attacker: Side, defender: NodeState): numbe
 
 // ---- Dragon -------------------------------------------------------------------------------------
 
-/** The dragon has marked one of our nodes: move most troops to the nearest own node (if there is one). */
+/** The dragon or the mage has marked one of our nodes: move most troops to the nearest own node (if there is one). */
 function evadeDragon(world: World, side: Side, dist: Distances, plan: Plan): void {
   const boss = world.boss;
-  if (boss?.type !== 'dragon' || !boss.targetId) return;
+  if ((boss?.type !== 'dragon' && boss?.type !== 'mage') || !boss.targetId) return;
   const marked = world.nodes[boss.targetId]!;
   if (marked.owner !== side) return;
   const refuge = own(world, side)
@@ -407,7 +407,7 @@ function consolidate(world: World, side: Side, threatened: Set<string>, dist: Di
 
   for (const node of own(world, side)) {
     if (threatened.has(node.id) || isFrontier(world, node, side)) continue;
-    if (node.troops < nodeCapacity(node) * AI.consolidateAt || available(node, plan, 'tap') === 0) continue;
+    if (node.troops < nodeCapacity(node) * AI.consolidateAt || available(node, plan, 'pull') === 0) continue;
 
     const here = frontDistance(node.id);
     const next = world.roads
@@ -416,6 +416,6 @@ function consolidate(world: World, side: Side, threatened: Set<string>, dist: Di
       .map((id) => ({ id, d: frontDistance(id) }))
       .filter((c) => c.d < here)
       .sort((a, b) => a.d - b.d)[0];
-    if (next) send(plan, side, node, next.id, 'tap');
+    if (next) send(plan, side, node, next.id, 'pull');
   }
 }

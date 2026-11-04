@@ -1,4 +1,5 @@
 import type { SpellId } from '../../config/balance';
+import type { TourState } from './onboarding';
 import type { LevelData } from '../level/schema';
 
 export type BonusId = 'startArmy' | 'troopProduction' | 'goldIncome' | 'unitStrength';
@@ -15,10 +16,12 @@ export interface Progress {
   stars: Record<string, number>;
   /** Stars spent on spell upgrades; free stars = total earned - spent (see stars.ts). */
   spentStars: number;
-  /** Spells the player chose to open, in the order opened (see spellbook.ts). */
-  openSpells: SpellId[];
-  /** The open spell taken into battle; null until the first one is opened. */
+  /** Spells given by the story so far, in the order unlocked (see spellbook.ts). */
+  unlockedSpells: SpellId[];
+  /** The unlocked spell taken into battle; null until the first one is unlocked. */
   activeSpell: SpellId | null;
+  /** Guided tours outside battle (see onboarding.ts). */
+  onboarding: { upgradesTour: TourState };
 }
 
 export function defaultProgress(): Progress {
@@ -29,8 +32,9 @@ export function defaultProgress(): Progress {
     spellUpgrades: { fireball: 0, reinforcement: 0, shield: 0 },
     stars: {},
     spentStars: 0,
-    openSpells: [],
+    unlockedSpells: [],
     activeSpell: null,
+    onboarding: { upgradesTour: 'pending' },
   };
 }
 

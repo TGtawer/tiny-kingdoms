@@ -483,3 +483,20 @@ export function shade(color: number, f: number): number {
   const m = (c: number): number => Math.max(0, Math.min(255, Math.round(f < 0 ? c * (1 + f) : c + (255 - c) * f)));
   return (m((color >> 16) & 255) << 16) | (m((color >> 8) & 255) << 8) | m(color & 255);
 }
+
+/** Cartoon pointing hand (tutorial finger); the fingertip is at (0, 0). `s`: game px per CSS px. */
+export function drawFinger(g: Phaser.GameObjects.Graphics, s: number): void {
+  const line = 2.5 * s;
+  g.clear();
+  // Finger.
+  g.fillStyle(0xffffff, 1).fillRoundedRect(-7 * s, -2 * s, 14 * s, 30 * s, 7 * s);
+  g.lineStyle(line, COLORS.outline, 1).strokeRoundedRect(-7 * s, -2 * s, 14 * s, 30 * s, 7 * s);
+  // Palm with folded fingers.
+  g.fillStyle(0xffffff, 1).fillRoundedRect(-9 * s, 18 * s, 30 * s, 26 * s, 10 * s);
+  g.lineStyle(line, COLORS.outline, 1).strokeRoundedRect(-9 * s, 18 * s, 30 * s, 26 * s, 10 * s);
+  g.lineStyle(1.5 * s, COLORS.outline, 0.6);
+  g.lineBetween(7 * s, 24 * s, 7 * s, 32 * s);
+  g.lineBetween(14 * s, 24 * s, 14 * s, 32 * s);
+  // Tap glow at the tip.
+  g.fillStyle(COLORS.hint, 0.6).fillCircle(0, 0, 5 * s);
+}

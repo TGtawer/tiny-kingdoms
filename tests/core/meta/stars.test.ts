@@ -58,22 +58,32 @@ describe('recordStars', () => {
 
 describe('defeatTip', () => {
   const all = { builtBarracks: true, builtMine: true, hadVeinWithoutMine: true };
+  const open = { barracks: true, mine: true, upgrades: true };
 
   it('suggests barracks first', () => {
-    expect(defeatTip({ ...all, builtBarracks: false }, defaultProgress())).toBe('barracks');
+    expect(defeatTip({ ...all, builtBarracks: false }, defaultProgress(), open)).toBe('barracks');
   });
 
   it('then a mine on an unused gold vein', () => {
-    expect(defeatTip({ ...all, builtMine: false }, defaultProgress())).toBe('mine');
-    expect(defeatTip({ ...all, builtMine: false, hadVeinWithoutMine: false }, defaultProgress())).toBeNull();
+    expect(defeatTip({ ...all, builtMine: false }, defaultProgress(), open)).toBe('mine');
+    expect(defeatTip({ ...all, builtMine: false, hadVeinWithoutMine: false }, defaultProgress(), open)).toBeNull();
   });
 
   it('then upgrades when the player can afford one', () => {
     const p = defaultProgress();
     expect(canBuyUpgrade(p)).toBe(false);
-    expect(defeatTip(all, p)).toBeNull();
+    expect(defeatTip(all, p, open)).toBeNull();
     p.crystals = BONUSES.costBase;
     expect(canBuyUpgrade(p)).toBe(true);
-    expect(defeatTip(all, p)).toBe('upgrades');
+    expect(defeatTip(all, p, open)).toBe('upgrades');
+  });
+
+  it('only suggests what is already open (TUTORIAL.md T-3)', () => {
+    const p = defaultProgress();
+    p.crystals = BONUSES.costBase;
+    const none = { barracks: false, mine: false, upgrades: false };
+    expect(defeatTip({ builtBarracks: false, builtMine: false, hadVeinWithoutMine: true }, p, none)).toBeNull();
+    expect(defeatTip({ builtBarracks: false, builtMine: false, hadVeinWithoutMine: true }, p, { ...none, upgrades: true })).toBe('upgrades');
+    expect(defeatTip({ ...all, builtMine: false }, p, { ...open, mine: false })).toBe('upgrades');
   });
 });

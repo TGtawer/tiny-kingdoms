@@ -5,13 +5,16 @@ import { buildCost } from '../core/sim/commands';
 import type { NodeState } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { Button } from './Button';
-import { drawBuilding, drawCoin } from './icons';
+import { toast } from './effects';
+import { drawBuilding, drawCoin, drawLock } from './icons';
 import { px, textStyle } from './layout';
 
 export type BuildChoice = { kind: 'build'; building: BuildingType } | { kind: 'upgrade' };
 
 interface Entry {
   button: Button;
+  /** The building this button builds (null for the upgrade button). */
+  building: BuildingType | null;
   cost: number | null;
   costText: Phaser.GameObjects.Text | null;
   shownCost: string;
@@ -23,20 +26,34 @@ const BUILDING_ORDER: readonly BuildingType[] = ['mine', 'barracks', 'tower'];
  * Build options for the selected own node, shown as a strip in the bottom HUD bar.
  * The field never extends into that bar, so the menu never covers nodes.
  * Build options on an empty slot, a single upgrade button on an existing building.
+ * Buildings not taught yet (TUTORIAL.md T-3) stay in the row, dark with a lock; a tap says when they open.
  */
 export class BuildMenu extends Phaser.GameObjects.Container {
   readonly nodeId: string;
   private readonly entries: Entry[] = [];
   private gold = 0;
 
-  constructor(scene: Phaser.Scene, node: NodeState, onChoose: (choice: BuildChoice) => void) {
+  /** `lockHint`: null if the building can be built, otherwise the "opens at level N" text. */
+  constructor(
+    scene: Phaser.Scene,
+    node: NodeState,
+    onChoose: (choice: BuildChoice) => void,
+    lockHint: (type: BuildingType) => string | null = () => null,
+  ) {
     const w = scene.scale.width;
     const h = scene.scale.height;
     const barH = px(HUD.bottomBar);
     super(scene, w / 2, h - barH / 2);
     this.nodeId = node.id;
 
-    const items: Array<{ choice: BuildChoice | null; label: string; desc: string; icon: BuildingType; cost: number | null }> = [];
+    const items: Array<{
+      choice: BuildChoice | null;
+      label: string;
+      desc: string;
+      icon: BuildingType;
+      cost: number | null;
+      locked?: string;
+    }> = [];
     if (node.building) {
       const cost = buildCost(node.building.level);
       items.push({
@@ -49,12 +66,14 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     } else {
       for (const type of BUILDING_ORDER) {
         if (type === 'mine' && !node.hasGoldVein) continue;
+        const locked = lockHint(type);
         items.push({
-          choice: { kind: 'build', building: type },
+          choice: locked === null ? { kind: 'build', building: type } : null,
           label: t(`building.${type}`),
           desc: t(`building.${type}.desc`),
           icon: type,
-          cost: buildCost(0),
+          cost: locked === null ? buildCost(0) : null,
+          ...(locked === null ? {} : { locked }),
         });
       }
     }
@@ -75,25 +94,41 @@ export class BuildMenu extends Phaser.GameObjects.Container {
 
     items.forEach((item, i) => {
       const x = -rowW / 2 + bw / 2 + i * (bw + gap);
+      const locked = item.locked;
       const button = new Button(scene, x, 0, {
         width: bw,
         height: bh,
+        ...(locked !== undefined ? { color: COLORS.locked } : {}),
         onClick: () => {
+          if (locked !== undefined) {
+            toast(scene, this.x + x, this.y - bh / 2 - px(8), locked);
+            return;
+          }
           // Not affordable: the button stays bright and says how much is missing, but does nothing.
           if (item.choice && item.cost !== null && this.gold >= item.cost) onChoose(item.choice);
         },
       });
 
-      // Rows: icon + name, effect, coin + cost (only the name at max level).
-      const topY = item.cost === null ? 0 : -bh * 0.27;
+      // Rows: icon + name, effect, coin + cost (only the name at max level); locked: icon + name, lock.
+      const topY = item.cost === null && locked === undefined ? 0 : -bh * 0.27;
       const iconSize = bh * 0.32;
-      const label = scene.add.text(0, topY, item.label, textStyle(14, COLORS.textDark)).setOrigin(0, 0.5);
+      const label = scene.add.text(0, topY, item.label, textStyle(14, locked !== undefined ? COLORS.text : COLORS.textDark)).setOrigin(0, 0.5);
       const rowContentW = iconSize + px(4) + label.width;
       const left = -rowContentW / 2;
       const icon = scene.add.graphics();
       drawBuilding(icon, item.icon, left + iconSize / 2, topY, iconSize);
       label.setX(left + iconSize + px(4));
       button.add([icon, label]);
+      if (locked !== undefined) {
+        icon.setAlpha(0.6);
+        const lock = scene.add.graphics();
+        drawLock(lock, 0, bh * 0.14, bh * 0.36);
+        lock.setAlpha(0.9);
+        // drawLock paints in the dark text color; a light disc behind keeps it visible on the dark face.
+        const disc = scene.add.graphics();
+        disc.fillStyle(COLORS.panel, 0.85).fillCircle(0, bh * 0.14, bh * 0.22);
+        button.add([disc, lock]);
+      }
 
       let costText: Phaser.GameObjects.Text | null = null;
       if (item.cost !== null) {
@@ -107,9 +142,10 @@ export class BuildMenu extends Phaser.GameObjects.Container {
         button.add([desc, coin, costText]);
       }
 
-      if (!item.choice) button.setEnabled(false);
+      // Max level: nothing to do. Locked buttons stay enabled so a tap can explain when they open.
+      if (!item.choice && locked === undefined) button.setEnabled(false);
       this.add(button);
-      const entry: Entry = { button, cost: item.choice ? item.cost : null, costText, shownCost: '' };
+      const entry: Entry = { button, building: node.building ? null : item.icon, cost: item.choice ? item.cost : null, costText, shownCost: '' };
       this.entries.push(entry);
       this.placeCost(entry, String(item.cost ?? ''));
     });
@@ -119,6 +155,12 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     this.y = targetY + barH;
     scene.tweens.add({ targets: this, y: targetY, duration: 140, ease: 'Back.Out' });
     scene.add.existing(this);
+  }
+
+  /** Screen position of the button that builds `type` (for tutorial highlights); null if it is not in the menu. */
+  buttonPosition(type: BuildingType): { x: number; y: number } | null {
+    const entry = this.entries.find((e) => e.building === type);
+    return entry ? { x: this.x + entry.button.x, y: this.y + entry.button.y } : null;
   }
 
   /** Shows the price of affordable options and "N more" for the others. */

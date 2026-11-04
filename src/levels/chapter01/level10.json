@@ -6,8 +6,12 @@
   "enemy": {
     "productionMult": 0.7,
     "aiThinkMs": 1000,
-    "aggression": 0.75,
+    "aggression": 0.5,
     "startGold": 20
+  },
+  "tutorial": "c01_l10",
+  "goal": {
+    "type": "capital"
   },
   "nodes": [
     {
@@ -38,7 +42,7 @@
       "y": 0.5,
       "size": "medium",
       "owner": "neutral",
-      "troops": 8,
+      "troops": 12,
       "hasGoldVein": false,
       "building": null
     },
@@ -49,7 +53,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 6,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -59,7 +63,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 6,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -69,7 +73,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 8,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -79,7 +83,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 8,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -154,8 +158,7 @@
     ]
   ],
   "special": {
-    "type": "dragon",
+    "type": "mage",
     "params": {}
-  },
-  "tutorial": "c01_l10"
+  }
 }

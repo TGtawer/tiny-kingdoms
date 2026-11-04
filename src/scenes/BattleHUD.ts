@@ -1,12 +1,14 @@
 import * as Phaser from 'phaser';
 import { SPELLS, type LeaderId, type SpellId } from '../config/balance';
-import { COLORS, cssColor, HUD, LEADER_CARD, RESULT_PANEL } from '../config/game';
+import { COLORS, HUD, LEADER_CARD, RESULT_PANEL } from '../config/game';
+import type { UiAnchor } from '../core/tutorial/tutorial';
 import { sideGoldRate } from '../core/sim/economy';
 import { spellCooldownMs } from '../core/sim/spells';
 import type { Side, World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { Button } from '../view/Button';
 import { drawCoin, drawCrystal, drawLeader, drawPause, drawSpell, drawStar } from '../view/icons';
+import { drawHintPlaque } from '../view/hintPlaque';
 import { px, textStyle } from '../view/layout';
 
 export interface HudCallbacks {
@@ -58,9 +60,12 @@ export class BattleHUD {
   private leader: LeaderId | null = null;
   /** Level goal plaque under the top bar. */
   private readonly goalText: Phaser.GameObjects.Text;
+  private readonly goalPlaque: Phaser.GameObjects.Graphics;
   private readonly spells: SpellButton[] = [];
   private overlay: Phaser.GameObjects.Container | null = null;
   private shownGold = -1;
+  /** Gold counter hidden until the player can spend gold (TUTORIAL.md T-3). */
+  private goldVisible = true;
 
   constructor(scene: Phaser.Scene, title: string, spells: readonly SpellId[], callbacks: HudCallbacks) {
     this.scene = scene;
@@ -87,13 +92,21 @@ export class BattleHUD {
     this.speedRing.setVisible(false);
 
     this.leaderIcon = scene.add.graphics();
-    this.goalText = scene.add
-      .text(0, 0, '', textStyle(15, COLORS.textDark))
-      .setOrigin(0.5)
-      .setBackgroundColor(cssColor(COLORS.panel))
-      .setPadding(px(10), px(3), px(10), px(3))
-      .setVisible(false);
-    this.root.add([this.topBar, this.coin, this.goldText, this.rateText, this.title, this.leaderIcon, this.goalText, this.speedRing, this.pauseButton, this.speedButton]);
+    this.goalPlaque = scene.add.graphics().setVisible(false);
+    this.goalText = scene.add.text(0, 0, '', textStyle(15, COLORS.textDark)).setOrigin(0.5).setVisible(false);
+    this.root.add([
+      this.topBar,
+      this.coin,
+      this.goldText,
+      this.rateText,
+      this.title,
+      this.leaderIcon,
+      this.goalPlaque,
+      this.goalText,
+      this.speedRing,
+      this.pauseButton,
+      this.speedButton,
+    ]);
 
     for (const spell of spells) {
       const size = px(HUD.spellButton);
@@ -126,10 +139,24 @@ export class BattleHUD {
   setGoal(text: string | null): void {
     if (text === null) {
       this.goalText.setVisible(false);
+      this.goalPlaque.setVisible(false);
       return;
     }
-    if (this.goalText.text !== text) this.goalText.setText(text);
+    if (this.goalText.text !== text) {
+      const width = this.goalText.width;
+      this.goalText.setText(text);
+      // Only a change of size needs a new plaque (the countdown keeps the same width most of the time).
+      if (this.goalText.width !== width) this.drawGoalPlaque();
+    }
     this.goalText.setVisible(true);
+    this.goalPlaque.setVisible(true);
+  }
+
+  private drawGoalPlaque(): void {
+    const g = this.goalPlaque;
+    g.clear();
+    const h = Math.min(px(HUD.goalBar) - px(4), this.goalText.height + px(8));
+    drawHintPlaque(g, this.goalText.x, this.goalText.y, this.goalText.width + px(24), h);
   }
 
   /** Shows the enemy leader's portrait in the top bar. */
@@ -181,6 +208,15 @@ export class BattleHUD {
     scene.time.delayedCall(LEADER_CARD.autoCloseMs, close);
   }
 
+  /** Shows or hides the gold counter and income; the title takes the freed space. */
+  setGoldVisible(visible: boolean): void {
+    this.goldVisible = visible;
+    this.coin.setVisible(visible);
+    this.goldText.setVisible(visible);
+    this.rateText.setVisible(visible);
+    this.placeTitle();
+  }
+
   get hasSpellBar(): boolean {
     return this.spells.length > 0;
   }
@@ -228,6 +264,7 @@ export class BattleHUD {
     this.goldText.setPosition(px(16) + px(34), barH / 2);
     this.placeRate();
     this.goalText.setPosition(w / 2, barH + px(HUD.goalBar) / 2);
+    this.drawGoalPlaque();
     this.pauseButton.setPosition(w - px(12) - this.pauseButton.buttonWidth / 2, barH / 2);
     this.speedButton.setPosition(
       this.pauseButton.x - this.pauseButton.buttonWidth / 2 - px(HUD.topBarGap) - this.speedButton.buttonWidth / 2,
@@ -365,7 +402,7 @@ export class BattleHUD {
   private placeTitle(): void {
     const barH = px(HUD.topBar);
     const gap = px(HUD.topBarGap);
-    const left = this.rateText.x + this.rateText.width + gap;
+    const left = this.goldVisible ? this.rateText.x + this.rateText.width + gap : px(16);
     const right = this.speedButton.x - this.speedButton.buttonWidth / 2 - gap;
     const portrait = this.leader ? px(LEADER_CARD.hudPortrait) : 0;
     const portraitW = portrait > 0 ? portrait + gap : 0;
@@ -384,9 +421,18 @@ export class BattleHUD {
     if (this.leader) drawLeader(this.leaderIcon, this.leader, x0 + portrait / 2, barH / 2, portrait);
   }
 
-  /** Screen position of the gold counter (for tutorial highlights). */
-  goldAnchor(): { x: number; y: number } {
-    return { x: this.coin.x + px(16) + px(14), y: px(HUD.topBar) / 2 };
+  /** Screen position of a HUD element for tutorial highlights; null while it is hidden. */
+  anchor(anchor: UiAnchor): { x: number; y: number } | null {
+    switch (anchor) {
+      case 'gold':
+        return this.goldVisible ? { x: this.coin.x + px(16) + px(14), y: px(HUD.topBar) / 2 } : null;
+      case 'spell': {
+        const button = this.spells[0]?.button;
+        return button?.visible ? { x: button.x, y: button.y } : null;
+      }
+      case 'goal':
+        return this.goalText.visible ? { x: this.goalText.x, y: this.goalText.y } : null;
+    }
   }
 
   hideOverlay(): void {

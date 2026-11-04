@@ -30,6 +30,11 @@ export const COLORS = {
   button: 0xffb53d,
   buttonPressed: 0xe8962a,
   buttonDisabled: 0xc9bfae,
+  /** Evil mage tower (TUTORIAL.md T-7). */
+  mage: 0x8b5cf6,
+  mageDark: 0x4c1d95,
+  /** Not taught yet (TUTORIAL.md T-3): dark face with a lock; text on it is light. */
+  locked: 0x4b4a52,
   /** Secondary buttons next to a main one (result panel). */
   buttonSecondary: 0xf2dcae,
   starEmpty: 0x8b8578,
@@ -335,11 +340,47 @@ export const HAPTICS = {
   shakeIntensity: 0.004,
 } as const;
 
+/**
+ * Whether the enemy leader card before the battle and the HUD portrait are shown (TUTORIAL.md T-2: off for now).
+ * The leader still sets the AI behavior; the card code stays for later.
+ */
+export const SHOW_LEADER_INTRO = false;
+
 /** Enemy leader card before the battle and the HUD portrait, CSS px / ms. */
 export const LEADER_CARD = {
   autoCloseMs: 2500,
   portrait: 96,
   hudPortrait: 34,
+} as const;
+
+/** Guided-tour overlay outside battle (view/Spotlight.ts, TUTORIAL.md T-6), CSS px / ms. */
+export const SPOTLIGHT = {
+  depth: 500,
+  dimAlpha: 0.62,
+  /** Space around the highlighted element and the corner radius of the hole. */
+  pad: 6,
+  radius: 14,
+  pulseMs: 650,
+  /** Finger tap loop, half period. */
+  tapMs: 420,
+  textMaxWidth: 340,
+  textGap: 14,
+  /** Extra room under the hole for the finger before the text. */
+  fingerRoom: 46,
+} as const;
+
+/** Evil mage fireball flight from the tower to its target, ms (the damage is already applied). */
+export const MAGE_FX = { flightMs: 380 } as const;
+
+/** Look of every hint plaque (view/hintPlaque.ts), CSS px: as the tutorial hint bar. */
+export const HINT_PLAQUE = {
+  radius: 18,
+  outline: 3,
+  shadowX: 3,
+  shadowY: 4,
+  shadowAlpha: 0.35,
+  padX: 14,
+  padY: 8,
 } as const;
 
 /** How long the special node info label stays, ms. */
@@ -471,6 +512,8 @@ export const MENU_BANNER = {
   medalShine: { x: -0.32, y: -0.48, rx: 0.36, ry: 0.16, angle: -0.35, alpha: 0.3 },
   medalRing: { inset: 5, width: 1.5, dash: 3, gap: 4, shade: -0.45, shadowY: 2, shadowShade: -0.35 },
   iconScale: 1.1,
+  /** Locked banner (TUTORIAL.md T-3): cloth and trim darkened, medallion dimmed with a lock on a light disc. */
+  locked: { shade: -0.55, medalDim: 0.55, lockDisc: 0.55, lockSize: 0.62, labelAlpha: 0.7 },
   pulse: { pad: 8, color: 0xffe68c, alpha: 0.5, periodMs: 1600 },
   /** Labels: font size share of the width (side banners capped), the second line smaller and yellow. */
   labelMain: 0.2,

@@ -1,24 +1,35 @@
 import * as Phaser from 'phaser';
-import { DRAGON, SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
-import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS, MUSIC, type JingleId } from '../config/game';
+import { DRAGON, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
+import { ARMY_FX, COLORS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
-import { sendAmount, type Command, type SendMode } from '../core/sim/commands';
+import { sendAmount, type Command } from '../core/sim/commands';
 import { armyPath, blockingNode, isPortalLink } from '../core/sim/pathfinding';
+import { battleSpeed, runClock } from '../core/sim/clock';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
-import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
+import {
+  advanceTutorial,
+  currentStep,
+  shouldRunTutorial,
+  startTutorial,
+  isTutorialSlow,
+  type TutorialState,
+  type UiEvent,
+} from '../core/tutorial/tutorial';
 import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
-import { canOpenSpell } from '../core/meta/spellbook';
+import { tourStep } from '../core/meta/onboarding';
+import { activeSpell, claimableSpell, grantWinSpells } from '../core/meta/spellbook';
 import { bestStars, recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
 import { isCompleted } from '../core/meta/Progress';
 import { defeatTip } from '../core/meta/tips';
+import { featureLevel, isFeatureAvailable, isGoldVisible } from '../core/meta/unlocks';
 import { playerSetupFrom } from '../core/meta/upgrades';
-import { FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
+import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
 import { ArmyView, armyLevelPosition } from '../view/ArmyView';
@@ -29,6 +40,7 @@ import { NodeView, type Highlight } from '../view/NodeView';
 import { RoadView } from '../view/RoadView';
 import { audioFiles, canPlayJingle, isMusicEnabled, playJingle, playMusic, setMusicDucked, setMusicEnabled, stopMusic } from '../view/music';
 import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
+import { hintLabel } from '../view/hintPlaque';
 import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
 import type { ChapterMapData, MapReveal } from './ChapterMapScene';
@@ -73,14 +85,16 @@ export class BattleScene extends Phaser.Scene {
   private ownersBefore = new Map<string, Owner>();
   private capitals = new Set<string>();
   /** Short info label for a special node (shown on tap). */
-  private infoLabel: Phaser.GameObjects.Text | null = null;
+  private infoLabel: Phaser.GameObjects.Container | null = null;
   /** Armies currently inside a portal (hidden). */
   private inPortal = new Set<string>();
   /** Battle facts for the star rating and the defeat tip. */
   private stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
   /** After a win: what the chapter map animates when the player goes there from the result panel (V-3). */
   private mapReveal: MapReveal | null = null;
-  /** "How many will leave" badge for a swipe or a selected node; one reused Text. */
+  /** Spells this win gave (TUTORIAL.md T-3), for the result panel. */
+  private newSpells: SpellId[] = [];
+  /** "How many will leave" badge at the end of a swipe; one reused Text. */
   private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
   private nodeViews = new Map<string, NodeView>();
@@ -92,6 +106,7 @@ export class BattleScene extends Phaser.Scene {
   private accumulator = 0;
   private paused = false;
   private ended = false;
+  /** Own node whose build menu is open (sends are swipe-only, there is no tap-to-send selection). */
   private selected: string | null = null;
   private menu: BuildMenu | null = null;
   private drag: DragState | null = null;
@@ -129,6 +144,7 @@ export class BattleScene extends Phaser.Scene {
     this.inPortal = new Set();
     this.stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
     this.mapReveal = null;
+    this.newSpells = [];
 
     this.platform = getPlatform(this);
     // Seed per level: the AI's timing jitter is reproducible for a given level.
@@ -140,14 +156,17 @@ export class BattleScene extends Phaser.Scene {
     this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy, this.world.goal, this.world.capitals.player));
     const enemy2 = this.level.enemy2;
     this.ai2 = enemy2 && this.level.nodes.some((n) => n.owner === 'enemy2') ? createAi('enemy2', aiParamsFromLevel(enemy2)) : null;
-    const script = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
+    // Hints and the slow-down only on the first playthrough (TUTORIAL.md T-4).
+    const levelScript = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
+    const script = shouldRunTutorial(this.level, getStore(this).progress, levelScript) ? levelScript : undefined;
     this.tutorial = script ? startTutorial(script, this.world.tick) : null;
 
     this.background = this.add.graphics();
     this.roads = new RoadView(this);
     this.capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
     for (const node of Object.values(this.world.nodes)) {
-      this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id)));
+      const mageTower = this.world.boss?.type === 'mage' && this.world.boss.towerId === node.id;
+      this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id), mageTower));
     }
     this.trails = this.add.graphics().setDepth(39);
     this.goalRing = this.add.graphics().setDepth(38);
@@ -159,6 +178,8 @@ export class BattleScene extends Phaser.Scene {
       onSpeed: () => this.toggleSpeed(),
       onSpell: (spell) => this.toggleSpell(spell),
     });
+    // Gold stays hidden until there is something to spend it on (TUTORIAL.md T-3); it is still earned.
+    this.hud.setGoldVisible(isGoldVisible(this.level.id, getStore(this).progress, ALL_LEVELS));
     this.tutorialView = this.tutorial ? new TutorialView(this) : null;
 
     this.relayout();
@@ -184,7 +205,8 @@ export class BattleScene extends Phaser.Scene {
     this.platform.gameplayStart();
 
     // Enemy leader: portrait in the HUD and a short card before the battle (the battle waits for it).
-    const leader = this.level.enemy.leader ?? null;
+    // Turned off by SHOW_LEADER_INTRO; the leader still drives the AI behavior.
+    const leader = SHOW_LEADER_INTRO ? (this.level.enemy.leader ?? null) : null;
     this.hud.setLeader(leader);
     if (leader) {
       this.paused = true;
@@ -196,16 +218,24 @@ export class BattleScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     if (!this.paused && !this.ended) {
-      this.accumulator += Math.min(delta, MAX_FRAME_DELTA_MS) * this.speed;
-      while (this.accumulator >= TICK_MS && !this.ended) {
-        this.tickOnce();
-        this.accumulator -= TICK_MS;
-      }
+      // While the player is choosing, the whole battle runs slowed down (sim/clock.ts);
+      // the choice can end mid-frame, so the speed is re-read every tick.
+      this.accumulator = runClock(
+        this.accumulator,
+        Math.min(delta, MAX_FRAME_DELTA_MS),
+        () => battleSpeed(this.speed, this.isChoosing()),
+        () => {
+          this.tickOnce();
+          return !this.ended;
+        },
+      );
     }
     this.render(this.ended ? 1 : this.accumulator / TICK_MS);
     this.tutorialView?.update(time, {
       node: (id) => this.nodeViews.get(id) ?? null,
-      gold: () => this.hud.goldAnchor(),
+      ui: (anchor) => this.hud.anchor(anchor),
+      bossTarget: () => (this.world.boss && 'targetId' in this.world.boss ? this.world.boss.targetId : null),
+      build: (type) => this.menu?.buttonPosition(type) ?? null,
     });
   }
 
@@ -334,6 +364,12 @@ export class BattleScene extends Phaser.Scene {
         playSfx('fireball');
         break;
       }
+      case 'mageWarning':
+        // The marked node gets a red circle in drawGoal.
+        break;
+      case 'mageStrike':
+        this.mageFireball(event.from, event.nodeId, event.killed);
+        break;
       case 'citadelWave': {
         const from = this.world.nodes[event.from]!;
         this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
@@ -390,6 +426,7 @@ export class BattleScene extends Phaser.Scene {
     const firstWin = !isCompleted(store.progress, this.level.id);
     const previousStars = bestStars(store.progress, this.level.id);
     const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
+    if (winner === 'player') this.newSpells = grantWinSpells(store.progress, this.level.id);
     const stars = starChecks({ won: winner === 'player', timeMs: this.world.tick * TICK_MS, lostOwnNode: this.stats.lostOwnNode }, this.level);
     const starCount = stars.filter(Boolean).length;
     recordStars(store.progress, this.level.id, starCount);
@@ -418,7 +455,9 @@ export class BattleScene extends Phaser.Scene {
     const toMap = { label: t('result.toMap'), onClick: () => this.toMap() };
     const total = getStore(this).progress.crystals;
     if (winner !== 'player') {
-      const tip = defeatTip(this.stats, getStore(this).progress);
+      const progress = getStore(this).progress;
+      const open = (f: 'barracks' | 'mine' | 'upgrades'): boolean => isFeatureAvailable(f, this.level.id, progress, ALL_LEVELS);
+      const tip = defeatTip(this.stats, progress, { barracks: open('barracks'), mine: open('mine'), upgrades: open('upgrades') });
       const buttons = [replay, toMap];
       if (tip === 'upgrades') {
         buttons.splice(1, 0, { label: t('menu.upgrades'), onClick: () => this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }) });
@@ -433,18 +472,69 @@ export class BattleScene extends Phaser.Scene {
       earned: checks,
       labels: [t('stars.won'), t('stars.fast', { time: clock }), t('stars.flawless')],
     };
-    // A new spell slot was earned: point the player to the Upgrades screen to pick one.
-    const winTip = canOpenSpell(getStore(this).progress) ? `${why}\n${t('result.newSpell')}` : why;
+    const winTip = [why, ...this.spellNews()].join('\n');
     const next = nextLevel(this.level.id);
     if (next) {
       this.hud.showResult(t('result.victory'), true, crystals, total, [
-        { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
+        // After the first win on level 6 "Next" goes to the map, where the Upgrades tour starts (TUTORIAL.md T-6).
+        { label: t('result.next'), onClick: () => (tourStep(getStore(this).progress) !== null ? this.toMap() : this.scene.restart({ levelId: next.id })) },
         replay,
         toMap,
       ], { stars, tip: winTip });
     } else {
       this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], { stars, tip: winTip });
     }
+  }
+
+  /**
+   * Result lines about spells (TUTORIAL.md T-3): "New spell: X" for spells this win gave, plus the switch hint when
+   * the new one did not become active; or a pointer to the Upgrades screen when a spell waits to be claimed there.
+   */
+  private spellNews(): string[] {
+    const progress = getStore(this).progress;
+    if (this.newSpells.length > 0) {
+      const lines = this.newSpells.map((spell) => t('result.newSpell', { spell: t(`spell.${spell}`) }));
+      if (this.newSpells.some((spell) => spell !== activeSpell(progress))) lines.push(t('result.switchSpellHint'));
+      return lines;
+    }
+    return claimableSpell(progress) ? [t('result.spellWaiting')] : [];
+  }
+
+  /** A mage fireball flies from the tower to the struck node, then bursts there (or on its shield). */
+  private mageFireball(fromId: string, toId: string, killed: number): void {
+    const from = this.nodeViews.get(fromId);
+    const to = this.nodeViews.get(toId);
+    if (!from || !to) return;
+    const ball = this.add.graphics().setDepth(70);
+    ball.fillStyle(COLORS.fireball, 1).fillCircle(0, 0, px(11));
+    ball.fillStyle(COLORS.hint, 1).fillCircle(0, 0, px(5));
+    ball.setPosition(from.x, from.y - from.radius * 1.6);
+    playSfx('fireball');
+    this.tweens.add({
+      targets: ball,
+      x: to.x,
+      y: to.y,
+      duration: MAGE_FX.flightMs,
+      ease: 'Quad.In',
+      onComplete: () => {
+        ball.destroy();
+        if (killed > 0) {
+          explosion(this, to.x, to.y, to.radius * 1.6);
+          floatText(this, to.x, to.y - to.radius, `-${Math.floor(killed)}`, COLORS.fireball);
+          this.shake();
+        } else {
+          // A shield (or a node that is no longer ours) took the hit.
+          ringBurst(this, to.x, to.y, to.radius * 1.5, COLORS.shield);
+        }
+      },
+    });
+  }
+
+  /** "Opens at level N" for a building the player has not been taught yet; null if it can be built. */
+  private buildingLock(type: BuildingType): string | null {
+    if (isFeatureAvailable(type, this.level.id, getStore(this).progress, ALL_LEVELS)) return null;
+    const at = featureLevel(type, ALL_LEVELS);
+    return at ? t('lock.atLevel', { index: at.index }) : t('lock.later');
   }
 
   /** To the chapter map; after a win the map plays the level-open animation (not from the pause panel). */
@@ -592,7 +682,12 @@ export class BattleScene extends Phaser.Scene {
         }
         break;
       case 'capital':
-        this.hud.setGoal(t('goal.capital'));
+        if (boss?.type === 'mage' && this.world.nodes[boss.towerId]?.owner === 'enemy') {
+          const sec = Math.max(0, Math.ceil(((boss.strikeTick - this.world.tick) * TICK_MS) / 1000));
+          this.hud.setGoal(t('boss.mage', { sec }));
+        } else {
+          this.hud.setGoal(t('goal.capital'));
+        }
         break;
       case 'survive':
         this.hud.setGoal(t('goal.survive', { done: Math.min(done, goal.seconds), total: goal.seconds }));
@@ -611,6 +706,13 @@ export class BattleScene extends Phaser.Scene {
       g.fillStyle(0x000000, 0.18 + 0.22 * (1 - left)).fillEllipse(view.x, view.y + view.radius * 0.2, view.radius * 3.2, view.radius * 1.6);
       g.lineStyle(px(5), COLORS.faction.enemy, 0.5 + 0.5 * pulse).strokeCircle(view.x, view.y, view.radius * (1.5 + 0.4 * left));
     }
+    // Mage warning: a pulsing red circle over the player's node that the next fireball will hit.
+    if (boss?.type === 'mage' && boss.targetId) {
+      const view = this.nodeViews.get(boss.targetId)!;
+      const left = Math.max(0, (boss.strikeTick - this.world.tick) * TICK_MS) / MAGE.warnMs;
+      const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 90);
+      g.lineStyle(px(5), COLORS.faction.enemy, 0.5 + 0.5 * pulse).strokeCircle(view.x, view.y, view.radius * (1.5 + 0.4 * left));
+    }
     if (goal.type !== 'hold') return;
     const view = this.nodeViews.get(goal.nodeId);
     if (!view) return;
@@ -623,36 +725,26 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /** Badge with the troops that will leave: at the swipe end, or above the selected node (tap-tap). */
+  /** Badge with the troops that will leave, at the end of the swipe line. */
   private drawSendBadge(): void {
     const badge = this.sendBadge;
     const drag = this.drag;
-    let count = 0;
-    let x = 0;
-    let y = 0;
-    let text = '';
-    if (drag?.moved) {
-      const hover = this.nodeAt(drag.x, drag.y);
-      const end = hover ? this.nodeViews.get(hover.id)! : null;
-      count = hover
-        ? previewAttack(this.world, 'player', drag.sources, 'swipe', hover.id).sent
-        : drag.sources.reduce((sum, id) => sum + sendAmount(this.world.nodes[id]!.troops, 'swipe'), 0);
-      x = end ? end.x : drag.x;
-      y = end ? end.y - end.radius * 1.34 - px(16) : drag.y - px(36);
-      text = String(count);
-    } else if (this.selected) {
-      const view = this.nodeViews.get(this.selected)!;
-      count = sendAmount(this.world.nodes[this.selected]!.troops, 'tap');
-      x = view.x;
-      y = view.y - view.radius * 1.34 - px(16);
-      text = t('battle.sendCount', { count });
+    if (!drag?.moved) {
+      badge.setVisible(false);
+      return;
     }
+    const hover = this.nodeAt(drag.x, drag.y);
+    const end = hover ? this.nodeViews.get(hover.id)! : null;
+    const count = hover
+      ? previewAttack(this.world, 'player', drag.sources, 'swipe', hover.id).sent
+      : drag.sources.reduce((sum, id) => sum + sendAmount(this.world.nodes[id]!.troops, 'swipe'), 0);
     if (count <= 0) {
       badge.setVisible(false);
       return;
     }
+    const text = String(count);
     if (badge.text !== text) badge.setText(text);
-    badge.setPosition(x, y).setVisible(true);
+    badge.setPosition(end ? end.x : drag.x, end ? end.y - end.radius * 1.34 - px(16) : drag.y - px(36)).setVisible(true);
   }
 
   /** Whether a player army from `from` has a route to `to` (only through own nodes). */
@@ -702,10 +794,9 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    // Tap-tap: a node is selected, the second tap on a foreign node sends the army.
-    if (node && this.selected) this.sendFrom([this.selected], node.id, 'tap');
-    else if (node) this.showInfo(node);
+    // Sends are swipe-only: a tap on a foreign node only closes the menu (and labels special nodes, GDD 3.12).
     this.deselect();
+    if (node) this.showInfo(node);
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
@@ -732,24 +823,19 @@ export class BattleScene extends Phaser.Scene {
 
     if (drag.moved) {
       const target = this.nodeAt(pointer.x, pointer.y);
-      if (target) this.sendFrom(drag.sources, target.id, 'swipe');
+      if (target) this.sendFrom(drag.sources, target.id);
       return;
     }
 
-    // A tap on an own node.
-    if (this.selected && this.selected !== drag.downNode) {
-      this.sendFrom([this.selected], drag.downNode, 'tap');
-      this.deselect();
-    } else if (this.selected === drag.downNode) {
-      this.deselect();
-    } else {
-      this.select(drag.downNode);
-    }
+    // A tap on an own node opens its build menu; a second tap on the same node closes it.
+    if (this.selected === drag.downNode) this.deselect();
+    else this.select(drag.downNode);
   }
 
-  private sendFrom(sources: readonly string[], target: string, mode: SendMode): void {
+  /** The player's only way to send troops: a swipe, 75% from every source (GDD 3.5). */
+  private sendFrom(sources: readonly string[], target: string): void {
     for (const from of sources) {
-      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target, mode });
+      if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target, mode: 'swipe' });
     }
   }
 
@@ -761,7 +847,12 @@ export class BattleScene extends Phaser.Scene {
     this.showInfo(node);
     // Temples hold no buildings: no build menu, the info label explains why.
     if (node.kind === 'temple') return;
-    this.menu = new BuildMenu(this, this.world.nodes[nodeId]!, (choice) => this.onBuild(nodeId, choice)).setDepth(90);
+    this.menu = new BuildMenu(
+      this,
+      this.world.nodes[nodeId]!,
+      (choice) => this.onBuild(nodeId, choice),
+      (type) => this.buildingLock(type),
+    ).setDepth(90);
     this.menu.refresh(this.world.sides.player.gold);
     this.hud.setSpellBarVisible(false);
   }
@@ -809,15 +900,10 @@ export class BattleScene extends Phaser.Scene {
     this.infoLabel = null;
     if (node.kind === 'normal') return;
     const view = this.nodeViews.get(node.id)!;
-    const label = this.add
-      .text(view.x, view.y - view.radius * 1.5 - px(24), `${t(`kind.${node.kind}`)}\n${t(`kind.${node.kind}.desc`)}`, textStyle(14, COLORS.textDark))
-      .setOrigin(0.5, 1)
-      .setAlign('center')
-      .setBackgroundColor(cssColor(COLORS.panel))
-      .setPadding(px(8), px(5), px(8), px(5))
-      .setDepth(95);
-    label.setX(Math.min(Math.max(view.x, label.width / 2 + px(4)), this.scale.width - label.width / 2 - px(4)));
-    label.setY(Math.max(label.y, px(HUD.topBar) + label.height + px(4)));
+    const label = hintLabel(this, `${t(`kind.${node.kind}`)}\n${t(`kind.${node.kind}.desc`)}`, 14).setDepth(95);
+    // Above the node, inside the screen and below the top bar.
+    const bottom = Math.max(view.y - view.radius * 1.5 - px(24), px(HUD.topBar) + label.height + px(4));
+    label.setPosition(Math.min(Math.max(view.x, label.width / 2 + px(4)), this.scale.width - label.width / 2 - px(4)), bottom - label.height / 2);
     this.infoLabel = label;
     this.tweens.add({ targets: label, alpha: 0, delay: INFO_LABEL_MS, duration: 300, onComplete: () => label.destroy() });
   }
@@ -847,13 +933,22 @@ export class BattleScene extends Phaser.Scene {
 
   // ---- Speed-up ---------------------------------------------------------------------------------
 
+  /**
+   * The player is choosing: a tutorial step waits for them, the build menu is open, a swipe is being drawn,
+   * or a spell is armed and waits for its target. The battle runs at SLOW_MO.speed meanwhile.
+   */
+  private isChoosing(): boolean {
+    return isTutorialSlow(this.tutorial, this.world.tick) || this.menu !== null || this.drag !== null || this.armed !== null;
+  }
+
   /** The speed-up is offered only while the player holds more than SPEED_UP.unlockShare of all nodes. */
   private speedAvailable(): boolean {
     return ownedShare(this.world, 'player') > SPEED_UP.unlockShare;
   }
 
   private syncSpeed(): void {
-    const available = !this.ended && this.speedAvailable();
+    // No speed-up button while a tutorial step slows the battle down.
+    const available = !this.ended && this.speedAvailable() && !isTutorialSlow(this.tutorial, this.world.tick);
     if (!available) this.speed = 1;
     this.hud.setSpeed(available, this.speed);
   }
@@ -867,6 +962,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.paused || this.ended) return;
     this.deselect();
     this.armed = this.armed === spell ? null : spell;
+    if (this.armed) this.uiEvents.push({ type: 'spellSelect', spell });
   }
 
   // ---- Pause ------------------------------------------------------------------------------------

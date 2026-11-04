@@ -65,25 +65,42 @@ describe('spent stars (v4)', () => {
   });
 
   it('spent stars are clamped to 0..earned', () => {
-    expect(parseSave({ version: 4, progress: { stars: { a: 3, b: 2 }, spentStars: 99 } }).progress.spentStars).toBe(5);
-    expect(parseSave({ version: 4, progress: { stars: { a: 3 }, spentStars: -4 } }).progress.spentStars).toBe(0);
+    expect(parseSave({ version: 7, progress: { stars: { a: 3, b: 2 }, spentStars: 99 } }).progress.spentStars).toBe(5);
+    expect(parseSave({ version: 7, progress: { stars: { a: 3 }, spentStars: -4 } }).progress.spentStars).toBe(0);
   });
 });
 
-describe('chosen spells (v5)', () => {
-  it('a v4 save keeps the spells its fixed thresholds had opened', () => {
-    const save = parseSave({ version: 4, progress: { stars: { a: 3, b: 3, c: 3, d: 3 } } });
-    expect(save.progress.openSpells).toEqual(['fireball', 'reinforcement']);
-    expect(save.progress.activeSpell).toBe('fireball');
-    expect(parseSave({ version: 4, progress: { stars: { a: 1 } } }).progress.openSpells).toEqual([]);
+describe('story spells (v7, TUTORIAL.md T-3)', () => {
+  it('drops slot choices and gives back the stars spent on spell upgrades', () => {
+    const save = parseSave({
+      version: 6,
+      progress: {
+        stars: { a: 3, b: 3, c: 3, d: 3 },
+        openSpells: ['fireball', 'shield'],
+        activeSpell: 'shield',
+        spellUpgrades: { fireball: 2, shield: 1 },
+        spentStars: 7,
+      },
+    });
+    expect(save.progress.unlockedSpells).toEqual([]);
+    expect(save.progress.activeSpell).toBeNull();
+    expect(save.progress.spellUpgrades).toEqual({ fireball: 0, reinforcement: 0, shield: 0 });
+    expect(save.progress.spentStars).toBe(0);
+    expect(save.progress.stars).toEqual({ a: 3, b: 3, c: 3, d: 3 });
   });
 
-  it('drops unknown spells, never keeps more than the slots, fixes a bad active spell', () => {
-    const save = parseSave({
-      version: 5,
-      progress: { stars: { a: 3 }, openSpells: ['meteor', 'reinforcement', 'fireball'], activeSpell: 'fireball' },
-    });
-    expect(save.progress.openSpells).toEqual(['reinforcement']);
+  it('unlocks what the story has already given: reinforcement after level 6, fireball after level 10', () => {
+    const upTo = (n: number): string[] => Array.from({ length: n }, (_, i) => `c01_l${String(i + 1).padStart(2, '0')}`);
+    expect(parseSave({ version: 6, progress: { completed: upTo(5) } }).progress.unlockedSpells).toEqual([]);
+    const six = parseSave({ version: 6, progress: { completed: upTo(6) } }).progress;
+    expect(six.unlockedSpells).toEqual(['reinforcement']);
+    expect(six.activeSpell).toBe('reinforcement');
+    expect(parseSave({ version: 6, progress: { completed: upTo(10) } }).progress.unlockedSpells).toEqual(['reinforcement', 'fireball']);
+  });
+
+  it('drops unknown spells and fixes a bad active spell', () => {
+    const save = parseSave({ version: 7, progress: { unlockedSpells: ['meteor', 'reinforcement', 'reinforcement'], activeSpell: 'fireball' } });
+    expect(save.progress.unlockedSpells).toEqual(['reinforcement']);
     expect(save.progress.activeSpell).toBe('reinforcement');
   });
 });

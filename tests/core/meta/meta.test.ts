@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BONUSES, SPELLS, SPELL_SLOT_STARS, SPELL_UPGRADES } from '../../../src/config/balance';
+import { BONUSES, SPELLS, SPELL_UPGRADES } from '../../../src/config/balance';
 import {
   currentLevel,
   defaultProgress,
@@ -8,8 +8,15 @@ import {
   type Progress,
 } from '../../../src/core/meta/Progress';
 import { applyBattleResult, baseReward, rewardFor } from '../../../src/core/meta/rewards';
-import { activeSpell, canOpenSpell, nextSlotStars, openSpell, setActiveSpell, spellSlots } from '../../../src/core/meta/spellbook';
-import { freeStars, totalStars } from '../../../src/core/meta/stars';
+import {
+  activeSpell,
+  claimableSpell,
+  grantWinSpells,
+  setActiveSpell,
+  spellUnlockLevel,
+  unlockSpell,
+} from '../../../src/core/meta/spellbook';
+import { freeStars } from '../../../src/core/meta/stars';
 import {
   bonusCost,
   buyBonus,
@@ -64,58 +71,60 @@ describe('chapters', () => {
   });
 });
 
-const [FIRST_SLOT, SECOND_SLOT, THIRD_SLOT] = SPELL_SLOT_STARS as [number, number, number];
-
-describe('spell slots by stars (GDD 3.8)', () => {
-  it('each star threshold gives one slot', () => {
-    expect(spellSlots(withStars(FIRST_SLOT - 1))).toBe(0);
-    expect(spellSlots(withStars(FIRST_SLOT))).toBe(1);
-    expect(spellSlots(withStars(SECOND_SLOT))).toBe(2);
-    expect(nextSlotStars(withStars(FIRST_SLOT))).toBe(SECOND_SLOT);
-    expect(nextSlotStars(withStars(SECOND_SLOT))).toBe(THIRD_SLOT);
-    expect(spellSlots(withStars(THIRD_SLOT))).toBe(3);
-    expect(nextSlotStars(withStars(THIRD_SLOT))).toBeNull();
-  });
-
-  it('the player picks any spell for a slot; no slot, no spell', () => {
-    const p = withStars(FIRST_SLOT - 1);
-    expect(canOpenSpell(p)).toBe(false);
-    expect(openSpell(p, 'reinforcement')).toBe('noSlot');
-    p.stars.extra = 1;
-    expect(canOpenSpell(p)).toBe(true);
-    expect(openSpell(p, 'reinforcement')).toBe('ok');
-    expect(openSpell(p, 'reinforcement')).toBe('alreadyOpen');
-    expect(openSpell(p, 'fireball')).toBe('noSlot');
-    expect(canOpenSpell(p)).toBe(false);
-  });
-
-  it('the first open spell becomes active; the active one can be switched among open spells', () => {
-    const p = withStars(SECOND_SLOT);
+describe('spells come from the story (GDD 3.8, TUTORIAL.md T-3)', () => {
+  it('stars alone open nothing', () => {
+    const p = withStars(30);
+    expect(p.unlockedSpells).toEqual([]);
+    expect(claimableSpell(p)).toBeNull();
     expect(activeSpell(p)).toBeNull();
-    openSpell(p, 'fireball');
+  });
+
+  it('reinforcement waits to be claimed after the first win on level 6 (the Upgrades tour)', () => {
+    const p = completeUpTo(5);
+    expect(claimableSpell(p)).toBeNull();
+    p.completed.push('c01_l06');
+    expect(grantWinSpells(p, 'c01_l06')).toEqual([]);
+    expect(claimableSpell(p)).toBe('reinforcement');
+    expect(unlockSpell(p, 'reinforcement')).toBe(true);
+    expect(unlockSpell(p, 'reinforcement')).toBe(false);
+    expect(claimableSpell(p)).toBeNull();
+    expect(activeSpell(p)).toBe('reinforcement');
+  });
+
+  it('fireball comes with the win on level 10, once; it does not replace the active spell', () => {
+    const p = completeUpTo(10);
+    unlockSpell(p, 'reinforcement');
+    expect(grantWinSpells(p, 'c01_l09')).toEqual([]);
+    expect(grantWinSpells(p, 'c01_l10')).toEqual(['fireball']);
+    expect(grantWinSpells(p, 'c01_l10')).toEqual([]);
+    expect(p.unlockedSpells).toEqual(['reinforcement', 'fireball']);
+    expect(activeSpell(p)).toBe('reinforcement');
+  });
+
+  it('the first unlocked spell becomes active; the active one can be switched among unlocked spells', () => {
+    const p = defaultProgress();
+    unlockSpell(p, 'fireball');
     expect(activeSpell(p)).toBe('fireball');
     expect(setActiveSpell(p, 'reinforcement')).toBe(false);
-    openSpell(p, 'reinforcement');
+    unlockSpell(p, 'reinforcement');
     expect(activeSpell(p)).toBe('fireball');
     expect(setActiveSpell(p, 'reinforcement')).toBe(true);
     expect(activeSpell(p)).toBe('reinforcement');
   });
 
   it('only the active spell goes into battle', () => {
-    const p = withStars(SECOND_SLOT);
+    const p = defaultProgress();
     expect(playerSetupFrom(p).unlockedSpells).toEqual([]);
-    openSpell(p, 'fireball');
-    openSpell(p, 'reinforcement');
+    unlockSpell(p, 'fireball');
+    unlockSpell(p, 'reinforcement');
     setActiveSpell(p, 'reinforcement');
     expect(playerSetupFrom(p).unlockedSpells).toEqual(['reinforcement']);
   });
 
-  it('spending stars does not close a spell again', () => {
-    const p = withStars(FIRST_SLOT);
-    openSpell(p, 'fireball');
-    p.spentStars = totalStars(p);
-    expect(freeStars(p)).toBe(0);
-    expect(activeSpell(p)).toBe('fireball');
+  it('every spell names the level that gives it', () => {
+    expect(spellUnlockLevel('reinforcement')).toBe('c01_l06');
+    expect(spellUnlockLevel('fireball')).toBe('c01_l10');
+    expect(spellUnlockLevel('shield')).toBe('c02_l10');
   });
 });
 
@@ -184,22 +193,22 @@ describe('spell upgrades', () => {
     expect(spellUpgradeCost(SPELL_UPGRADES.maxLevel)).toBeNull();
   });
 
-  it('locked until the spell is open', () => {
-    const p = withStars(FIRST_SLOT + 2);
+  it('locked until the spell is unlocked', () => {
+    const p = withStars(5);
     expect(buySpellUpgrade(p, 'fireball')).toBe('locked');
-    openSpell(p, 'fireball');
+    unlockSpell(p, 'fireball');
     expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
     expect(buySpellUpgrade(p, 'reinforcement')).toBe('locked');
   });
 
   it('spends free stars, not crystals', () => {
-    const p = withStars(FIRST_SLOT + 2);
-    openSpell(p, 'fireball');
+    const p = withStars(5);
+    unlockSpell(p, 'fireball');
     p.crystals = 1000;
     expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
     expect(p.crystals).toBe(1000);
     expect(p.spentStars).toBe(2);
-    expect(freeStars(p)).toBe(FIRST_SLOT);
+    expect(freeStars(p)).toBe(3);
     expect(buySpellUpgrade(p, 'fireball')).toBe('ok');
     expect(buySpellUpgrade(p, 'fireball')).toBe('notEnoughStars');
     expect(p.spellUpgrades.fireball).toBe(2);

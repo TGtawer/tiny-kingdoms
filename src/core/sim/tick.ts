@@ -7,6 +7,7 @@ import { segmentLength } from './pathfinding';
 import { stepBandits, type BanditRaid } from './bandits';
 import { stepCitadel, type CitadelWave } from './specials/citadel';
 import { stepDragon, type DragonEvent } from './specials/dragon';
+import { stepMage, type MageEvent } from './specials/mage';
 import { checkOutcome, updateGoal, type OutcomeReason } from './victory';
 import type { ArmyState, Side, World } from './World';
 
@@ -19,6 +20,7 @@ export type TickEvent =
   | ({ type: 'clash' } & ClashResult)
   | ({ type: 'raid' } & BanditRaid)
   | DragonEvent
+  | MageEvent
   | CitadelWave
   | { type: 'gameOver'; winner: Side; reason: OutcomeReason };
 
@@ -72,6 +74,7 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
   for (const raid of stepBandits(world)) events.push({ type: 'raid', ...raid });
   if (world.boss?.type === 'dragon') events.push(...stepDragon(world, world.boss));
   else if (world.boss?.type === 'citadel') events.push(...stepCitadel(world, world.boss));
+  else if (world.boss?.type === 'mage') events.push(...stepMage(world, world.boss));
 
   for (const node of Object.values(world.nodes)) {
     if (node.shieldTicks > 0) node.shieldTicks -= 1;

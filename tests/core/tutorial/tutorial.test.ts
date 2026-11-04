@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import { SLOW_MO, TUTORIAL } from '../../../src/config/balance';
+import { battleSpeed, runClock } from '../../../src/core/sim/clock';
+import { defaultProgress } from '../../../src/core/meta/Progress';
 import {
   advanceTutorial,
   currentStep,
+  shouldRunTutorial,
   startTutorial,
+  isTutorialSlow,
   validateTutorial,
   type StepCondition,
   type TutorialScript,
 } from '../../../src/core/tutorial/tutorial';
 import { step } from '../../../src/core/sim/tick';
 import { hasKey } from '../../../src/i18n/i18n';
-import { ALL_LEVELS, TUTORIALS } from '../../../src/levels';
+import { ALL_LEVELS, DEV_LEVELS, TUTORIALS } from '../../../src/levels';
 import { freezeEconomy, lineWorld, run } from '../helpers';
 
 const script = (...until: StepCondition[]): TutorialScript => ({ steps: until.map((u) => ({ hint: 'tut.send', until: u })) });
@@ -67,6 +72,53 @@ describe('tutorial steps', () => {
     expect(advanceTutorial(t, world, [], [{ type: 'select', node: 'P' }])).toBe(true);
   });
 
+  it('send minSources: one swipe through at least two own nodes', () => {
+    const world = freezeEconomy(lineWorld({ N: { owner: 'player', troops: 10 }, E: { troops: 1 } }));
+    const t = startTutorial(script({ type: 'send', minSources: 2 }), world.tick);
+    expect(advanceTutorial(t, world, step(world, [{ type: 'send', side: 'player', from: 'P', to: 'E' }]))).toBe(false);
+    // Two sources but two different targets is not one swipe.
+    expect(
+      advanceTutorial(t, world, step(world, [
+        { type: 'send', side: 'player', from: 'P', to: 'N' },
+        { type: 'send', side: 'player', from: 'N', to: 'E' },
+      ])),
+    ).toBe(false);
+    world.nodes.P!.troops = 20;
+    world.nodes.N!.troops = 20;
+    expect(
+      advanceTutorial(t, world, step(world, [
+        { type: 'send', side: 'player', from: 'P', to: 'E' },
+        { type: 'send', side: 'player', from: 'N', to: 'E' },
+      ])),
+    ).toBe(true);
+  });
+
+  it('spellSelect (UI) and cast', () => {
+    const world = freezeEconomy(lineWorld({}, { playerStartGold: 200 }));
+    world.sides.player.unlockedSpells = ['reinforcement'];
+    const t = startTutorial(script({ type: 'spellSelect' }, { type: 'cast', spell: 'reinforcement' }), world.tick);
+    expect(advanceTutorial(t, world, [], [{ type: 'select', node: 'P' }])).toBe(false);
+    expect(advanceTutorial(t, world, [], [{ type: 'spellSelect', spell: 'reinforcement' }])).toBe(true);
+    expect(advanceTutorial(t, world, step(world))).toBe(false);
+    expect(advanceTutorial(t, world, step(world, [{ type: 'cast', side: 'player', spell: 'reinforcement', nodeId: 'P' }]))).toBe(true);
+  });
+
+  it('any: done when one of the conditions is', () => {
+    const world = freezeEconomy(lineWorld());
+    const t = startTutorial(script({ type: 'any', of: [{ type: 'select', node: 'N' }, { type: 'send' }] }), world.tick);
+    expect(advanceTutorial(t, world, step(world))).toBe(false);
+    expect(advanceTutorial(t, world, step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N' }]))).toBe(true);
+  });
+
+  it('a step without text still waits for its condition', () => {
+    const world = freezeEconomy(lineWorld());
+    const t = startTutorial({ steps: [{ until: { type: 'send' } }, { hint: 'tut.goal', until: { type: 'time', sec: 1 } }] }, world.tick);
+    expect(currentStep(t)?.hint).toBeUndefined();
+    expect(advanceTutorial(t, world, step(world))).toBe(false);
+    expect(advanceTutorial(t, world, step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N' }]))).toBe(true);
+    expect(currentStep(t)?.hint).toBe('tut.goal');
+  });
+
   it('validateTutorial reports unknown nodes and texts', () => {
     const level = ALL_LEVELS[0]!;
     const bad: TutorialScript = {
@@ -78,9 +130,94 @@ describe('tutorial steps', () => {
   });
 });
 
+describe('slow-down (TUTORIAL.md T-4)', () => {
+  const slowScript: TutorialScript = {
+    steps: [
+      { hint: 'tut.goal', until: { type: 'send' }, slow: true },
+      { hint: 'tut.goal', until: { type: 'time', sec: 1 } },
+    ],
+  };
+
+  it('a slow step slows the battle down; the next step does not', () => {
+    const world = freezeEconomy(lineWorld());
+    const t = startTutorial(slowScript, world.tick);
+    expect(isTutorialSlow(t, world.tick)).toBe(true);
+    advanceTutorial(t, world, step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N' }]));
+    expect(isTutorialSlow(t, world.tick)).toBe(false);
+    expect(isTutorialSlow(null, world.tick)).toBe(false);
+  });
+
+  it('while slowed the battle runs at SLOW_MO.speed (85% slower), the speed-up ignored', () => {
+    expect(SLOW_MO.speed).toBe(0.15);
+    expect(battleSpeed(1, true)).toBe(SLOW_MO.speed);
+    expect(battleSpeed(2, true)).toBe(SLOW_MO.speed);
+    expect(battleSpeed(2, false)).toBe(2);
+  });
+
+  it('fewer ticks per frame while slow', () => {
+    const count = (speed: number): number => {
+      let ticks = 0;
+      let acc = 0;
+      for (let frame = 0; frame < 60; frame++) acc = runClock(acc, 1000 / 60, () => speed, () => ++ticks > 0);
+      return ticks;
+    };
+    expect(count(1)).toBe(10);
+    expect(count(0.2)).toBe(2);
+    expect(count(SLOW_MO.speed)).toBe(1);
+  });
+
+  it('the speed is re-read every tick: finishing the step mid-frame speeds the rest of the frame up', () => {
+    let speed: number = 0.2;
+    let ticks = 0;
+    // One tick needs 500 ms of real time at 0.2; after it the step is done and the rest runs at ×1.
+    const acc = runClock(0, 1000, () => speed, () => {
+      ticks++;
+      speed = 1;
+      return true;
+    });
+    expect(ticks).toBe(1 + 5);
+    expect(acc).toBeCloseTo(0, 6);
+  });
+
+  it('validateTutorial: a time step cannot be slow and lasts at most TUTORIAL.infoStepMaxSec', () => {
+    const level = ALL_LEVELS[0]!;
+    const errors = validateTutorial(
+      { steps: [{ hint: 'tut.goal', until: { type: 'time', sec: TUTORIAL.infoStepMaxSec + 1 }, slow: true }] },
+      level,
+      hasKey,
+    );
+    expect(errors.some((e) => e.includes('cannot be slow'))).toBe(true);
+    expect(errors.some((e) => e.includes('longer than'))).toBe(true);
+  });
+});
+
+describe('first playthrough only', () => {
+  it('runs the tutorial only while the level is not won yet', () => {
+    const level = ALL_LEVELS[0]!;
+    const script = TUTORIALS[level.tutorial!];
+    const progress = defaultProgress();
+    expect(shouldRunTutorial(level, progress, script)).toBe(true);
+    progress.completed.push(level.id);
+    expect(shouldRunTutorial(level, progress, script)).toBe(false);
+    expect(shouldRunTutorial({ ...level, tutorial: undefined }, defaultProgress(), script)).toBe(false);
+  });
+
+  it('the spell lesson (level 7) runs only with reinforcement as the active spell', () => {
+    const level = ALL_LEVELS[6]!;
+    const script = TUTORIALS[level.tutorial!];
+    const progress = defaultProgress();
+    expect(shouldRunTutorial(level, progress, script)).toBe(false);
+    progress.unlockedSpells = ['reinforcement', 'fireball'];
+    progress.activeSpell = 'fireball';
+    expect(shouldRunTutorial(level, progress, script)).toBe(false);
+    progress.activeSpell = 'reinforcement';
+    expect(shouldRunTutorial(level, progress, script)).toBe(true);
+  });
+});
+
 describe('chapter tutorials', () => {
   it('every tutorial referenced by a level exists and matches it', () => {
-    for (const level of ALL_LEVELS.filter((l) => l.tutorial)) {
+    for (const level of [...ALL_LEVELS, ...DEV_LEVELS].filter((l) => l.tutorial)) {
       const tutorial = TUTORIALS[level.tutorial!];
       expect(tutorial, level.id).toBeDefined();
       expect(validateTutorial(tutorial!, level, hasKey)).toEqual([]);

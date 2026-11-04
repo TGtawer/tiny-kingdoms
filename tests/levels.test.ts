@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
-import { validateLevel } from '../src/core/level/schema';
+import { validateLevel, type LevelData } from '../src/core/level/schema';
 import { step } from '../src/core/sim/tick';
 import { createWorld } from '../src/core/sim/World';
 import { CHAPTERS, DEV_LEVELS, getLevel, nextLevel } from '../src/levels';
@@ -12,8 +12,17 @@ describe('chapter 1', () => {
     expect(chapter.map((l) => l.id)).toEqual(Array.from({ length: 10 }, (_, i) => `c01_l${String(i + 1).padStart(2, '0')}`));
   });
 
-  it('levels 1–5 have a tutorial; 6 introduces the chest, 10 the dragon; 7–9 have none', () => {
-    chapter.forEach((l, i) => expect(Boolean(l.tutorial), l.id).toBe(i < 6 || i === 9));
+  it('lessons 1, 3, 5, 7, the chest on 8 and the boss on 10 have a tutorial; consolidation levels have none', () => {
+    const withTutorial = chapter.filter((l) => l.tutorial).map((l) => l.index);
+    expect(withTutorial).toEqual([1, 3, 5, 7, 8, 10]);
+  });
+
+  it('has no gold veins, one chest on level 8; the only boss is the mage on level 10 (TUTORIAL.md T-2, T-7)', () => {
+    for (const l of chapter) {
+      expect(l.nodes.filter((n) => n.hasGoldVein), l.id).toEqual([]);
+      expect(l.special?.type, l.id).toBe(l.index === 10 ? 'mage' : undefined);
+      expect(l.nodes.filter((n) => n.kind === 'chest').length, l.id).toBe(l.id === 'c01_l08' ? 1 : 0);
+    }
   });
 
   it('uses 6–9 nodes per level and enemy production 0.7 (BALANCE.md, chapter 1)', () => {
@@ -36,14 +45,6 @@ describe('chapter 1', () => {
   });
 });
 
-/**
- * Difficulty curve, measured with an AI playing for the player (an active player without meta bonuses:
- * decides every 1.2 s, aggression 0.6) against the level AI, 10 seeds per level.
- * - "Chapter 1 is passable without upgrades" (BALANCE.md): at least 4/10 wins everywhere.
- * - Tutorial levels 1–3 stay easy: at least 9/10.
- * - Saw-tooth (BALANCE.md): levels 7–9 must not be a walkover: at most 8/10.
- * - Battles end within 10 minutes of game time.
- */
 describe('dev sandbox levels', () => {
   it.each(DEV_LEVELS.map((l) => [l.id, l] as const))('%s is valid and AI vs AI ends', (_id, lvl) => {
     expect(getLevel(lvl.id)).toBe(lvl);
@@ -56,18 +57,43 @@ describe('dev sandbox levels', () => {
   });
 });
 
+/**
+ * Difficulty curve (TUTORIAL.md T-5, BALANCE.md), measured with an AI playing for the player (an active player
+ * without meta bonuses: decides every 1.2 s, aggression 0.6) against the level AI, 10 seeds per level.
+ * Lessons 1–3 and 5: 10/10; consolidation 4 and 6: 8–9/10; 7–9: 6–8/10; 10: 5–7/10. Battles end within 10 minutes.
+ */
+const WIN_CORRIDOR: Record<number, readonly [number, number]> = {
+  1: [10, 10],
+  2: [10, 10],
+  3: [10, 10],
+  4: [8, 9],
+  5: [10, 10],
+  6: [8, 9],
+  7: [6, 8],
+  8: [6, 8],
+  9: [6, 8],
+  10: [5, 7],
+};
+
+/** Wins of the AI player over seeds 1..10. */
+function wins(level: LevelData): number {
+  let won = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    const world = createWorld(level, { seed });
+    const player = createAi('player', { thinkMs: 1200, aggression: 0.6 });
+    const enemy = createAi('enemy', aiParamsFromLevel(level.enemy, world.goal, world.capitals.player));
+    while (!world.winner && world.tick < 6000) step(world, [...aiStep(world, player), ...aiStep(world, enemy)]);
+    expect(world.winner, `${level.id} seed ${seed} did not finish in 10 min`).not.toBeNull();
+    if (world.winner === 'player') won++;
+  }
+  return won;
+}
+
 describe('chapter 1 difficulty curve', () => {
   it.each(CHAPTERS[0]!.map((l) => [l.id, l] as const))('%s', (_id, level) => {
-    let wins = 0;
-    for (let seed = 1; seed <= 10; seed++) {
-      const world = createWorld(level, { seed });
-      const player = createAi('player', { thinkMs: 1200, aggression: 0.6 });
-      const enemy = createAi('enemy', aiParamsFromLevel(level.enemy));
-      while (!world.winner && world.tick < 6000) step(world, [...aiStep(world, player), ...aiStep(world, enemy)]);
-      expect(world.winner, `${level.id} seed ${seed} did not finish in 10 min`).not.toBeNull();
-      if (world.winner === 'player') wins++;
-    }
-    expect(wins).toBeGreaterThanOrEqual(level.index <= 3 ? 9 : 4);
-    if (level.index >= 7 && level.index <= 9) expect(wins).toBeLessThanOrEqual(8);
+    const [min, max] = WIN_CORRIDOR[level.index]!;
+    const won = wins(level);
+    expect(won, `${level.id}: ${won}/10`).toBeGreaterThanOrEqual(min);
+    expect(won, `${level.id}: ${won}/10`).toBeLessThanOrEqual(max);
   });
 });

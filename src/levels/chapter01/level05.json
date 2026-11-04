@@ -6,9 +6,8 @@
   "enemy": {
     "productionMult": 0.7,
     "startGold": 20,
-    "aiThinkMs": 1500,
-    "aggression": 0.75,
-    "aiStartDelayMs": 8000
+    "leader": "baron",
+    "aiStartDelayMs": 18000
   },
   "tutorial": "c01_l05",
   "nodes": [
@@ -24,62 +23,62 @@
       "capital": true
     },
     {
-      "id": "f",
-      "x": 0.35,
+      "id": "p1",
+      "x": 0.27,
+      "y": 0.24,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "p2",
+      "x": 0.27,
+      "y": 0.76,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 5,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "neck",
+      "x": 0.5,
       "y": 0.5,
       "size": "medium",
-      "owner": "player",
-      "troops": 10,
+      "owner": "neutral",
+      "troops": 6,
       "hasGoldVein": false,
       "building": null
     },
     {
-      "id": "a",
-      "x": 0.25,
-      "y": 0.22,
+      "id": "q1",
+      "x": 0.73,
+      "y": 0.24,
       "size": "small",
       "owner": "neutral",
-      "troops": 5,
+      "troops": 6,
       "hasGoldVein": false,
       "building": null
     },
     {
-      "id": "b",
-      "x": 0.25,
-      "y": 0.78,
-      "size": "small",
-      "owner": "neutral",
-      "troops": 5,
-      "hasGoldVein": false,
-      "building": null
-    },
-    {
-      "id": "c",
-      "x": 0.6,
-      "y": 0.3,
+      "id": "e2",
+      "x": 0.73,
+      "y": 0.76,
       "size": "medium",
       "owner": "neutral",
-      "troops": 10,
-      "hasGoldVein": false,
-      "building": null
-    },
-    {
-      "id": "d",
-      "x": 0.6,
-      "y": 0.7,
-      "size": "medium",
-      "owner": "neutral",
-      "troops": 10,
+      "troops": 12,
       "hasGoldVein": false,
       "building": null
     },
     {
       "id": "enemy",
-      "x": 0.88,
+      "x": 0.9,
       "y": 0.5,
       "size": "large",
       "owner": "enemy",
-      "troops": 35,
+      "troops": 30,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -88,46 +87,42 @@
   "roads": [
     [
       "player",
-      "a"
+      "p1"
     ],
     [
       "player",
-      "b"
+      "p2"
     ],
     [
       "player",
-      "f"
+      "neck"
     ],
     [
-      "a",
-      "f"
+      "p1",
+      "neck"
     ],
     [
-      "b",
-      "f"
+      "p2",
+      "neck"
     ],
     [
-      "a",
-      "c"
+      "neck",
+      "q1"
     ],
     [
-      "f",
-      "c"
+      "neck",
+      "e2"
     ],
     [
-      "f",
-      "d"
-    ],
-    [
-      "b",
-      "d"
-    ],
-    [
-      "c",
+      "neck",
       "enemy"
     ],
     [
-      "d",
+      "q1",
+      "enemy"
+    ],
+    [
+      "e2",
       "enemy"
     ]
   ]

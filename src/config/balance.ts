@@ -9,10 +9,26 @@ export const NODE_KINDS: readonly NodeKind[] = ['normal', 'temple', 'fortress', 
 export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement', 'shield'];
 
 /**
- * GDD 3.8: each entry is a total of earned stars that gives one more spell slot; the player chooses which spell
- * to open in it (stars are not spent). One open spell is active in battle.
+ * GDD 3.8, TUTORIAL.md T-3: spells are given by the story in a fixed order, not chosen.
+ * `tour`: claimed in the Upgrades tour after the first win on that level; `afterWin`: the first win on that level.
+ * TODO(design): chapter 2 does not exist yet, so the shield is not reachable.
  */
-export const SPELL_SLOT_STARS: readonly number[] = [3, 12, 24];
+export const SPELL_UNLOCKS: Record<SpellId, { tour: string } | { afterWin: string }> = {
+  reinforcement: { tour: 'c01_l06' },
+  fireball: { afterWin: 'c01_l10' },
+  shield: { afterWin: 'c02_l10' },
+};
+
+/**
+ * TUTORIAL.md T-3: when buildings and screens open. Buildings: from that level on (in play order);
+ * Upgrades: after the first win on that level. The enemy always has every building.
+ */
+export const FEATURE_UNLOCKS = {
+  barracks: 'c01_l03',
+  tower: 'c01_l05',
+  mine: 'c02_l01',
+  upgrades: { afterWin: 'c01_l06' },
+} as const;
 
 /** Simulation fixed timestep. */
 export const TICK_MS = 100;
@@ -48,8 +64,11 @@ export const BUILDINGS = {
 export const ARMY = {
   /** Field widths per second. */
   speed: 0.12,
-  /** Share of node troops sent per order (rounded down): swipe sends more than tap-tap (GDD 3.5). */
-  sendShare: { swipe: 0.75, tap: 0.5 },
+  /**
+   * Share of node troops sent per order (rounded down, GDD 3.5): the player only swipes (75%);
+   * `pull` (50%) is the AI's internal mode for moving troops up from the rear.
+   */
+  sendShare: { swipe: 0.75, pull: 0.5 },
   minSend: 1,
   /** A node with this many troops or fewer cannot send. */
   minTroopsToSend: 2,
@@ -120,6 +139,17 @@ export const DRAGON = {
   warnMs: 3000,
 } as const;
 
+/**
+ * Evil mage, boss of chapter 1 level 10 (TUTORIAL.md T-7): a fireball every `everyMs` at the player's biggest
+ * garrison, shown `warnMs` before. Damage is the level 1 Fireball spell's.
+ */
+export const MAGE = {
+  everyMs: 20000,
+  warnMs: 3000,
+  damageShare: 0.4,
+  damageMin: 5,
+} as const;
+
 /** Boss of chapter 2 level 10 (CONTENT.md C-4.2). */
 export const CITADEL = {
   waveEveryMs: 15000,
@@ -132,6 +162,25 @@ export const SPEED_UP = {
   unlockShare: 0.65,
   /** Simulation ticks per real tick while sped up. */
   multiplier: 2,
+} as const;
+
+/**
+ * Slow-down while the player is choosing (BALANCE.md «Замедление»): a tutorial step waits for them, the build menu
+ * is open, a swipe is being drawn, or a spell waits for its target. The whole battle runs at `speed`: 85% slower.
+ */
+export const SLOW_MO = {
+  speed: 0.15,
+} as const;
+
+/** Tutorial (TUTORIAL.md T-4, BALANCE.md «Обучение»). */
+export const TUTORIAL = {
+  /** Info-only steps (`until: time`) last at most this long. */
+  infoStepMaxSec: 4,
+  /**
+   * A slow step the player ignores stops slowing the battle after this much battle time (≈33 s of real time at
+   * SLOW_MO.speed); its hint stays until it is done.
+   */
+  slowMaxSec: 5,
 } as const;
 
 export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {

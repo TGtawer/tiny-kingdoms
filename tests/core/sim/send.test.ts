@@ -5,14 +5,16 @@ import { step } from '../../../src/core/sim/tick';
 import { createWorld } from '../../../src/core/sim/World';
 import { freezeEconomy, level, lineWorld, node, run } from '../helpers';
 
+/** Most mechanics tests use the AI's `pull` mode (50%) so the numbers stay small and easy to follow. */
 const send = (from: string, to: string, side: 'player' | 'enemy' = 'player'): SendArmy => ({
   type: 'send',
   side,
   from,
   to,
+  mode: 'pull',
 });
 
-describe('sendAmount', () => {
+describe('sendAmount for an AI pull (50%)', () => {
   it.each([
     [0, 0],
     [1, 0],
@@ -23,7 +25,7 @@ describe('sendAmount', () => {
     [11, 5],
     [11.7, 5],
   ])('%f troops -> sends %i', (troops, expected) => {
-    expect(sendAmount(troops)).toBe(expected);
+    expect(sendAmount(troops, 'pull')).toBe(expected);
   });
 });
 
@@ -41,9 +43,9 @@ describe('sendAmount for a swipe (75%)', () => {
     if (troops >= 2) expect(troops - sendAmount(troops, 'swipe')).toBeGreaterThanOrEqual(1);
   });
 
-  it('tap-tap is the default and sends half', () => {
-    expect(sendAmount(20)).toBe(10);
-    expect(sendAmount(20, 'tap')).toBe(10);
+  it('a swipe is the default; only the AI pull sends half', () => {
+    expect(sendAmount(20)).toBe(15);
+    expect(sendAmount(20, 'pull')).toBe(10);
   });
 });
 
@@ -55,7 +57,7 @@ describe('send army', () => {
     expect(world.nodes.P!.troops).toBe(5);
   });
 
-  it('sends half of the node troops and leaves the rest', () => {
+  it('an AI pull sends half of the node troops and leaves the rest', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 11 } }));
     const events = step(world, [send('P', 'N')]);
     expect(events[0]).toMatchObject({ type: 'applied', armyId: 'a1' });
@@ -126,10 +128,13 @@ describe('send army', () => {
     expect(world.nodes.E).toMatchObject({ owner: 'enemy', troops: 1 });
   });
 
-  it('several nodes can send in one tick (multi-select)', () => {
+  it('several nodes can send in one tick (multi-node swipe)', () => {
     const world = freezeEconomy(lineWorld({ N: { owner: 'player', troops: 8 } }));
-    step(world, [send('P', 'E'), send('N', 'E')]);
-    expect(world.armies.map((a) => a.count)).toEqual([5, 4]);
+    step(world, [
+      { ...send('P', 'E'), mode: 'swipe' },
+      { ...send('N', 'E'), mode: 'swipe' },
+    ]);
+    expect(world.armies.map((a) => a.count)).toEqual([7, 6]);
   });
 
   it('own target: army joins the garrison, even above capacity', () => {

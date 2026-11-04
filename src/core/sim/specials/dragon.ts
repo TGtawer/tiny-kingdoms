@@ -1,13 +1,10 @@
 import { DRAGON, TICK_MS } from '../../../config/balance';
 import { random, type NodeState, type World } from '../World';
+import { biggestGarrison, stepStrikeTimer, type StrikeTimer } from './strikeTimer';
 
-/** Dragon boss state (chapter 1, level 10). */
-export interface DragonState {
+/** Dragon boss state (in reserve: dev level dev_dragon). */
+export interface DragonState extends StrikeTimer {
   type: 'dragon';
-  /** Tick of the next strike. */
-  strikeTick: number;
-  /** Node chosen at the warning (DRAGON.warnMs before the strike); null before the warning. */
-  targetId: string | null;
 }
 
 export type DragonEvent =
@@ -23,19 +20,11 @@ export function createDragon(): DragonState {
 
 /** The node with the biggest garrison of the player or the enemy (neutrals are left alone); ties by the seeded RNG. */
 export function dragonTarget(world: World): NodeState | null {
-  let best: NodeState[] = [];
-  let max = -Infinity;
-  for (const node of Object.values(world.nodes)) {
-    if (node.owner === 'neutral') continue;
-    if (node.troops > max + 1e-9) {
-      best = [node];
-      max = node.troops;
-    } else if (Math.abs(node.troops - max) <= 1e-9) {
-      best.push(node);
-    }
-  }
-  if (best.length === 0) return null;
-  return best.length === 1 ? best[0]! : best[Math.floor(random(world) * best.length)]!;
+  return biggestGarrison(
+    world,
+    Object.values(world.nodes).filter((n) => n.owner !== 'neutral'),
+    random,
+  );
 }
 
 /**
@@ -44,22 +33,13 @@ export function dragonTarget(world: World): NodeState | null {
  */
 export function stepDragon(world: World, dragon: DragonState): DragonEvent[] {
   const events: DragonEvent[] = [];
-  if (dragon.targetId === null && world.tick >= dragon.strikeTick - WARN_TICKS) {
-    const target = dragonTarget(world);
-    if (target) {
-      dragon.targetId = target.id;
-      events.push({ type: 'dragonWarn', nodeId: target.id, strikeTick: dragon.strikeTick });
-    }
-  }
-  if (world.tick >= dragon.strikeTick) {
-    if (dragon.targetId) {
-      const node = world.nodes[dragon.targetId]!;
-      const killed = node.shieldTicks > 0 ? 0 : node.troops * DRAGON.burnShare;
-      node.troops -= killed;
-      events.push({ type: 'dragonStrike', nodeId: node.id, killed });
-    }
-    dragon.strikeTick += EVERY_TICKS;
-    dragon.targetId = null;
+  const strikeTick = dragon.strikeTick;
+  const { warned, struck } = stepStrikeTimer(world, dragon, EVERY_TICKS, WARN_TICKS, () => dragonTarget(world));
+  if (warned) events.push({ type: 'dragonWarn', nodeId: warned.id, strikeTick });
+  if (struck) {
+    const killed = struck.shieldTicks > 0 ? 0 : struck.troops * DRAGON.burnShare;
+    struck.troops -= killed;
+    events.push({ type: 'dragonStrike', nodeId: struck.id, killed });
   }
   return events;
 }
