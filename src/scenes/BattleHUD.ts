@@ -27,6 +27,12 @@ interface SpellButton {
 
 /** In-battle overlay: gold, pause button, spell buttons, pause and result panels. */
 /** Victory star row: which of the three conditions were met, and their captions. */
+/** An on/off setting shown as a button label. */
+export interface Toggle {
+  on: boolean;
+  toggle: () => void;
+}
+
 export interface StarRow {
   earned: readonly boolean[];
   labels: readonly string[];
@@ -295,14 +301,16 @@ export class BattleHUD {
     }
   }
 
-  /** Pause panel; `sound` adds the sound on/off toggle (redraws the panel in place). */
+  /** Pause panel with the sound and music on/off toggles (a toggle redraws the panel in place). */
   showPause(
     onResume: () => void,
     onRestart: () => void,
     onExit: () => void,
-    sound: { on: boolean; toggle: () => void },
+    settings: { sound: Toggle; music: Toggle },
     fade = true,
   ): void {
+    const { sound, music } = settings;
+    const redraw = (next: { sound: Toggle; music: Toggle }): void => this.showPause(onResume, onRestart, onExit, next, false);
     this.showPanel(
       t('pause.title'),
       [
@@ -311,7 +319,14 @@ export class BattleHUD {
           label: t(sound.on ? 'pause.soundOn' : 'pause.soundOff'),
           onClick: () => {
             sound.toggle();
-            this.showPause(onResume, onRestart, onExit, { on: !sound.on, toggle: sound.toggle }, false);
+            redraw({ sound: { ...sound, on: !sound.on }, music });
+          },
+        },
+        {
+          label: t(music.on ? 'pause.musicOn' : 'pause.musicOff'),
+          onClick: () => {
+            music.toggle();
+            redraw({ sound, music: { ...music, on: !music.on } });
           },
         },
         { label: t('pause.restart'), onClick: onRestart },

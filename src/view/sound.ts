@@ -1,8 +1,9 @@
-// Sound effects synthesized with Web Audio: no audio assets (CLAUDE.md rule 8).
-// One entry point, playSfx(id). Sound is muted by the player setting and suspended while the tab is hidden
-// or an ad is shown (Yandex requirement).
+// Sound effects: a file public/audio/sfx_<id>.mp3 when SFX.files lists it, otherwise synthesized with Web Audio
+// (CLAUDE.md rule 8, docs/AUDIO.md A-4). One entry point, playSfx(id). Sound is muted by the player setting and
+// suspended while the tab is hidden or an ad is shown (Yandex requirement).
 
 import { SFX } from '../config/game';
+import { audioContext, audioUrl, isAudioSuspended, loadBuffer, resumeAudio, setAudioSuspended } from './audioContext';
 
 export type SfxId = 'send' | 'capture' | 'lost' | 'build' | 'fireball' | 'victory' | 'defeat' | 'click';
 
@@ -63,25 +64,21 @@ const EFFECTS: Record<SfxId, { notes: Note[]; noise?: { dur: number; gain: numbe
   },
 };
 
-let context: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuffer: AudioBuffer | null = null;
 let enabled = true;
-let suspended = false;
+/** Decoded effect files by id. */
+const files = new Map<SfxId, AudioBuffer>();
 
-function audio(): AudioContext | null {
-  if (context) return context;
-  const Ctor = typeof window === 'undefined' ? undefined : window.AudioContext;
-  if (!Ctor) return null;
-  try {
-    context = new Ctor();
-  } catch {
-    return null;
+function output(): { ctx: AudioContext; master: GainNode } | null {
+  const ctx = audioContext();
+  if (!ctx) return null;
+  if (!master) {
+    master = ctx.createGain();
+    master.gain.value = SFX.volume;
+    master.connect(ctx.destination);
   }
-  master = context.createGain();
-  master.gain.value = SFX.volume;
-  master.connect(context.destination);
-  return context;
+  return { ctx, master };
 }
 
 /** Player setting: sound on/off. */
@@ -93,19 +90,39 @@ export function isSoundEnabled(): boolean {
   return enabled;
 }
 
-/** Tab hidden or ad shown: stop all audio until resumed. */
+/** Tab hidden or ad shown: stop all audio (effects and music share the context) until resumed. */
 export function setSoundSuspended(value: boolean): void {
-  suspended = value;
-  if (!context) return;
-  void (value ? context.suspend() : context.resume()).catch(() => undefined);
+  setAudioSuspended(value);
+}
+
+/** Loads and decodes the effect files in the background; until one is ready its synth version plays. */
+export function preloadSfx(): void {
+  for (const id of SFX.files as readonly SfxId[]) {
+    if (files.has(id)) continue;
+    void loadBuffer(audioUrl(`sfx_${id}`)).then((buffer) => {
+      if (buffer) files.set(id, buffer);
+    });
+  }
 }
 
 export function playSfx(id: SfxId): void {
-  if (!enabled || suspended) return;
-  const ctx = audio();
-  if (!ctx || !master) return;
+  if (!enabled || isAudioSuspended()) return;
+  const out = output();
+  if (!out) return;
+  const { ctx, master } = out;
   // Browsers start the context suspended until a user gesture; the first tap resumes it.
-  if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
+  resumeAudio();
+
+  const file = files.get(id);
+  if (file) {
+    const src = ctx.createBufferSource();
+    src.buffer = file;
+    const gain = ctx.createGain();
+    gain.gain.value = SFX.fileVolume;
+    src.connect(gain).connect(master);
+    src.start(ctx.currentTime, Math.min(SFX.fileOffsetSec, file.duration));
+    return;
+  }
 
   const now = ctx.currentTime + 0.01;
   const effect = EFFECTS[id];

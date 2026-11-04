@@ -151,6 +151,42 @@ export const RESULT_PANEL = {
 export const SFX = {
   /** Master volume, 0..1. */
   volume: 0.5,
+  /** Gain of effects played from files (on top of `volume`); files are mastered louder than the synth. */
+  fileVolume: 0.8,
+  /** Effects with a file public/audio/sfx_<id>.mp3 (docs/AUDIO.md); the others stay synthesized. */
+  files: ['click'] as readonly string[],
+  /** Skipped at the start of effect files: MP3 encoder delay, s. */
+  fileOffsetSec: 0,
+} as const;
+
+/** Music tracks (looped) and jingles (once), files public/audio/<id>.mp3 — see docs/AUDIO.md. */
+export type MusicId = 'music_menu' | 'music_upgrades' | 'music_battle_1' | 'music_battle_2' | 'music_battle_3' | 'music_boss';
+export type JingleId = 'jingle_victory' | 'jingle_victory_3star' | 'jingle_defeat' | 'jingle_chapter';
+
+export const MUSIC = {
+  /** Music volume, 0..1. */
+  volume: 0.45,
+  /** Jingle volume, 0..1. */
+  jingleVolume: 0.6,
+  /** Music level while the battle pause panel is open, share of `volume`. */
+  pauseDuck: 0.4,
+  /** Crossfade between tracks, ms. */
+  crossfadeMs: 500,
+  /** Music fade-out when a battle ends, ms. */
+  endFadeMs: 300,
+  /** Tracks that have a file. Add the ID when a file is added to public/audio/; the rest stay silent. */
+  files: [
+    'music_menu',
+    'music_upgrades',
+    'music_battle_1',
+    'music_battle_2',
+    'music_battle_3',
+    'jingle_victory',
+    'jingle_victory_3star',
+    'jingle_defeat',
+  ] as ReadonlyArray<MusicId | JingleId>,
+  /** Battle rotation order (docs/AUDIO.md A-2); only IDs that are also in `files` play. */
+  battleTracks: ['music_battle_1', 'music_battle_2', 'music_battle_3'] as readonly MusicId[],
 } as const;
 export const HAPTICS = {
   /** Own node captured or lost, ms. */
@@ -203,5 +239,9 @@ export const MENU_LAYOUT = {
   /** Flowers per (100 CSS px)^2 on the menu meadow. */
   flowerDensity: 1.6,
   flowerColors: [0xfde047, 0xf9a8d4, 0xffffff, 0xc4b5fd],
+  /** Sound / music toggle buttons in the top-left corner, CSS px. */
+  toggleSize: 48,
+  toggleMargin: 10,
+  toggleGap: 8,
 } as const;
 
