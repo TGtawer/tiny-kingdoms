@@ -153,6 +153,14 @@ export const SPEED_UP = {
   multiplier: 2,
 } as const;
 
+/** Tutorial (TUTORIAL.md T-4, BALANCE.md «Обучение»). */
+export const TUTORIAL = {
+  /** Battle speed while a step waits for the player: 80% slower (corridor 0.15–0.25). */
+  slowMo: 0.2,
+  /** Info-only steps (`until: time`) last at most this long. */
+  infoStepMaxSec: 4,
+} as const;
+
 export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
   fireball: { killShare: number; minKill: number };
   reinforcement: { troops: number };

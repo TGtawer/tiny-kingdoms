@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { SPELLS, type LeaderId, type SpellId } from '../config/balance';
 import { COLORS, cssColor, HUD, LEADER_CARD, RESULT_PANEL } from '../config/game';
+import type { UiAnchor } from '../core/tutorial/tutorial';
 import { sideGoldRate } from '../core/sim/economy';
 import { spellCooldownMs } from '../core/sim/spells';
 import type { Side, World } from '../core/sim/World';
@@ -395,9 +396,18 @@ export class BattleHUD {
     if (this.leader) drawLeader(this.leaderIcon, this.leader, x0 + portrait / 2, barH / 2, portrait);
   }
 
-  /** Screen position of the gold counter (for tutorial highlights). */
-  goldAnchor(): { x: number; y: number } {
-    return { x: this.coin.x + px(16) + px(14), y: px(HUD.topBar) / 2 };
+  /** Screen position of a HUD element for tutorial highlights; null while it is hidden. */
+  anchor(anchor: UiAnchor): { x: number; y: number } | null {
+    switch (anchor) {
+      case 'gold':
+        return this.goldVisible ? { x: this.coin.x + px(16) + px(14), y: px(HUD.topBar) / 2 } : null;
+      case 'spell': {
+        const button = this.spells[0]?.button;
+        return button?.visible ? { x: button.x, y: button.y } : null;
+      }
+      case 'goal':
+        return this.goalText.visible ? { x: this.goalText.x, y: this.goalText.y } : null;
+    }
   }
 
   hideOverlay(): void {

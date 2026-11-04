@@ -9,7 +9,16 @@ import { armyPath, blockingNode, isPortalLink } from '../core/sim/pathfinding';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
-import { advanceTutorial, currentStep, startTutorial, type TutorialState, type UiEvent } from '../core/tutorial/tutorial';
+import {
+  advanceTutorial,
+  currentStep,
+  runClock,
+  shouldRunTutorial,
+  startTutorial,
+  tutorialSpeed,
+  type TutorialState,
+  type UiEvent,
+} from '../core/tutorial/tutorial';
 import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
@@ -145,7 +154,8 @@ export class BattleScene extends Phaser.Scene {
     this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy, this.world.goal, this.world.capitals.player));
     const enemy2 = this.level.enemy2;
     this.ai2 = enemy2 && this.level.nodes.some((n) => n.owner === 'enemy2') ? createAi('enemy2', aiParamsFromLevel(enemy2)) : null;
-    const script = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
+    // Hints and the slow-down only on the first playthrough (TUTORIAL.md T-4).
+    const script = shouldRunTutorial(this.level, getStore(this).progress) ? TUTORIALS[this.level.tutorial!] : undefined;
     this.tutorial = script ? startTutorial(script, this.world.tick) : null;
 
     this.background = this.add.graphics();
@@ -204,16 +214,23 @@ export class BattleScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     if (!this.paused && !this.ended) {
-      this.accumulator += Math.min(delta, MAX_FRAME_DELTA_MS) * this.speed;
-      while (this.accumulator >= TICK_MS && !this.ended) {
-        this.tickOnce();
-        this.accumulator -= TICK_MS;
-      }
+      // While a tutorial step waits for the player, the whole battle runs slowed down (TUTORIAL.md T-4);
+      // the step can end mid-frame, so the speed is re-read every tick.
+      this.accumulator = runClock(
+        this.accumulator,
+        Math.min(delta, MAX_FRAME_DELTA_MS),
+        () => this.speed * tutorialSpeed(this.tutorial),
+        () => {
+          this.tickOnce();
+          return !this.ended;
+        },
+      );
     }
     this.render(this.ended ? 1 : this.accumulator / TICK_MS);
     this.tutorialView?.update(time, {
       node: (id) => this.nodeViews.get(id) ?? null,
-      gold: () => this.hud.goldAnchor(),
+      ui: (anchor) => this.hud.anchor(anchor),
+      build: (type) => this.menu?.buttonPosition(type) ?? null,
     });
   }
 
@@ -873,7 +890,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private syncSpeed(): void {
-    const available = !this.ended && this.speedAvailable();
+    // No speed-up while a tutorial step slows the battle down.
+    const available = !this.ended && this.speedAvailable() && tutorialSpeed(this.tutorial) === 1;
     if (!available) this.speed = 1;
     this.hud.setSpeed(available, this.speed);
   }
@@ -887,6 +905,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.paused || this.ended) return;
     this.deselect();
     this.armed = this.armed === spell ? null : spell;
+    if (this.armed) this.uiEvents.push({ type: 'spellSelect', spell });
   }
 
   // ---- Pause ------------------------------------------------------------------------------------

@@ -13,6 +13,8 @@ export type BuildChoice = { kind: 'build'; building: BuildingType } | { kind: 'u
 
 interface Entry {
   button: Button;
+  /** The building this button builds (null for the upgrade button). */
+  building: BuildingType | null;
   cost: number | null;
   costText: Phaser.GameObjects.Text | null;
   shownCost: string;
@@ -143,7 +145,7 @@ export class BuildMenu extends Phaser.GameObjects.Container {
       // Max level: nothing to do. Locked buttons stay enabled so a tap can explain when they open.
       if (!item.choice && locked === undefined) button.setEnabled(false);
       this.add(button);
-      const entry: Entry = { button, cost: item.choice ? item.cost : null, costText, shownCost: '' };
+      const entry: Entry = { button, building: node.building ? null : item.icon, cost: item.choice ? item.cost : null, costText, shownCost: '' };
       this.entries.push(entry);
       this.placeCost(entry, String(item.cost ?? ''));
     });
@@ -153,6 +155,12 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     this.y = targetY + barH;
     scene.tweens.add({ targets: this, y: targetY, duration: 140, ease: 'Back.Out' });
     scene.add.existing(this);
+  }
+
+  /** Screen position of the button that builds `type` (for tutorial highlights); null if it is not in the menu. */
+  buttonPosition(type: BuildingType): { x: number; y: number } | null {
+    const entry = this.entries.find((e) => e.building === type);
+    return entry ? { x: this.x + entry.button.x, y: this.y + entry.button.y } : null;
   }
 
   /** Shows the price of affordable options and "N more" for the others. */
