@@ -176,6 +176,11 @@ export const SLOW_MO = {
 export const TUTORIAL = {
   /** Info-only steps (`until: time`) last at most this long. */
   infoStepMaxSec: 4,
+  /**
+   * A slow step the player ignores stops slowing the battle after this much battle time (≈33 s of real time at
+   * SLOW_MO.speed); its hint stays until it is done.
+   */
+  slowMaxSec: 5,
 } as const;
 
 export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {

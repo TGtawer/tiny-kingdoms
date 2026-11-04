@@ -85,9 +85,13 @@ export function currentStep(state: TutorialState): TutorialStep | null {
   return state.script.steps[state.index] ?? null;
 }
 
-/** Whether the tutorial slows the battle down now: a `slow` step is waiting for the player. */
-export function isTutorialSlow(state: TutorialState | null): boolean {
-  return state !== null && currentStep(state)?.slow === true;
+/**
+ * Whether the tutorial slows the battle down at `tick`: a `slow` step is waiting for the player, for at most
+ * TUTORIAL.slowMaxSec (a player who ignores the hint is not kept slowed down for the whole level).
+ */
+export function isTutorialSlow(state: TutorialState | null, tick: number): boolean {
+  if (state === null || currentStep(state)?.slow !== true) return false;
+  return (tick - state.stepStartTick) * TICK_MS < TUTORIAL.slowMaxSec * 1000;
 }
 
 /** Checks the current step against this tick's events; moves to the next step if done. Returns true on change. */
@@ -98,10 +102,49 @@ export function advanceTutorial(
   ui: readonly UiEvent[] = [],
 ): boolean {
   const step = currentStep(state);
-  if (!step || !isDone(step.until, state, world, events, ui)) return false;
-  state.index += 1;
-  state.stepStartTick = world.tick;
-  return true;
+  let changed = false;
+  if (step && isDone(step.until, state, world, events, ui)) {
+    state.index += 1;
+    changed = true;
+  }
+  // The player may do things before the hint asks (e.g. barracks built during the gold hint): a waiting step
+  // whose goal, or a later step's goal, is already reached in the world is skipped, up to that later step.
+  // An info step still runs its course first.
+  const steps = state.script.steps;
+  if (currentStep(state) && currentStep(state)!.until.type !== 'time') {
+    for (let j = steps.length - 1; j >= state.index; j--) {
+      if (goalReached(steps[j]!.until, world)) {
+        state.index = j + 1;
+        changed = true;
+        break;
+      }
+    }
+  }
+  if (changed) state.stepStartTick = world.tick;
+  return changed;
+}
+
+/**
+ * Whether a step's goal can be seen in the world right now, no matter when it happened: a building the player
+ * owns, a node the player holds. Other goals are events and only count when they happen during their step.
+ */
+export function goalReached(until: StepCondition, world: World): boolean {
+  switch (until.type) {
+    case 'build':
+      return Object.values(world.nodes).some(
+        (n) =>
+          n.owner === 'player' &&
+          n.building !== null &&
+          (!until.building || n.building.type === until.building) &&
+          (!until.node || n.id === until.node),
+      );
+    case 'capture':
+      return until.node !== undefined && world.nodes[until.node]?.owner === 'player';
+    case 'any':
+      return until.of.some((c) => goalReached(c, world));
+    default:
+      return false;
+  }
 }
 
 function isDone(

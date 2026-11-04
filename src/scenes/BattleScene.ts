@@ -942,7 +942,7 @@ export class BattleScene extends Phaser.Scene {
    * or a spell is armed and waits for its target. The battle runs at SLOW_MO.speed meanwhile.
    */
   private isChoosing(): boolean {
-    return isTutorialSlow(this.tutorial) || this.menu !== null || this.drag !== null || this.armed !== null;
+    return isTutorialSlow(this.tutorial, this.world.tick) || this.menu !== null || this.drag !== null || this.armed !== null;
   }
 
   /** The speed-up is offered only while the player holds more than SPEED_UP.unlockShare of all nodes. */
@@ -952,7 +952,7 @@ export class BattleScene extends Phaser.Scene {
 
   private syncSpeed(): void {
     // No speed-up button while a tutorial step slows the battle down.
-    const available = !this.ended && this.speedAvailable() && !isTutorialSlow(this.tutorial);
+    const available = !this.ended && this.speedAvailable() && !isTutorialSlow(this.tutorial, this.world.tick);
     if (!available) this.speed = 1;
     this.hud.setSpeed(available, this.speed);
   }
