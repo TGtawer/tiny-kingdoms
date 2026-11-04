@@ -10,7 +10,6 @@
     "aggression": 0.1,
     "aiStartDelayMs": 15000
   },
-  "tutorial": "c01_l02",
   "nodes": [
     {
       "id": "player",

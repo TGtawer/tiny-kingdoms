@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import { COLORS, HUD } from '../config/game';
-import type { BuildingType } from '../config/balance';
+import { SPECIAL_NODES, type BuildingType } from '../config/balance';
 import { dragPath, type FingerHint, type TutorialStep, type UiAnchor } from '../core/tutorial/tutorial';
 import { t } from '../i18n/i18n';
 import { px, textStyle, type Point } from './layout';
@@ -58,7 +58,8 @@ export class TutorialView {
     this.finger.setVisible(Boolean(shown?.finger));
     this.uiRing.setVisible(visible);
     if (!shown) return;
-    this.text.setText(t(shown.hint!));
+    // Hints may show balance numbers (e.g. the chest gold).
+    this.text.setText(t(shown.hint!, { gold: SPECIAL_NODES.chest.gold }));
     this.layout();
     this.panel.setAlpha(0);
     this.text.setAlpha(0);

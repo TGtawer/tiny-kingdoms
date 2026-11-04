@@ -2,61 +2,80 @@
   "c01_l01": {
     "steps": [
       {
-        "hint": "tut.send",
+        "hint": "tut.swipe",
         "highlight": [{ "node": "player" }, { "node": "n1" }],
         "finger": { "kind": "drag", "from": "player", "to": "n1" },
-        "until": { "type": "send" }
+        "until": { "type": "send" },
+        "slow": true
       },
-      { "hint": "tut.neutral", "until": { "type": "capture" } },
-      { "hint": "tut.goal", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 4 } }
-    ]
-  },
-  "c01_l02": {
-    "steps": [
-      { "hint": "tut.produce", "highlight": [{ "node": "player" }], "until": { "type": "time", "sec": 4 } },
-      { "hint": "tut.grow", "until": { "type": "capture" } },
+      { "until": { "type": "capture", "node": "n1" } },
+      {
+        "hint": "tut.swipeMany",
+        "highlight": [{ "node": "player" }, { "node": "n1" }, { "node": "n2" }],
+        "finger": { "kind": "drag", "path": ["player", "n1", "n2"] },
+        "until": { "type": "send", "minSources": 2 },
+        "slow": true
+      },
       { "hint": "tut.goal", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 4 } }
     ]
   },
   "c01_l03": {
     "steps": [
-      { "hint": "tut.gold", "highlight": [{ "ui": "gold" }], "until": { "type": "time", "sec": 4 } },
+      { "hint": "tut.gold", "highlight": [{ "ui": "gold" }], "until": { "type": "time", "sec": 3 } },
       {
-        "hint": "tut.buildBarracks",
+        "hint": "tut.tapCastle",
         "highlight": [{ "node": "player" }],
         "finger": { "kind": "tap", "node": "player" },
-        "until": { "type": "build", "building": "barracks" }
-      },
-      { "hint": "tut.barracks", "until": { "type": "time", "sec": 4 } },
-      { "hint": "tut.goal", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 4 } }
-    ]
-  },
-  "c01_l04": {
-    "steps": [
-      {
-        "hint": "tut.vein",
-        "highlight": [{ "node": "v" }],
-        "finger": { "kind": "drag", "from": "player", "to": "v" },
-        "until": { "type": "capture", "node": "v" }
+        "until": { "type": "select", "node": "player" },
+        "slow": true
       },
       {
-        "hint": "tut.buildMine",
-        "highlight": [{ "node": "v" }],
-        "finger": { "kind": "tap", "node": "v" },
-        "until": { "type": "build", "building": "mine" }
+        "hint": "tut.buildBarracks",
+        "highlight": [{ "build": "barracks" }],
+        "until": { "type": "build", "building": "barracks" },
+        "slow": true
       },
-      { "hint": "tut.mine", "highlight": [{ "ui": "gold" }], "until": { "type": "time", "sec": 4 } }
+      { "hint": "tut.barracks", "until": { "type": "time", "sec": 4 } }
     ]
   },
   "c01_l05": {
     "steps": [
       {
-        "hint": "tut.buildTower",
-        "highlight": [{ "node": "f" }],
-        "finger": { "kind": "tap", "node": "f" },
-        "until": { "type": "build", "building": "tower" }
+        "hint": "tut.takePass",
+        "highlight": [{ "node": "neck" }],
+        "finger": { "kind": "drag", "from": "player", "to": "neck" },
+        "until": { "type": "send", "to": "neck" },
+        "slow": true
       },
-      { "hint": "tut.tower", "until": { "type": "time", "sec": 4 } }
+      { "until": { "type": "capture", "node": "neck" } },
+      {
+        "hint": "tut.buildTower",
+        "highlight": [{ "node": "neck" }],
+        "finger": { "kind": "tap", "node": "neck" },
+        "until": { "type": "build", "building": "tower", "node": "neck" },
+        "slow": true
+      },
+      { "hint": "tut.towerHold", "highlight": [{ "node": "neck" }, { "ui": "goal" }], "until": { "type": "time", "sec": 4 } }
+    ]
+  },
+  "c01_l07": {
+    "requires": { "activeSpell": "reinforcement" },
+    "steps": [
+      {
+        "hint": "tut.tapSpell",
+        "highlight": [{ "ui": "spell" }],
+        "finger": { "kind": "tapUi", "ui": "spell" },
+        "until": { "type": "spellSelect" },
+        "slow": true
+      },
+      {
+        "hint": "tut.castSpell",
+        "highlight": [{ "node": "player" }],
+        "finger": { "kind": "tap", "node": "player" },
+        "until": { "type": "cast", "spell": "reinforcement" },
+        "slow": true
+      },
+      { "hint": "tut.spellCost", "highlight": [{ "ui": "spell" }], "until": { "type": "time", "sec": 4 } }
     ]
   },
   "c01_l08": {

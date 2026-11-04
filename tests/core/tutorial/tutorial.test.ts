@@ -186,11 +186,24 @@ describe('slow-down (TUTORIAL.md T-4)', () => {
 describe('first playthrough only', () => {
   it('runs the tutorial only while the level is not won yet', () => {
     const level = ALL_LEVELS[0]!;
+    const script = TUTORIALS[level.tutorial!];
     const progress = defaultProgress();
-    expect(shouldRunTutorial(level, progress)).toBe(true);
+    expect(shouldRunTutorial(level, progress, script)).toBe(true);
     progress.completed.push(level.id);
-    expect(shouldRunTutorial(level, progress)).toBe(false);
-    expect(shouldRunTutorial({ ...level, tutorial: undefined }, defaultProgress())).toBe(false);
+    expect(shouldRunTutorial(level, progress, script)).toBe(false);
+    expect(shouldRunTutorial({ ...level, tutorial: undefined }, defaultProgress(), script)).toBe(false);
+  });
+
+  it('the spell lesson (level 7) runs only with reinforcement as the active spell', () => {
+    const level = ALL_LEVELS[6]!;
+    const script = TUTORIALS[level.tutorial!];
+    const progress = defaultProgress();
+    expect(shouldRunTutorial(level, progress, script)).toBe(false);
+    progress.unlockedSpells = ['reinforcement', 'fireball'];
+    progress.activeSpell = 'fireball';
+    expect(shouldRunTutorial(level, progress, script)).toBe(false);
+    progress.activeSpell = 'reinforcement';
+    expect(shouldRunTutorial(level, progress, script)).toBe(true);
   });
 });
 

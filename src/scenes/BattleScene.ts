@@ -155,7 +155,8 @@ export class BattleScene extends Phaser.Scene {
     const enemy2 = this.level.enemy2;
     this.ai2 = enemy2 && this.level.nodes.some((n) => n.owner === 'enemy2') ? createAi('enemy2', aiParamsFromLevel(enemy2)) : null;
     // Hints and the slow-down only on the first playthrough (TUTORIAL.md T-4).
-    const script = shouldRunTutorial(this.level, getStore(this).progress) ? TUTORIALS[this.level.tutorial!] : undefined;
+    const levelScript = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
+    const script = shouldRunTutorial(this.level, getStore(this).progress, levelScript) ? levelScript : undefined;
     this.tutorial = script ? startTutorial(script, this.world.tick) : null;
 
     this.background = this.add.graphics();

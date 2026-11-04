@@ -1,6 +1,7 @@
 import { TICK_MS, TUTORIAL, type BuildingType, type SpellId } from '../../config/balance';
 import type { LevelData } from '../level/schema';
 import type { Progress } from '../meta/Progress';
+import { activeSpell } from '../meta/spellbook';
 import type { TickEvent } from '../sim/tick';
 import type { World } from '../sim/World';
 
@@ -52,6 +53,8 @@ export interface TutorialStep {
 }
 
 export interface TutorialScript {
+  /** Run only if the player takes this spell into battle (the spell lesson, TUTORIAL.md T-5). */
+  requires?: { activeSpell: SpellId };
   steps: TutorialStep[];
 }
 
@@ -67,9 +70,13 @@ export function startTutorial(script: TutorialScript, tick: number): TutorialSta
   return { script, index: 0, stepStartTick: tick };
 }
 
-/** The tutorial runs only on the first playthrough of a level; replays have no hints and no slow-down. */
-export function shouldRunTutorial(level: LevelData, progress: Progress): boolean {
-  return level.tutorial !== undefined && !progress.completed.includes(level.id);
+/**
+ * The tutorial runs only on the first playthrough of a level (replays have no hints and no slow-down),
+ * and only if what it teaches is there (`requires`).
+ */
+export function shouldRunTutorial(level: LevelData, progress: Progress, script: TutorialScript | undefined): boolean {
+  if (!script || level.tutorial === undefined || progress.completed.includes(level.id)) return false;
+  return !script.requires || activeSpell(progress) === script.requires.activeSpell;
 }
 
 export function currentStep(state: TutorialState): TutorialStep | null {
