@@ -525,6 +525,10 @@ export const MENU_NIGHT = {
   moon: { x: 1060, y: 120, r: 36, halo: 110, color: '#fff4cf' },
   sky: ['#0f1b3d', '#22356b', '#2d4a7a'],
   castle: '#16233f',
+  /** Battlements: size and spacing; towers narrower than roofMaxW get a pointed roof of height roofH instead. */
+  merlon: { w: 7, h: 8, every: 11 },
+  roofMaxW: 50,
+  roofH: 40,
   /** Walls between the towers [x, y, width, height]: deep enough to reach into the hill (no sky below them). */
   walls: [
     [90, 520, 330, 100],

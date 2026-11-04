@@ -384,8 +384,13 @@ export class NightScreen extends Screen {
     const skyH = frameY(f, N.stars.maxY);
     const count = Math.round((N.stars.count * w) / (N.ref.w * f.s));
     for (let i = 0; i < count; i++) {
-      const x = r0() * w;
-      const y = r0() * skyH;
+      // Stars stay in the open sky: one that lands on a tower or a roof is moved to another spot.
+      let x = r0() * w;
+      let y = r0() * skyH;
+      for (let tries = 0; tries < 20 && onCastle((x - f.ox) / f.s, (y - f.oy) / f.s); tries++) {
+        x = r0() * w;
+        y = r0() * skyH;
+      }
       const size = (0.6 + r0() * 1.7) * f.s;
       const img = this.image(dot, x, y, MENU_DEPTH.ambient).setScale(size / 8).setTint(N.stars.color);
       this.stars.push({ img, phase: r0() * Math.PI * 2, x });
@@ -547,12 +552,14 @@ export class NightScreen extends Screen {
     ctx.fill();
     for (const [x, tw, th] of N.towers) {
       ctx.fillRect(x - tw / 2, 570 - th, tw, th + 60);
-      for (let i = 0; i < tw; i += 11) ctx.fillRect(x - tw / 2 + i, 570 - th - 8, 7, 8);
+      // Battlements fit the tower edge to edge; towers with a pointed roof have none (they poked out under it).
+      if (hasRoof(tw)) continue;
+      for (const mx of merlons(tw)) ctx.fillRect(x - tw / 2 + mx, 570 - th - MERLON.h, MERLON.w, MERLON.h);
     }
-    for (const [x, tw, th] of N.towers.filter(([, tw]) => tw < 50)) {
+    for (const [x, tw, th] of N.towers.filter(([, tw]) => hasRoof(tw))) {
       ctx.beginPath();
       ctx.moveTo(x - tw / 2 - 6, 570 - th);
-      ctx.lineTo(x, 570 - th - 40);
+      ctx.lineTo(x, 570 - th - N.roofH);
       ctx.lineTo(x + tw / 2 + 6, 570 - th);
       ctx.fill();
     }
@@ -560,6 +567,33 @@ export class NightScreen extends Screen {
     ctx.fillStyle = N.ground.color;
     ctx.fillRect(0, N.ground.y, N.ref.w, 80);
   }
+}
+
+const MERLON = MENU_NIGHT.merlon;
+
+function hasRoof(towerW: number): boolean {
+  return towerW < MENU_NIGHT.roofMaxW;
+}
+
+/** Left edges of the battlements, spread evenly so the first and the last sit on the tower edges. */
+function merlons(towerW: number): number[] {
+  const n = Math.max(2, Math.round((towerW - MERLON.w) / MERLON.every) + 1);
+  const step = (towerW - MERLON.w) / (n - 1);
+  return Array.from({ length: n }, (_, i) => i * step);
+}
+
+/** Whether a reference-px point is on a tower, its battlements or its roof (with a small margin for the star size). */
+function onCastle(x: number, y: number): boolean {
+  const pad = 3;
+  for (const [tx, tw, th] of MENU_NIGHT.towers) {
+    const top = 570 - th - (hasRoof(tw) ? 0 : MERLON.h);
+    if (Math.abs(x - tx) <= tw / 2 + pad && y >= top - pad) return true;
+    if (!hasRoof(tw)) continue;
+    const apex = 570 - th - MENU_NIGHT.roofH;
+    const half = tw / 2 + 6;
+    if (y >= apex - pad && y <= 570 - th && Math.abs(x - tx) <= (half * (y - apex)) / MENU_NIGHT.roofH + pad) return true;
+  }
+  return false;
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
