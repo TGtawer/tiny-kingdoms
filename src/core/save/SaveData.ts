@@ -1,9 +1,10 @@
 import { BONUSES, SPELL_IDS, SPELL_UPGRADES, STARS, type SpellId } from '../../config/balance';
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
+import { TOUR_STEPS, type TourState, type TourStep } from '../meta/onboarding';
 import { totalStars } from '../meta/stars';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 export interface SaveData {
   version: number;
@@ -60,6 +61,13 @@ export const MIGRATIONS: Record<number, Migration> = {
       version: 7,
       progress: { ...progress, spellUpgrades: {}, spentStars: 0, unlockedSpells: unlocked, activeSpell: unlocked[0] ?? null },
     };
+  },
+  // v8 (TUTORIAL.md T-6): the Upgrades tour. Players who already won level 6 count it as done.
+  7: (d) => {
+    const progress: Record<string, unknown> = isObject(d.progress) ? { ...d.progress } : {};
+    const completed = Array.isArray(progress.completed) ? progress.completed : [];
+    progress.onboarding = { upgradesTour: completed.includes('c01_l06') ? 'done' : 'pending' };
+    return { ...d, version: 8, progress };
   },
 };
 
@@ -126,6 +134,10 @@ function sanitizeProgress(raw: unknown): Progress {
   }
   const active = raw.activeSpell as SpellId;
   progress.activeSpell = progress.unlockedSpells.includes(active) ? active : (progress.unlockedSpells[0] ?? null);
+  const tour = isObject(raw.onboarding) ? raw.onboarding.upgradesTour : undefined;
+  if (tour === 'done' || tour === 'pending' || TOUR_STEPS.includes(tour as TourStep)) {
+    progress.onboarding.upgradesTour = tour as TourState;
+  }
   return progress;
 }
 

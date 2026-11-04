@@ -1,4 +1,5 @@
 import type { SpellId } from '../../config/balance';
+import type { TourState } from './onboarding';
 import type { LevelData } from '../level/schema';
 
 export type BonusId = 'startArmy' | 'troopProduction' | 'goldIncome' | 'unitStrength';
@@ -19,6 +20,8 @@ export interface Progress {
   unlockedSpells: SpellId[];
   /** The unlocked spell taken into battle; null until the first one is unlocked. */
   activeSpell: SpellId | null;
+  /** Guided tours outside battle (see onboarding.ts). */
+  onboarding: { upgradesTour: TourState };
 }
 
 export function defaultProgress(): Progress {
@@ -31,6 +34,7 @@ export function defaultProgress(): Progress {
     spentStars: 0,
     unlockedSpells: [],
     activeSpell: null,
+    onboarding: { upgradesTour: 'pending' },
   };
 }
 

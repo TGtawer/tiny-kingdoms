@@ -350,6 +350,22 @@ export const LEADER_CARD = {
   hudPortrait: 34,
 } as const;
 
+/** Guided-tour overlay outside battle (view/Spotlight.ts, TUTORIAL.md T-6), CSS px / ms. */
+export const SPOTLIGHT = {
+  depth: 500,
+  dimAlpha: 0.62,
+  /** Space around the highlighted element and the corner radius of the hole. */
+  pad: 6,
+  radius: 14,
+  pulseMs: 650,
+  /** Finger tap loop, half period. */
+  tapMs: 420,
+  textMaxWidth: 340,
+  textGap: 14,
+  /** Extra room under the hole for the finger before the text. */
+  fingerRoom: 46,
+} as const;
+
 /** How long the special node info label stays, ms. */
 export const INFO_LABEL_MS = 2500;
 

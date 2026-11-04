@@ -1,8 +1,9 @@
 import * as Phaser from 'phaser';
 import { BONUSES, SPELL_UPGRADES, SPELL_IDS, type SpellId } from '../config/balance';
-import { COLORS } from '../config/game';
+import { COLORS, HUD } from '../config/game';
 import { BONUS_IDS, type BonusId } from '../core/meta/Progress';
 import { activeSpell, claimableSpell, setActiveSpell, spellUnlockLevel, unlockSpell } from '../core/meta/spellbook';
+import { advanceTour, claimTourSpell, tourStep } from '../core/meta/onboarding';
 import { freeStars } from '../core/meta/stars';
 import { bonusCost, buyBonus, buySpellUpgrade, spellUpgradeCost } from '../core/meta/upgrades';
 import { t } from '../i18n/i18n';
@@ -11,6 +12,8 @@ import { drawCrystal, drawLock, drawStar } from '../view/icons';
 import { px, textStyle } from '../view/layout';
 import { mapTrack } from '../core/audio/playlist';
 import { audioFiles, playMusic } from '../view/music';
+import { ringBurst, sparks } from '../view/effects';
+import { Spotlight, type SpotRect } from '../view/Spotlight';
 import { drawMeadow, topBar } from '../view/ui';
 import { getLevel } from '../levels';
 import { getStore } from './registry';
@@ -45,6 +48,12 @@ const HEADER_H = 30;
 /** Permanent bonuses bought with crystals and spell upgrades bought with stars (GDD 4.3, BALANCE.md). */
 export class UpgradesScene extends Phaser.Scene {
   private from: 'MenuScene' | 'ChapterMapScene' = 'MenuScene';
+  /** Upgrades tour steps 2–5 (TUTORIAL.md T-6). */
+  private spotlight: Spotlight | null = null;
+  /** Where the tour points, recorded while building the screen. */
+  private areas: { crystals: SpotRect; spells: SpotRect; claim: SpotRect | null; back: SpotRect } | null = null;
+  /** Set when the tour spell was just claimed: the unlock burst plays there after the rebuild. */
+  private burstAt: { x: number; y: number } | null = null;
 
   constructor() {
     super('UpgradesScene');
@@ -63,6 +72,8 @@ export class UpgradesScene extends Phaser.Scene {
   }
 
   private build(): void {
+    this.spotlight?.destroy();
+    this.spotlight = null;
     this.children.removeAll(true);
     const w = this.scale.width;
     const h = this.scale.height;
@@ -71,7 +82,10 @@ export class UpgradesScene extends Phaser.Scene {
 
     const store = getStore(this);
     const progress = store.progress;
-    const barH = topBar(this, t('upgrades.title'), progress.crystals, () => this.scene.start(this.from));
+    // Reached from the main menu during tour step 1: the Upgrades screen is where the tour goes on.
+    if (advanceTour(progress, 1)) store.commit();
+    const barH = topBar(this, t('upgrades.title'), progress.crystals, () => this.onBack());
+    const backSize = px(HUD.pauseButton);
 
     const afterBuy = (ok: boolean): void => {
       if (!ok) return;
@@ -123,7 +137,7 @@ export class UpgradesScene extends Phaser.Scene {
         currency: 'star',
         balance: free,
         ...(isOpen ? { spell: { active: id === active, select: () => afterBuy(id !== active && setActiveSpell(progress, id)) } } : {}),
-        ...(!isOpen && id === claimable ? { open: () => afterBuy(unlockSpell(progress, id)) } : {}),
+        ...(!isOpen && id === claimable ? { open: () => this.claim(id) } : {}),
         ...(!isOpen && id !== claimable ? { locked: lockedText(id) } : {}),
         buy: () => afterBuy(buySpellUpgrade(progress, id) === 'ok'),
       };
@@ -156,8 +170,88 @@ export class UpgradesScene extends Phaser.Scene {
 
     header(t('upgrades.bonuses'));
     bonusRows.forEach(row);
+    const spellsTop = y;
     header(t('upgrades.spells'), free);
+    // The "Open" button of the claimable spell row (same place as in drawRow).
+    const claimIndex = claimable ? SPELL_IDS.indexOf(claimable) : -1;
+    const buttonW = px(104);
+    const claimCy = y + claimIndex * rowH + (rowH - px(6)) / 2;
+    const claimH = Math.max(px(48), rowH - px(16));
+    const claim = claimIndex >= 0 ? { x: x0 + listW - buttonW - px(8), y: claimCy - claimH / 2, w: buttonW, h: claimH } : null;
     spellRows.forEach(row);
+
+    this.areas = {
+      crystals: { x: w - px(130), y: px(4), w: px(124), h: barH - px(8) },
+      spells: { x: x0, y: spellsTop, w: listW, h: y - spellsTop },
+      claim,
+      back: { x: px(12), y: barH / 2 - backSize / 2, w: backSize, h: backSize },
+    };
+    this.showTour();
+    if (this.burstAt) {
+      const { x, y: by } = this.burstAt;
+      this.burstAt = null;
+      ringBurst(this, x, by, px(40), COLORS.reinforcement);
+      sparks(this, x, by, COLORS.gold, 14, px(60), 700, px(5), 50);
+    }
+  }
+
+  /** Back: to where the player came from; the last tour step goes to the chapter map and ends the tour. */
+  private onBack(): void {
+    const store = getStore(this);
+    if (advanceTour(store.progress, 5)) {
+      store.commit();
+      this.scene.start('ChapterMapScene');
+      return;
+    }
+    this.scene.start(this.from);
+  }
+
+  /** Claims a story spell (in the tour: unlocked and made active, with a burst). */
+  private claim(spell: SpellId): void {
+    const store = getStore(this);
+    const claim = this.areas?.claim;
+    const ok = claimTourSpell(store.progress) || unlockSpell(store.progress, spell);
+    if (!ok) return;
+    store.commit();
+    if (claim) this.burstAt = { x: claim.x + claim.w / 2, y: claim.y + claim.h / 2 };
+    this.build();
+  }
+
+  /** Spotlight for the current tour step (TUTORIAL.md T-6). */
+  private showTour(): void {
+    const store = getStore(this);
+    const step = tourStep(store.progress);
+    const areas = this.areas;
+    if (!areas || step === null) return;
+    const next = (from: 2 | 3): void => {
+      if (advanceTour(store.progress, from)) store.commit();
+      this.build();
+    };
+    const center = (r: SpotRect): { x: number; y: number } => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+    switch (step) {
+      case 2:
+        this.spotlight = new Spotlight(this, { hole: areas.crystals, text: t('tour.crystals'), onTapAnywhere: () => next(2) });
+        break;
+      case 3:
+        this.spotlight = new Spotlight(this, { hole: areas.spells, text: t('tour.stars'), onTapAnywhere: () => next(3) });
+        break;
+      case 4: {
+        const spell = claimableSpell(store.progress);
+        if (!areas.claim || !spell) break;
+        // Until the spell is claimed nothing else works, Back included.
+        this.spotlight = new Spotlight(this, {
+          hole: areas.claim,
+          text: t('tour.claim', { spell: t(`spell.${spell}`) }),
+          finger: center(areas.claim),
+        });
+        break;
+      }
+      case 5:
+        this.spotlight = new Spotlight(this, { hole: areas.back, text: t('tour.done'), finger: center(areas.back) });
+        break;
+      default:
+        break;
+    }
   }
 
   private drawRow(r: Row, x: number, y: number, width: number, height: number): void {

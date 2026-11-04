@@ -113,5 +113,10 @@
   "tut.towerHold": "The tower hits every enemy army. Hold on!",
   "tut.tapSpell": "Tap the spell",
   "tut.castSpell": "Choose your circle",
-  "tut.spellCost": "Spells cost gold and need to recharge"
+  "tut.spellCost": "Spells cost gold and need to recharge",
+  "tour.newSpell": "A new spell awaits!",
+  "tour.crystals": "Crystals come from wins. Spend them on permanent bonuses",
+  "tour.stars": "Stars come from great wins. Spend them on spell upgrades",
+  "tour.claim": "Unlock {spell}",
+  "tour.done": "Done! Back to battle"
 }

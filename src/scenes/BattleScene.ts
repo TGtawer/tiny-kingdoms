@@ -22,6 +22,7 @@ import {
 import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
+import { tourStep } from '../core/meta/onboarding';
 import { activeSpell, claimableSpell, grantWinSpells } from '../core/meta/spellbook';
 import { bestStars, recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
 import { isCompleted } from '../core/meta/Progress';
@@ -466,7 +467,8 @@ export class BattleScene extends Phaser.Scene {
     const next = nextLevel(this.level.id);
     if (next) {
       this.hud.showResult(t('result.victory'), true, crystals, total, [
-        { label: t('result.next'), onClick: () => this.scene.restart({ levelId: next.id }) },
+        // After the first win on level 6 "Next" goes to the map, where the Upgrades tour starts (TUTORIAL.md T-6).
+        { label: t('result.next'), onClick: () => (tourStep(getStore(this).progress) !== null ? this.toMap() : this.scene.restart({ levelId: next.id })) },
         replay,
         toMap,
       ], { stars, tip: winTip });

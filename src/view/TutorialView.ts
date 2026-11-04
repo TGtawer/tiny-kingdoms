@@ -3,6 +3,7 @@ import { COLORS, HUD } from '../config/game';
 import { SPECIAL_NODES, type BuildingType } from '../config/balance';
 import { dragPath, type FingerHint, type TutorialStep, type UiAnchor } from '../core/tutorial/tutorial';
 import { t } from '../i18n/i18n';
+import { drawFinger } from './icons';
 import { px, textStyle, type Point } from './layout';
 
 export interface TutorialContext {
@@ -132,23 +133,8 @@ export class TutorialView {
     g.setAlpha(phase > 0.85 ? (1 - phase) / 0.15 : 1);
   }
 
-  /** Cartoon pointing hand; the fingertip is at (0, 0). */
   private drawFinger(): void {
-    const g = this.finger;
-    const s = px(1);
-    const line = px(2.5);
-    g.clear();
-    // Finger.
-    g.fillStyle(0xffffff, 1).fillRoundedRect(-7 * s, -2 * s, 14 * s, 30 * s, 7 * s);
-    g.lineStyle(line, COLORS.outline, 1).strokeRoundedRect(-7 * s, -2 * s, 14 * s, 30 * s, 7 * s);
-    // Palm with folded fingers.
-    g.fillStyle(0xffffff, 1).fillRoundedRect(-9 * s, 18 * s, 30 * s, 26 * s, 10 * s);
-    g.lineStyle(line, COLORS.outline, 1).strokeRoundedRect(-9 * s, 18 * s, 30 * s, 26 * s, 10 * s);
-    g.lineStyle(px(1.5), COLORS.outline, 0.6);
-    g.lineBetween(7 * s, 24 * s, 7 * s, 32 * s);
-    g.lineBetween(14 * s, 24 * s, 14 * s, 32 * s);
-    // Tap glow at the tip.
-    g.fillStyle(COLORS.hint, 0.6).fillCircle(0, 0, 5 * s);
+    drawFinger(this.finger, px(1));
   }
 
   destroy(): void {

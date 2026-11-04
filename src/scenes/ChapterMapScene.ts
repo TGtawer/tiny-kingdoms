@@ -5,6 +5,7 @@ import { mapTrack } from '../core/audio/playlist';
 import type { LevelData } from '../core/level/schema';
 import { currentLevel, isCompleted, isUnlocked } from '../core/meta/Progress';
 import { bestStars } from '../core/meta/stars';
+import { advanceTour, tourStep } from '../core/meta/onboarding';
 import { isUpgradesOpen } from '../core/meta/unlocks';
 import { t } from '../i18n/i18n';
 import { ALL_LEVELS, CHAPTERS, getLevel } from '../levels';
@@ -14,6 +15,7 @@ import { clamp, px, textStyle, type Point } from '../view/layout';
 import { MAP_DEPTH, MapScenery } from '../view/MapScenery';
 import { audioFiles, playMusic } from '../view/music';
 import { playSfx } from '../view/sound';
+import { Spotlight, type SpotRect } from '../view/Spotlight';
 import { lockedButton, meadowTile, textButton, topBar } from '../view/ui';
 import { getStore } from './registry';
 
@@ -73,6 +75,9 @@ export class ChapterMapScene extends Phaser.Scene {
   private reveal: MapReveal | null = null;
   /** The running animation: its start and the levels involved (`next` null: no level to open). */
   private anim: { t0: number; won: number; next: number | null } | null = null;
+  /** Upgrades tour, step 1 (TUTORIAL.md T-6): everything but the Upgrades button is dimmed. */
+  private spotlight: Spotlight | null = null;
+  private upgradesRect: SpotRect | null = null;
 
   constructor() {
     super('ChapterMapScene');
@@ -131,6 +136,8 @@ export class ChapterMapScene extends Phaser.Scene {
   private build(): void {
     this.pulse?.stop();
     this.pulse = null;
+    this.spotlight?.destroy();
+    this.spotlight = null;
     this.children.removeAll(true);
     this.nodes.clear();
     const w = this.scale.width;
@@ -217,10 +224,13 @@ export class ChapterMapScene extends Phaser.Scene {
     const strip = this.add.graphics();
     strip.fillStyle(COLORS.outline, 0.28).fillRect(0, h - bottomH, w, bottomH);
     const upW = Math.min(w - px(48), px(260));
+    this.upgradesRect = { x: w / 2 - upW / 2, y: h - bottomH / 2 - px(28), w: upW, h: px(56) };
     if (isUpgradesOpen(progress)) {
-      textButton(this, w / 2, h - bottomH / 2, upW, px(56), t('menu.upgrades'), () =>
-        this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }),
-      );
+      textButton(this, w / 2, h - bottomH / 2, upW, px(56), t('menu.upgrades'), () => {
+        const store = getStore(this);
+        if (advanceTour(store.progress, 1)) store.commit();
+        this.scene.start('UpgradesScene', { from: 'ChapterMapScene' });
+      });
     } else {
       // Locked until the first win on its level (TUTORIAL.md T-3): a tap says when it opens.
       const afterIndex = getLevel(FEATURE_UNLOCKS.upgrades.afterWin)?.index ?? 0;
@@ -238,6 +248,21 @@ export class ChapterMapScene extends Phaser.Scene {
     // Start with the next level in view.
     const focus = next && levels.includes(next) ? points[levels.indexOf(next)]! : points[0];
     if (focus) cam.setScroll(...this.scrollFor(focus));
+    // The tour waits for the level-open animation (finishReveal shows it then).
+    if (!this.reveal) this.showTour();
+  }
+
+  /** Upgrades tour step 1: only the Upgrades button stays bright and pressable, a finger points at it. */
+  private showTour(): void {
+    this.spotlight?.destroy();
+    this.spotlight = null;
+    const rect = this.upgradesRect;
+    if (!rect || tourStep(getStore(this).progress) !== 1) return;
+    this.spotlight = new Spotlight(this, {
+      hole: rect,
+      text: t('tour.newSpell'),
+      finger: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
+    });
   }
 
   /** Camera scroll that puts `p` in the middle of the visible band, within the world. */
@@ -431,6 +456,7 @@ export class ChapterMapScene extends Phaser.Scene {
     this.scenery?.setQuiet(false);
     const current = currentLevel(progress, ALL_LEVELS);
     if (current) this.startPulse(current.id);
+    this.showTour();
   }
 
   // ---- Scrolling --------------------------------------------------------------------------------

@@ -1,12 +1,13 @@
 import * as Phaser from 'phaser';
 import { COLORS } from '../config/game';
+import { tourScene, tourStep } from '../core/meta/onboarding';
 import { FIRST_LEVEL } from '../levels';
 import type { BattleSceneData } from './BattleScene';
 import { getStore } from './registry';
 
 /**
  * First scene. Nothing to load yet (graphics are drawn in code): goes to the main menu,
- * or into the first battle on the very first launch.
+ * into the first battle on the very first launch, or back into an unfinished Upgrades tour.
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -28,6 +29,13 @@ export class BootScene extends Phaser.Scene {
     if (getStore(this).progress.completed.length === 0) {
       const data: BattleSceneData = { levelId: FIRST_LEVEL.id };
       this.scene.start('BattleScene', data);
+      return;
+    }
+    // An unfinished Upgrades tour (TUTORIAL.md T-6) goes on where it stopped: the map or straight into Upgrades.
+    const step = tourStep(getStore(this).progress);
+    if (step !== null) {
+      const scene = tourScene(step);
+      this.scene.start(scene, scene === 'UpgradesScene' ? { from: 'ChapterMapScene' } : {});
       return;
     }
     this.scene.start('MenuScene');
