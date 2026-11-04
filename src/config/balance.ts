@@ -166,7 +166,7 @@ export const SPEED_UP = {
 
 /**
  * Slow-down while the player is choosing (BALANCE.md «Замедление»): a tutorial step waits for them, the build menu
- * is open, or a swipe is being drawn. The whole battle runs at `speed`: 85% slower.
+ * is open, a swipe is being drawn, or a spell waits for its target. The whole battle runs at `speed`: 85% slower.
  */
 export const SLOW_MO = {
   speed: 0.15,

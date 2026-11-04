@@ -938,11 +938,11 @@ export class BattleScene extends Phaser.Scene {
   // ---- Speed-up ---------------------------------------------------------------------------------
 
   /**
-   * The player is choosing: a tutorial step waits for them, the build menu is open, or a swipe is being drawn.
-   * The battle runs at SLOW_MO.speed meanwhile.
+   * The player is choosing: a tutorial step waits for them, the build menu is open, a swipe is being drawn,
+   * or a spell is armed and waits for its target. The battle runs at SLOW_MO.speed meanwhile.
    */
   private isChoosing(): boolean {
-    return isTutorialSlow(this.tutorial) || this.menu !== null || this.drag !== null;
+    return isTutorialSlow(this.tutorial) || this.menu !== null || this.drag !== null || this.armed !== null;
   }
 
   /** The speed-up is offered only while the player holds more than SPEED_UP.unlockShare of all nodes. */

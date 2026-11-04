@@ -2,8 +2,9 @@ import { SLOW_MO, TICK_MS } from '../../config/balance';
 
 /**
  * Simulation speed for this moment of the battle. While the player is choosing something (a tutorial step waits
- * for them, the build menu is open, a swipe is being drawn) the whole battle, armies on the road included,
- * runs at SLOW_MO.speed; the speed-up does not apply then. Otherwise the speed-up multiplier (1 = normal).
+ * for them, the build menu is open, a swipe is being drawn, a spell waits for its target) the whole battle,
+ * armies on the road included, runs at SLOW_MO.speed; the speed-up does not apply then. Otherwise the speed-up
+ * multiplier (1 = normal).
  */
 export function battleSpeed(speedUp: number, slowed: boolean): number {
   return slowed ? SLOW_MO.speed : speedUp;
