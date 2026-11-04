@@ -5,7 +5,7 @@
   "playerStartGold": 30,
   "enemy": {
     "productionMult": 0.7,
-    "startGold": 20,
+    "startGold": 40,
     "aiThinkMs": 1000,
     "aggression": 0.5,
     "aiStartDelayMs": 10000
@@ -30,7 +30,7 @@
       "size": "medium",
       "owner": "neutral",
       "troops": 6,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -80,7 +80,7 @@
       "size": "medium",
       "owner": "neutral",
       "troops": 8,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {

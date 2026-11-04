@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DRAGON, SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
-import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS, MUSIC, type JingleId } from '../config/game';
+import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -185,7 +185,8 @@ export class BattleScene extends Phaser.Scene {
     this.platform.gameplayStart();
 
     // Enemy leader: portrait in the HUD and a short card before the battle (the battle waits for it).
-    const leader = this.level.enemy.leader ?? null;
+    // Turned off by SHOW_LEADER_INTRO; the leader still drives the AI behavior.
+    const leader = SHOW_LEADER_INTRO ? (this.level.enemy.leader ?? null) : null;
     this.hud.setLeader(leader);
     if (leader) {
       this.paused = true;

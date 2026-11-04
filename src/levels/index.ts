@@ -13,6 +13,7 @@ import l09 from './chapter01/level09.json';
 import l10 from './chapter01/level10.json';
 import tutorials from './tutorials.json';
 import devCitadel from './dev/dev_citadel.json';
+import devDragon from './dev/dev_dragon.json';
 import devHold from './dev/dev_hold.json';
 import devSpecials from './dev/dev_specials.json';
 import devSurvive from './dev/dev_survive.json';
@@ -28,10 +29,10 @@ export const ALL_LEVELS: readonly LevelData[] = CHAPTERS.flat();
 export const FIRST_LEVEL: LevelData = ALL_LEVELS[0]!;
 
 /**
- * Sandbox levels for mechanics that no chapter uses yet (special nodes, goals, citadel, three sides).
+ * Sandbox levels for mechanics that no chapter uses yet (special nodes, goals, citadel, three sides, dragon).
  * Not part of the chapters; open in dev with ?level=<id>, e.g. ?level=dev_specials.
  */
-export const DEV_LEVELS: readonly LevelData[] = [devSpecials, devHold, devSurvive, devCitadel, devThree].map(loadLevel);
+export const DEV_LEVELS: readonly LevelData[] = [devSpecials, devHold, devSurvive, devCitadel, devThree, devDragon].map(loadLevel);
 
 export const TUTORIALS: Readonly<Record<string, TutorialScript>> = tutorials as Record<string, TutorialScript>;
 

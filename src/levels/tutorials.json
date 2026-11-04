@@ -59,10 +59,10 @@
       { "hint": "tut.tower", "until": { "type": "time", "sec": 7 } }
     ]
   },
-  "c01_l06": {
-    "steps": [{ "hint": "tut.chest", "highlight": [{ "node": "c" }], "until": { "type": "time", "sec": 10 } }]
+  "c01_l08": {
+    "steps": [{ "hint": "tut.chest", "highlight": [{ "node": "a2" }], "until": { "type": "time", "sec": 10 } }]
   },
-  "c01_l10": {
+  "dev_dragon": {
     "steps": [{ "hint": "tut.dragon", "until": { "type": "time", "sec": 20 } }]
   }
 }

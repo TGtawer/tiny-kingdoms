@@ -7,7 +7,7 @@
     "productionMult": 0.7,
     "aiThinkMs": 1000,
     "aggression": 0.75,
-    "startGold": 40
+    "startGold": 80
   },
   "nodes": [
     {
@@ -59,7 +59,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 7,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -69,7 +69,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 7,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {

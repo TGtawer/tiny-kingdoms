@@ -38,7 +38,7 @@
       "y": 0.5,
       "size": "medium",
       "owner": "neutral",
-      "troops": 8,
+      "troops": 12,
       "hasGoldVein": false,
       "building": null
     },
@@ -49,7 +49,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 6,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -59,7 +59,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 6,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -69,7 +69,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 8,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -79,7 +79,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 8,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -152,10 +152,5 @@
       "c",
       "a1"
     ]
-  ],
-  "special": {
-    "type": "dragon",
-    "params": {}
-  },
-  "tutorial": "c01_l10"
+  ]
 }

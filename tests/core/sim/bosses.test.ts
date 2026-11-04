@@ -5,7 +5,7 @@ import { validateLevel, type LevelData } from '../../../src/core/level/schema';
 import { dragonTarget } from '../../../src/core/sim/specials/dragon';
 import { step, type TickEvent } from '../../../src/core/sim/tick';
 import { createWorld } from '../../../src/core/sim/World';
-import { ALL_LEVELS } from '../../../src/levels';
+import { getLevel } from '../../../src/levels';
 import { freezeEconomy, level, node } from '../helpers';
 
 const ticks = (ms: number): number => Math.round(ms / TICK_MS);
@@ -86,8 +86,8 @@ describe('dragon', () => {
     expect(aiStep(world, ai)).toContainEqual(expect.objectContaining({ type: 'send', from: 'E', to: 'F' }));
   });
 
-  it('chapter 1 level 10 is the dragon and AI vs AI still ends', () => {
-    const l10 = ALL_LEVELS[9]!;
+  it('the dragon dev level (old chapter 1 level 10) still works: AI vs AI ends', () => {
+    const l10 = getLevel('dev_dragon')!;
     expect(l10.special?.type).toBe('dragon');
     for (const seed of [1, 2, 3]) {
       const world = createWorld(l10, { seed });

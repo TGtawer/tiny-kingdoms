@@ -9,7 +9,7 @@ import {
 } from '../../../src/core/tutorial/tutorial';
 import { step } from '../../../src/core/sim/tick';
 import { hasKey } from '../../../src/i18n/i18n';
-import { ALL_LEVELS, TUTORIALS } from '../../../src/levels';
+import { ALL_LEVELS, DEV_LEVELS, TUTORIALS } from '../../../src/levels';
 import { freezeEconomy, lineWorld, run } from '../helpers';
 
 const script = (...until: StepCondition[]): TutorialScript => ({ steps: until.map((u) => ({ hint: 'tut.send', until: u })) });
@@ -80,7 +80,7 @@ describe('tutorial steps', () => {
 
 describe('chapter tutorials', () => {
   it('every tutorial referenced by a level exists and matches it', () => {
-    for (const level of ALL_LEVELS.filter((l) => l.tutorial)) {
+    for (const level of [...ALL_LEVELS, ...DEV_LEVELS].filter((l) => l.tutorial)) {
       const tutorial = TUTORIALS[level.tutorial!];
       expect(tutorial, level.id).toBeDefined();
       expect(validateTutorial(tutorial!, level, hasKey)).toEqual([]);

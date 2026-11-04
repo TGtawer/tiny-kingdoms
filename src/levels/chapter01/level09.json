@@ -50,7 +50,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 7,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -60,7 +60,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 7,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -70,19 +70,18 @@
       "size": "medium",
       "owner": "neutral",
       "troops": 10,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
       "id": "b2",
       "x": 0.816,
       "y": 0.213,
-      "size": "medium",
+      "size": "small",
       "owner": "neutral",
       "troops": 10,
-      "hasGoldVein": true,
-      "building": null,
-      "kind": "chest"
+      "hasGoldVein": false,
+      "building": null
     },
     {
       "id": "a3",

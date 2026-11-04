@@ -12,8 +12,16 @@ describe('chapter 1', () => {
     expect(chapter.map((l) => l.id)).toEqual(Array.from({ length: 10 }, (_, i) => `c01_l${String(i + 1).padStart(2, '0')}`));
   });
 
-  it('levels 1–5 have a tutorial; 6 introduces the chest, 10 the dragon; 7–9 have none', () => {
-    chapter.forEach((l, i) => expect(Boolean(l.tutorial), l.id).toBe(i < 6 || i === 9));
+  it('levels 1–5 have a tutorial; 8 introduces the chest; 6, 7, 9, 10 have none', () => {
+    chapter.forEach((l, i) => expect(Boolean(l.tutorial), l.id).toBe(i < 5 || i === 7));
+  });
+
+  it('has no gold veins, one chest on level 8 and no boss special (TUTORIAL.md T-2)', () => {
+    for (const l of chapter) {
+      expect(l.nodes.filter((n) => n.hasGoldVein), l.id).toEqual([]);
+      expect(l.special, l.id).toBeUndefined();
+      expect(l.nodes.filter((n) => n.kind === 'chest').length, l.id).toBe(l.id === 'c01_l08' ? 1 : 0);
+    }
   });
 
   it('uses 6–9 nodes per level and enemy production 0.7 (BALANCE.md, chapter 1)', () => {

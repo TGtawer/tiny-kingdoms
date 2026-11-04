@@ -26,7 +26,7 @@
       "y": 0.58,
       "size": "large",
       "owner": "enemy",
-      "troops": 20,
+      "troops": 30,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -35,12 +35,11 @@
       "id": "c",
       "x": 0.5,
       "y": 0.5,
-      "size": "medium",
+      "size": "small",
       "owner": "neutral",
       "troops": 9,
       "hasGoldVein": false,
-      "building": null,
-      "kind": "chest"
+      "building": null
     },
     {
       "id": "a1",
@@ -49,7 +48,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 5,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -59,7 +58,7 @@
       "size": "small",
       "owner": "neutral",
       "troops": 5,
-      "hasGoldVein": true,
+      "hasGoldVein": false,
       "building": null
     },
     {
@@ -124,6 +123,5 @@
       "b1",
       "b2"
     ]
-  ],
-  "tutorial": "c01_l06"
+  ]
 }

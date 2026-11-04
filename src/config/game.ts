@@ -335,6 +335,12 @@ export const HAPTICS = {
   shakeIntensity: 0.004,
 } as const;
 
+/**
+ * Whether the enemy leader card before the battle and the HUD portrait are shown (TUTORIAL.md T-2: off for now).
+ * The leader still sets the AI behavior; the card code stays for later.
+ */
+export const SHOW_LEADER_INTRO = false;
+
 /** Enemy leader card before the battle and the HUD portrait, CSS px / ms. */
 export const LEADER_CARD = {
   autoCloseMs: 2500,
