@@ -147,9 +147,12 @@ export class ChapterMapScene extends Phaser.Scene {
       // Best star rating under the node.
       const stars = bestStars(progress, level.id);
       const size = px(MAP.starSize);
-      const row = this.add.graphics();
-      for (let i = 0; i < 3; i++) drawStar(row, (i - 1) * size * 1.05, r + size * 0.55, size, i < stars);
-      container.add(row);
+      // One Graphics per star: in a shared one Phaser strokes earlier outlines again, so stars 2 and 3 looked bolder.
+      for (let i = 0; i < 3; i++) {
+        const star = this.add.graphics();
+        drawStar(star, (i - 1) * size * 1.05, r + size * 0.55, size, i < stars);
+        container.add(star);
+      }
     }
 
     if (isNext) {
