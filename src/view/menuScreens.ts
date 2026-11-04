@@ -202,8 +202,12 @@ export class TournamentScreen extends Screen {
     ctx.lineWidth = 2;
     ctx.fillRect(left, F.y, right - left, F.h);
     ctx.strokeRect(left - 2, F.y, right - left + 4, F.h);
-    const first = F.postX - Math.ceil((F.postX - left) / F.postEvery) * F.postEvery;
-    for (let x = first; x < right; x += F.postEvery) {
+    // Symmetric: post centers at center ± (k + 0.5) * postEvery, so both screen edges get the same gap.
+    const center = (left + right) / 2;
+    const half = Math.ceil((right - left) / 2 / F.postEvery);
+    for (let k = -half; k < half; k++) {
+      const x = center + (k + 0.5) * F.postEvery - F.postW / 2;
+      if (x + F.postW < left || x > right) continue;
       ctx.fillRect(x, F.postTop, F.postW, F.postH);
       ctx.strokeRect(x, F.postTop, F.postW, F.postH);
     }
@@ -552,8 +556,7 @@ export class NightScreen extends Screen {
       ctx.lineTo(x + tw / 2 + 6, 570 - th);
       ctx.fill();
     }
-    ctx.fillRect(90, 520, 330, 60);
-    ctx.fillRect(870, 520, 330, 60);
+    for (const [x, y, ww, hh] of N.walls) ctx.fillRect(x, y, ww, hh);
     ctx.fillStyle = N.ground.color;
     ctx.fillRect(0, N.ground.y, N.ref.w, 80);
   }

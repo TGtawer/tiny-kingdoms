@@ -495,7 +495,8 @@ export const MENU_TOURNAMENT = {
   sky: { top: '#8fd0f5', bottom: '#e3f5ff', to: 330 },
   grassFrom: 320,
   tufts: { count: 34, from: 340, seed: 21 },
-  fence: { y: 352, h: 6, postEvery: 30, postX: 8, postTop: 340, postW: 6, postH: 26, color: '#c08a4b' },
+  /** Posts every `postEvery`, placed symmetrically around the screen center. */
+  fence: { y: 352, h: 6, postEvery: 30, postTop: 340, postW: 6, postH: 26, color: '#c08a4b' },
   tents: [
     { x: 20, y: 330, w: 88, h: 98, color: '#dc2626' },
     { x: 340, y: 330, w: 88, h: 98, color: '#2563eb' },
@@ -522,6 +523,11 @@ export const MENU_NIGHT = {
   moon: { x: 1060, y: 120, r: 36, halo: 110, color: '#fff4cf' },
   sky: ['#0f1b3d', '#22356b', '#2d4a7a'],
   castle: '#16233f',
+  /** Walls between the towers [x, y, width, height]: deep enough to reach into the hill (no sky below them). */
+  walls: [
+    [90, 520, 330, 100],
+    [870, 520, 330, 100],
+  ],
   ground: { y: 640, color: '#0d1630' },
   /** [x, width, height] of each tower; narrow ones get a pointed roof. */
   towers: [
