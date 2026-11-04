@@ -14,15 +14,15 @@ describe('chapter 1', () => {
     expect(chapter.map((l) => l.id)).toEqual(Array.from({ length: 10 }, (_, i) => `c01_l${String(i + 1).padStart(2, '0')}`));
   });
 
-  it('lessons 1, 3, 5, 7 and the chest on 8 have a tutorial; consolidation levels have none (TUTORIAL.md T-5)', () => {
+  it('lessons 1, 3, 5, 7, the chest on 8 and the boss on 10 have a tutorial; consolidation levels have none', () => {
     const withTutorial = chapter.filter((l) => l.tutorial).map((l) => l.index);
-    expect(withTutorial).toEqual([1, 3, 5, 7, 8]);
+    expect(withTutorial).toEqual([1, 3, 5, 7, 8, 10]);
   });
 
-  it('has no gold veins, one chest on level 8 and no boss special (TUTORIAL.md T-2)', () => {
+  it('has no gold veins, one chest on level 8; the only boss is the mage on level 10 (TUTORIAL.md T-2, T-7)', () => {
     for (const l of chapter) {
       expect(l.nodes.filter((n) => n.hasGoldVein), l.id).toEqual([]);
-      expect(l.special, l.id).toBeUndefined();
+      expect(l.special?.type, l.id).toBe(l.index === 10 ? 'mage' : undefined);
       expect(l.nodes.filter((n) => n.kind === 'chest').length, l.id).toBe(l.id === 'c01_l08' ? 1 : 0);
     }
   });

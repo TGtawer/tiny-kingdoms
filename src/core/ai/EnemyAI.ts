@@ -181,10 +181,10 @@ function strengthRatio(world: World, attacker: Side, defender: NodeState): numbe
 
 // ---- Dragon -------------------------------------------------------------------------------------
 
-/** The dragon has marked one of our nodes: move most troops to the nearest own node (if there is one). */
+/** The dragon or the mage has marked one of our nodes: move most troops to the nearest own node (if there is one). */
 function evadeDragon(world: World, side: Side, dist: Distances, plan: Plan): void {
   const boss = world.boss;
-  if (boss?.type !== 'dragon' || !boss.targetId) return;
+  if ((boss?.type !== 'dragon' && boss?.type !== 'mage') || !boss.targetId) return;
   const marked = world.nodes[boss.targetId]!;
   if (marked.owner !== side) return;
   const refuge = own(world, side)

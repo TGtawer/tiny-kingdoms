@@ -6,8 +6,12 @@
   "enemy": {
     "productionMult": 0.7,
     "aiThinkMs": 1000,
-    "aggression": 0.75,
+    "aggression": 0.5,
     "startGold": 20
+  },
+  "tutorial": "c01_l10",
+  "goal": {
+    "type": "capital"
   },
   "nodes": [
     {
@@ -152,5 +156,9 @@
       "c",
       "a1"
     ]
-  ]
+  ],
+  "special": {
+    "type": "mage",
+    "params": {}
+  }
 }

@@ -2,6 +2,7 @@ import { TICK_MS, TUTORIAL, type BuildingType, type SpellId } from '../../config
 import type { LevelData } from '../level/schema';
 import type { Progress } from '../meta/Progress';
 import { activeSpell } from '../meta/spellbook';
+import type { MageEvent } from '../sim/specials/mage';
 import type { TickEvent } from '../sim/tick';
 import type { World } from '../sim/World';
 
@@ -14,7 +15,8 @@ import type { World } from '../sim/World';
 /** HUD elements a step can point at: the gold counter, the spell button, the goal plaque. */
 export type UiAnchor = 'gold' | 'spell' | 'goal';
 
-export type TutorialAnchor = { node: string } | { ui: UiAnchor } | { build: BuildingType };
+/** `bossTarget`: the node a boss has just marked (changes during the battle). */
+export type TutorialAnchor = { node: string } | { ui: UiAnchor } | { build: BuildingType } | { bossTarget: true };
 
 export type FingerHint =
   /** Swipe from `from` to `to`, or along `path` (own nodes, then the target) for a multi-node swipe. */
@@ -25,7 +27,7 @@ export type FingerHint =
   | { kind: 'tapUi'; ui: UiAnchor };
 
 /** Boss events a step can wait for (TUTORIAL.md T-7). */
-export type SpecialEvent = 'mageWarning' | 'mageStrike';
+export type SpecialEvent = MageEvent['type'];
 
 export type StepCondition =
   /** `minSources`: one swipe from at least that many own nodes (one tick, one target). */
@@ -171,7 +173,7 @@ function isDone(
           e.type === 'applied' && e.command.type === 'cast' && e.command.side === 'player' && (!until.spell || e.command.spell === until.spell),
       );
     case 'special':
-      return events.some((e) => (e.type as string) === until.event);
+      return events.some((e) => e.type === until.event);
     case 'any':
       return until.of.some((c) => isDone(c, state, world, events, ui));
   }

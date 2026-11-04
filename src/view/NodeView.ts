@@ -23,6 +23,8 @@ export class NodeView extends Phaser.GameObjects.Container {
   readonly nodeId: string;
   /** Start castle of a side: drawn with a crown whoever owns it now. */
   readonly capital: boolean;
+  /** The evil mage's tower (TUTORIAL.md T-7): a purple tower rises behind the circle. */
+  readonly mageTower: boolean;
   radius = 0;
   hitRadius = 0;
 
@@ -42,10 +44,11 @@ export class NodeView extends Phaser.GameObjects.Container {
   private highlight: Highlight = 'none';
   private ringTween: Phaser.Tweens.Tween | null = null;
 
-  constructor(scene: Phaser.Scene, node: NodeState, capital = false) {
+  constructor(scene: Phaser.Scene, node: NodeState, capital = false, mageTower = false) {
     super(scene, 0, 0);
     this.nodeId = node.id;
     this.capital = capital;
+    this.mageTower = mageTower;
     this.ring = scene.add.graphics();
     this.capGfx = scene.add.graphics();
     this.bodyGfx = scene.add.graphics();
@@ -154,6 +157,7 @@ export class NodeView extends Phaser.GameObjects.Container {
 
     // Shadow, rim, face, highlight crescent.
     g.fillStyle(0x000000, 0.18).fillEllipse(0, r * 0.82, r * 1.9, r * 0.6);
+    if (this.mageTower) drawMageTower(g, r);
     // Fortress: battlements around the rim.
     if (node.kind === 'fortress') {
       const merlon = r * 0.34;
@@ -191,8 +195,8 @@ export class NodeView extends Phaser.GameObjects.Container {
       drawKind(g, node.kind, kx, ky, kr * 1.3);
     }
 
-    // Capital crown at the top left (mirrors the building badge).
-    if (this.capital) {
+    // Capital crown at the top left (mirrors the building badge); the mage tower is its own landmark.
+    if (this.capital && !this.mageTower) {
       const size = Math.max(px(18), r * 0.7);
       drawCrown(g, -r * 0.62, -r * 0.88, size);
     }
@@ -234,4 +238,27 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.ringTween?.stop();
     super.destroy(fromScene);
   }
+}
+
+/** Purple wizard tower behind a node of radius r: body, pointed roof, a star on the tip and a lit window. */
+function drawMageTower(g: Phaser.GameObjects.Graphics, r: number): void {
+  const line = Math.max(2, r * 0.08);
+  const bw = r * 0.78;
+  const top = -r * 1.55;
+  // Body.
+  g.fillStyle(COLORS.mageDark, 1).fillRect(-bw / 2, top, bw, r * 1.2);
+  g.lineStyle(line, COLORS.outline, 1).strokeRect(-bw / 2, top, bw, r * 1.2);
+  // Roof.
+  g.fillStyle(COLORS.mage, 1);
+  g.beginPath();
+  g.moveTo(-bw * 0.72, top + r * 0.05);
+  g.lineTo(0, top - r * 1.05);
+  g.lineTo(bw * 0.72, top + r * 0.05);
+  g.closePath();
+  g.fillPath();
+  g.strokePath();
+  // Star on the tip and a glowing window.
+  g.fillStyle(COLORS.gold, 1).fillCircle(0, top - r * 1.05, r * 0.14);
+  g.lineStyle(Math.max(1, line * 0.6), COLORS.outline, 1).strokeCircle(0, top - r * 1.05, r * 0.14);
+  g.fillStyle(COLORS.hint, 1).fillRoundedRect(-r * 0.12, top + r * 0.22, r * 0.24, r * 0.3, r * 0.1);
 }

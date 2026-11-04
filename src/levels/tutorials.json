@@ -81,6 +81,18 @@
   "c01_l08": {
     "steps": [{ "hint": "tut.chest", "highlight": [{ "node": "a2" }], "until": { "type": "time", "sec": 4 } }]
   },
+  "c01_l10": {
+    "steps": [
+      { "hint": "tut.mage", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 4 } },
+      { "until": { "type": "special", "event": "mageWarning" } },
+      {
+        "hint": "tut.mageFireball",
+        "highlight": [{ "bossTarget": true }],
+        "until": { "type": "any", "of": [{ "type": "send" }, { "type": "special", "event": "mageStrike" }] },
+        "slow": true
+      }
+    ]
+  },
   "dev_dragon": {
     "steps": [{ "hint": "tut.dragon", "until": { "type": "time", "sec": 4 } }]
   }

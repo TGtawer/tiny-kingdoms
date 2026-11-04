@@ -30,6 +30,9 @@ export const COLORS = {
   button: 0xffb53d,
   buttonPressed: 0xe8962a,
   buttonDisabled: 0xc9bfae,
+  /** Evil mage tower (TUTORIAL.md T-7). */
+  mage: 0x8b5cf6,
+  mageDark: 0x4c1d95,
   /** Not taught yet (TUTORIAL.md T-3): dark face with a lock; text on it is light. */
   locked: 0x4b4a52,
   /** Secondary buttons next to a main one (result panel). */
@@ -365,6 +368,9 @@ export const SPOTLIGHT = {
   /** Extra room under the hole for the finger before the text. */
   fingerRoom: 46,
 } as const;
+
+/** Evil mage fireball flight from the tower to its target, ms (the damage is already applied). */
+export const MAGE_FX = { flightMs: 380 } as const;
 
 /** How long the special node info label stays, ms. */
 export const INFO_LABEL_MS = 2500;

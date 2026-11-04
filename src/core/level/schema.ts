@@ -50,10 +50,11 @@ export interface LevelData {
   enemy2?: EnemyParams;
   playerStartGold: number;
   /**
-   * Boss mechanic of 10th levels (GDD 4.1): 'dragon' (no params) or 'citadel' ({ nodeId }: the enemy citadel).
+   * Boss mechanic of 10th levels (GDD 4.1): 'mage' (no params; the tower is the enemy capital), 'dragon' (no params)
+   * or 'citadel' ({ nodeId }: the enemy citadel).
    * TODO(design): bosses of chapters 3–10 are not defined yet.
    */
-  special?: { type: 'dragon' | 'citadel'; params: Record<string, unknown> };
+  special?: { type: 'dragon' | 'citadel' | 'mage'; params: Record<string, unknown> };
   /** Tutorial scenario id (see src/levels/tutorials.json). */
   tutorial?: string;
   /** Win faster than this (simulation seconds) for the "fast" star; default STARS.defaultTimeSec. */
@@ -180,6 +181,8 @@ export function validateLevel(data: unknown): ValidationResult {
       const id = special.params.nodeId;
       const n = nodes.find((m) => isObject(m) && m.id === id);
       if (!isObject(n) || n.owner !== 'enemy') at('special citadel: params.nodeId must be an enemy node');
+    } else if (special.type === 'mage') {
+      if (!nodes.some((n) => isObject(n) && n.capital === true && n.owner === 'enemy')) at('special mage: the enemy needs a capital (the tower)');
     } else if (special.type !== 'dragon') at('special.type is unknown');
   }
 

@@ -118,5 +118,8 @@
   "tour.crystals": "Crystals come from wins. Spend them on permanent bonuses",
   "tour.stars": "Stars come from great wins. Spend them on spell upgrades",
   "tour.claim": "Unlock {spell}",
-  "tour.done": "Done! Back to battle"
+  "tour.done": "Done! Back to battle",
+  "tut.mage": "An evil mage! Take his tower",
+  "tut.mageFireball": "Fireball! Move your troops out",
+  "boss.mage": "Take the mage tower · fire in {sec} s"
 }

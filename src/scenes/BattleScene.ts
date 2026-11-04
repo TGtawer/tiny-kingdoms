@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
-import { DRAGON, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
+import { DRAGON, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
+import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -164,7 +164,8 @@ export class BattleScene extends Phaser.Scene {
     this.roads = new RoadView(this);
     this.capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
     for (const node of Object.values(this.world.nodes)) {
-      this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id)));
+      const mageTower = this.world.boss?.type === 'mage' && this.world.boss.towerId === node.id;
+      this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id), mageTower));
     }
     this.trails = this.add.graphics().setDepth(39);
     this.goalRing = this.add.graphics().setDepth(38);
@@ -232,6 +233,7 @@ export class BattleScene extends Phaser.Scene {
     this.tutorialView?.update(time, {
       node: (id) => this.nodeViews.get(id) ?? null,
       ui: (anchor) => this.hud.anchor(anchor),
+      bossTarget: () => (this.world.boss && 'targetId' in this.world.boss ? this.world.boss.targetId : null),
       build: (type) => this.menu?.buttonPosition(type) ?? null,
     });
   }
@@ -361,6 +363,12 @@ export class BattleScene extends Phaser.Scene {
         playSfx('fireball');
         break;
       }
+      case 'mageWarning':
+        // The marked node gets a red circle in drawGoal.
+        break;
+      case 'mageStrike':
+        this.mageFireball(event.from, event.nodeId, event.killed);
+        break;
       case 'citadelWave': {
         const from = this.world.nodes[event.from]!;
         this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
@@ -489,6 +497,36 @@ export class BattleScene extends Phaser.Scene {
       return lines;
     }
     return claimableSpell(progress) ? [t('result.spellWaiting')] : [];
+  }
+
+  /** A mage fireball flies from the tower to the struck node, then bursts there (or on its shield). */
+  private mageFireball(fromId: string, toId: string, killed: number): void {
+    const from = this.nodeViews.get(fromId);
+    const to = this.nodeViews.get(toId);
+    if (!from || !to) return;
+    const ball = this.add.graphics().setDepth(70);
+    ball.fillStyle(COLORS.fireball, 1).fillCircle(0, 0, px(11));
+    ball.fillStyle(COLORS.hint, 1).fillCircle(0, 0, px(5));
+    ball.setPosition(from.x, from.y - from.radius * 1.6);
+    playSfx('fireball');
+    this.tweens.add({
+      targets: ball,
+      x: to.x,
+      y: to.y,
+      duration: MAGE_FX.flightMs,
+      ease: 'Quad.In',
+      onComplete: () => {
+        ball.destroy();
+        if (killed > 0) {
+          explosion(this, to.x, to.y, to.radius * 1.6);
+          floatText(this, to.x, to.y - to.radius, `-${Math.floor(killed)}`, COLORS.fireball);
+          this.shake();
+        } else {
+          // A shield (or a node that is no longer ours) took the hit.
+          ringBurst(this, to.x, to.y, to.radius * 1.5, COLORS.shield);
+        }
+      },
+    });
   }
 
   /** "Opens at level N" for a building the player has not been taught yet; null if it can be built. */
@@ -643,7 +681,12 @@ export class BattleScene extends Phaser.Scene {
         }
         break;
       case 'capital':
-        this.hud.setGoal(t('goal.capital'));
+        if (boss?.type === 'mage' && this.world.nodes[boss.towerId]?.owner === 'enemy') {
+          const sec = Math.max(0, Math.ceil(((boss.strikeTick - this.world.tick) * TICK_MS) / 1000));
+          this.hud.setGoal(t('boss.mage', { sec }));
+        } else {
+          this.hud.setGoal(t('goal.capital'));
+        }
         break;
       case 'survive':
         this.hud.setGoal(t('goal.survive', { done: Math.min(done, goal.seconds), total: goal.seconds }));
@@ -660,6 +703,13 @@ export class BattleScene extends Phaser.Scene {
       const left = Math.max(0, (boss.strikeTick - this.world.tick) * TICK_MS) / DRAGON.warnMs;
       const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 90);
       g.fillStyle(0x000000, 0.18 + 0.22 * (1 - left)).fillEllipse(view.x, view.y + view.radius * 0.2, view.radius * 3.2, view.radius * 1.6);
+      g.lineStyle(px(5), COLORS.faction.enemy, 0.5 + 0.5 * pulse).strokeCircle(view.x, view.y, view.radius * (1.5 + 0.4 * left));
+    }
+    // Mage warning: a pulsing red circle over the player's node that the next fireball will hit.
+    if (boss?.type === 'mage' && boss.targetId) {
+      const view = this.nodeViews.get(boss.targetId)!;
+      const left = Math.max(0, (boss.strikeTick - this.world.tick) * TICK_MS) / MAGE.warnMs;
+      const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 90);
       g.lineStyle(px(5), COLORS.faction.enemy, 0.5 + 0.5 * pulse).strokeCircle(view.x, view.y, view.radius * (1.5 + 0.4 * left));
     }
     if (goal.type !== 'hold') return;

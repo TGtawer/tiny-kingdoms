@@ -139,6 +139,17 @@ export const DRAGON = {
   warnMs: 3000,
 } as const;
 
+/**
+ * Evil mage, boss of chapter 1 level 10 (TUTORIAL.md T-7): a fireball every `everyMs` at the player's biggest
+ * garrison, shown `warnMs` before. Damage is the level 1 Fireball spell's.
+ */
+export const MAGE = {
+  everyMs: 20000,
+  warnMs: 3000,
+  damageShare: 0.4,
+  damageMin: 5,
+} as const;
+
 /** Boss of chapter 2 level 10 (CONTENT.md C-4.2). */
 export const CITADEL = {
   waveEveryMs: 15000,

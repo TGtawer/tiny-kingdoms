@@ -13,6 +13,8 @@ export interface TutorialContext {
   ui(anchor: UiAnchor): Point | null;
   /** Screen position of a build menu button (null while the menu is closed). */
   build(type: BuildingType): Point | null;
+  /** Node a boss has marked for its next strike, if any. */
+  bossTarget(): string | null;
 }
 
 /** Period of one finger gesture loop, ms. */
@@ -30,6 +32,8 @@ export class TutorialView {
   private readonly uiRing: Phaser.GameObjects.Graphics;
   private step: TutorialStep | null = null;
   private bottomOffsetCss = 0;
+  /** Last known boss target, for `bossTarget` highlights. */
+  private bossTargetId: string | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -44,7 +48,9 @@ export class TutorialView {
 
   /** Node ids the current step asks to highlight. */
   highlightedNodes(): string[] {
-    return (this.step?.highlight ?? []).flatMap((h) => ('node' in h ? [h.node] : []));
+    return (this.step?.highlight ?? []).flatMap((h) =>
+      'node' in h ? [h.node] : 'bossTarget' in h && this.bossTargetId ? [this.bossTargetId] : [],
+    );
   }
 
   /** `bottomOffsetCss`: HUD height below the panel (e.g. the spell bar). */
@@ -89,6 +95,7 @@ export class TutorialView {
   update(time: number, ctx: TutorialContext): void {
     const step = this.step;
     if (!step) return;
+    this.bossTargetId = ctx.bossTarget();
 
     this.uiRing.clear();
     const pulse = 0.5 + 0.5 * Math.sin(time / 180);
