@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import type { BuildingType, LeaderId, NodeKind, SpellId } from '../config/balance';
-import { COLORS } from '../config/game';
+import { COLORS, STAR_ROUNDING } from '../config/game';
 
 // Simple cartoon icons drawn with Graphics, centered at (x, y), fitting in a box of `size`.
 
@@ -300,12 +300,12 @@ function starShape(g: Phaser.GameObjects.Graphics, x: number, y: number, outer: 
     const prev = corners[(i + 9) % 10]!;
     const next = corners[(i + 1) % 10]!;
     // Cut the corner at share f of both edges and bend a quadratic curve through it.
-    const f = c.tip ? 0.22 : 0.1;
+    const f = c.tip ? STAR_ROUNDING.tip : STAR_ROUNDING.inner;
     const ax = c.x + (prev.x - c.x) * f;
     const ay = c.y + (prev.y - c.y) * f;
     const bx = c.x + (next.x - c.x) * f;
     const by = c.y + (next.y - c.y) * f;
-    const steps = c.tip ? 5 : 2;
+    const steps = c.tip ? 8 : 3;
     for (let k = 0; k <= steps; k++) {
       const t = k / steps;
       const px = (1 - t) * (1 - t) * ax + 2 * (1 - t) * t * c.x + t * t * bx;

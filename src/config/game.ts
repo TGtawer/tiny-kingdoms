@@ -364,6 +364,9 @@ export const SHIELD_FX = {
 } as const;
 
 /** Main menu UI layer, CSS px. */
+/** Star corners: share of each edge cut off and bent into a curve at the tips and the inner corners (0..0.5). */
+export const STAR_ROUNDING = { tip: 0.38, inner: 0.16 } as const;
+
 /** Look of every Button (as in docs/prototypes/living-screens.html), CSS px. */
 export const BUTTON_STYLE = {
   radius: 16,
