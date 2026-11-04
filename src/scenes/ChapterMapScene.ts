@@ -9,6 +9,7 @@ import { drawCheck, drawLock, drawStar } from '../view/icons';
 import { clamp, px, textStyle, type Point } from '../view/layout';
 import { mapTrack } from '../core/audio/playlist';
 import { audioFiles, playMusic } from '../view/music';
+import { MAP_DEPTH, MapScenery } from '../view/MapScenery';
 import { drawMeadow, textButton, topBar } from '../view/ui';
 import { getStore } from './registry';
 
@@ -20,10 +21,12 @@ export interface ChapterMapData {
  * Chapter map (GDD 4.1): a winding path of level nodes; levels open strictly in order.
  * Nodes keep a fixed size and spacing; when the path does not fit, the map scrolls
  * (vertically in portrait, horizontally in landscape). Top bar and bottom button stay in place.
+ * Around the path lives the scenery of docs/VISUALS.md V-2 (MapScenery).
  */
 export class ChapterMapScene extends Phaser.Scene {
   private chapter = 1;
   private pulse: Phaser.Tweens.Tween | null = null;
+  private scenery: MapScenery | null = null;
   private portrait = true;
   /** Pointer travel since press, to tell a tap on a level from a scroll. */
   private drag: { id: number; last: number; travelled: number } | null = null;
@@ -49,7 +52,14 @@ export class ChapterMapScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_UP, this.onUp, this);
     this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onUp, this);
     this.input.on(Phaser.Input.Events.POINTER_WHEEL, this.onWheel, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.build, this));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.build, this);
+      this.scenery = null;
+    });
+  }
+
+  override update(time: number, delta: number): void {
+    this.scenery?.update(time, delta);
   }
 
   private build(): void {
@@ -61,7 +71,7 @@ export class ChapterMapScene extends Phaser.Scene {
     cam.setSize(w, h);
     this.portrait = h > w;
 
-    drawMeadow(this.add.graphics().setScrollFactor(0).setDepth(-10), w, h);
+    drawMeadow(this.add.graphics().setScrollFactor(0).setDepth(MAP_DEPTH.meadow), w, h);
 
     const progress = getStore(this).progress;
     const levels = CHAPTERS[this.chapter - 1] ?? [];
@@ -93,12 +103,17 @@ export class ChapterMapScene extends Phaser.Scene {
     }
     cam.setBounds(0, 0, worldW, worldH);
 
-    // Road through all levels.
-    const road = this.add.graphics();
-    road.lineStyle(px(18), COLORS.roadEdge, 1);
-    strokePath(road, points);
-    road.lineStyle(px(11), COLORS.road, 1);
-    strokePath(road, points);
+    // Road, decor, token, walker and clouds.
+    const done = levels.filter((l) => isCompleted(progress, l.id)).length;
+    this.scenery = new MapScenery(this, {
+      chapter: this.chapter,
+      points,
+      done,
+      nodeRadius: r,
+      world: { width: worldW, height: worldH },
+      portrait: this.portrait,
+      band: { top: barH, bottom: h - bottomH },
+    });
 
     const next = currentLevel(progress, ALL_LEVELS);
     levels.forEach((level, i) => this.levelNode(level, points[i]!, r, next?.id === level.id));
@@ -135,6 +150,8 @@ export class ChapterMapScene extends Phaser.Scene {
     g.fillStyle(isNext ? COLORS.goldDark : COLORS.factionDark[owner], 1).fillCircle(0, r * 0.1, r);
     g.fillStyle(isNext ? COLORS.gold : COLORS.faction[owner], 1).fillCircle(0, 0, r * 0.92);
     g.lineStyle(Math.max(2, r * 0.09), COLORS.outline, 1).strokeCircle(0, 0, r);
+    // Glossy highlight, as on the battle nodes.
+    g.fillStyle(0xffffff, MAP.nodeShineAlpha).fillEllipse(-r * 0.3, -r * 0.45, r * 0.8, r * 0.38);
     container.add(g);
 
     if (open) {
@@ -214,12 +231,4 @@ export class ChapterMapScene extends Phaser.Scene {
 /** Side-to-side offset of level i along the path, -1..1. */
 function wave(i: number): number {
   return Math.sin(i * MAP.waveStep);
-}
-
-function strokePath(g: Phaser.GameObjects.Graphics, pts: readonly Point[]): void {
-  if (pts.length < 2) return;
-  g.beginPath();
-  g.moveTo(pts[0]!.x, pts[0]!.y);
-  for (const p of pts.slice(1)) g.lineTo(p.x, p.y);
-  g.strokePath();
 }

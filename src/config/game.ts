@@ -113,6 +113,100 @@ export const MAP = {
   waveStep: 1.1,
   /** Star size under completed levels. */
   starSize: 18,
+  /** White highlight on the level nodes (upper left). */
+  nodeShineAlpha: 0.28,
+} as const;
+
+/**
+ * Living chapter map (docs/VISUALS.md V-2, prototype docs/prototypes/living-screens.html).
+ * Sizes CSS px, speeds px/s or rad/s, times ms. Each `show*` flag turns one effect off for profiling.
+ */
+export const MAP_FX = {
+  showToken: true,
+  showRoadProgress: true,
+  showDecor: true,
+  showSway: true,
+  showClouds: true,
+  showWalker: true,
+
+  /** Player squad hopping over the current level. */
+  token: { radius: 13, lift: 18, hop: 10, hopSpeed: 3.2, shadowLift: 6, shadowW: 10, shadowH: 3.5, shadowAlpha: 0.2 },
+  /** Road ahead of the current level is dimmed; running dashes lead from the last completed level to it. */
+  road: { edgeWidth: 18, width: 11, futureAlpha: 0.5, dash: 10, gap: 12, dashWidth: 4, dashSpeed: 28 },
+  /** Small squad walking the completed path back and forth. */
+  walker: { radius: 8, segmentMs: 4200, bob: 2, bobSpeed: 9 },
+  decor: {
+    count: 45,
+    maxTries: 4000,
+    /** Clearance beyond the node radius + item radius, from the road line, between items; margin from the world edge. */
+    nodeClearance: 22,
+    roadClearance: 14,
+    itemGap: 4,
+    edge: 16,
+    outline: 2,
+    kinds: [
+      { kind: 'tree', radius: 14, weight: 5 },
+      { kind: 'pine', radius: 13, weight: 4 },
+      { kind: 'bush', radius: 9, weight: 3 },
+      { kind: 'house', radius: 15, weight: 1.4 },
+      { kind: 'pond', radius: 22, weight: 0.5, max: 2 },
+      { kind: 'mill', radius: 18, weight: 0.35, max: 2 },
+    ],
+    /** Ground shadow ellipse per kind, centered under the item: [dy, rx, ry] from the item position. */
+    shadows: {
+      tree: [10, 12, 4],
+      pine: [10, 10, 3.5],
+      bush: [6, 10, 3.5],
+      house: [9, 15, 4],
+      mill: [12, 14, 4],
+    },
+    /** Trees and pines are anchored at the trunk foot (their sway pivot), this far below the item position. */
+    footY: { tree: 10, pine: 11 },
+    shadowAlpha: 0.16,
+    /** Tree and pine sway around the base: amplitude, speed (rad/s of the sine). */
+    swayDeg: 2,
+    swaySpeed: 1.6,
+    /** Mill sails, rad/s; their hub above the mill base, CSS px. */
+    sailSpeed: 1.4,
+    sailHub: 12,
+    /** Chimney smoke: one puff grows and fades over this time, moving from (x, y) by (dx, dy), radius r0 → r1. */
+    smoke: { ms: 2000, x: 7, y: -18, dx: 6, dy: -16, r0: 3, r1: 7, alpha: 0.55 },
+    colors: {
+      pond: 0x4fa3d9,
+      bush: 0x3f8f3a,
+      tree: [0x2f8a3a, 0x3c9a3f],
+      pine: 0x25704a,
+      trunk: 0x8a5a2b,
+      wall: 0xfff6e0,
+      roof: [0xd9534f, 0xc2703d],
+      window: 0xffd56b,
+      sails: 0xe9e1cc,
+    },
+  },
+  clouds: {
+    count: 7,
+    alpha: 0.92,
+    /** Parallax: clouds move this many times faster than the ground when the map scrolls. */
+    parallax: 1.4,
+    /** Drift px/s: speedMin + (i % 4) * speedStep; size: 0.8 + (i % 3) * 0.3. */
+    speedMin: 4,
+    speedStep: 2,
+    /** White blobs [dx, dy, rx], ry = rx * 0.7; the shadow blobs [dx, dy, rx], ry = rx * 0.6, offset below-right. */
+    blobs: [
+      [0, 0, 26],
+      [24, 4, 20],
+      [-22, 6, 18],
+      [8, -10, 18],
+    ],
+    shadowBlobs: [
+      [0, 0, 26],
+      [24, 4, 20],
+      [-22, 6, 18],
+    ],
+    shadowOffset: [18, 26],
+    shadowColor: 0x143c14,
+    shadowAlpha: 0.12,
+  },
 } as const;
 
 /** Build menu strip in the bottom HUD bar, CSS px. */

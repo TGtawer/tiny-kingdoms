@@ -21,16 +21,8 @@ export class ArmyView extends Phaser.GameObjects.Container {
   constructor(scene: Phaser.Scene, owner: Owner, phase = 0) {
     super(scene, 0, 0);
     this.phase = phase;
-    const r = px(ARMY_RADIUS_PX);
     const g = scene.add.graphics();
-    g.fillStyle(0x000000, 0.2).fillEllipse(0, r * 0.9, r * 2, r * 0.6);
-    g.fillStyle(COLORS.factionDark[owner], 1).fillCircle(0, r * 0.12, r);
-    g.fillStyle(COLORS.faction[owner], 1).fillCircle(0, 0, r * 0.9);
-    g.lineStyle(px(2.5), COLORS.outline, 1).strokeCircle(0, 0, r);
-    // Little banner pole to read as "marching squad".
-    g.lineStyle(px(2), COLORS.outline, 1).lineBetween(r * 0.6, -r * 0.6, r * 0.6, -r * 1.7);
-    g.fillStyle(COLORS.faction[owner], 1).fillTriangle(r * 0.6, -r * 1.7, r * 1.4, -r * 1.45, r * 0.6, -r * 1.2);
-    g.lineStyle(px(1.5), COLORS.outline, 1).strokeTriangle(r * 0.6, -r * 1.7, r * 1.4, -r * 1.45, r * 0.6, -r * 1.2);
+    drawSquad(g, px(ARMY_RADIUS_PX), owner, px(1));
 
     this.countText = scene.add.text(0, 0, '', textStyle(14)).setOrigin(0.5).setStroke('#1f2937', px(3));
     this.add([g, this.countText]);
@@ -48,4 +40,19 @@ export class ArmyView extends Phaser.GameObjects.Container {
     this.drawnCount = visible;
     this.countText.setText(String(visible));
   }
+}
+
+/**
+ * Squad marker body without the number, centered at (0, 0): ground shadow, colored disc, outline, banner.
+ * `unit` scales the line widths (px(1) on screen, 1 when baking at CSS scale).
+ */
+export function drawSquad(g: Phaser.GameObjects.Graphics, r: number, owner: Owner, unit: number, shadow = true): void {
+  if (shadow) g.fillStyle(0x000000, 0.2).fillEllipse(0, r * 0.9, r * 2, r * 0.6);
+  g.fillStyle(COLORS.factionDark[owner], 1).fillCircle(0, r * 0.12, r);
+  g.fillStyle(COLORS.faction[owner], 1).fillCircle(0, 0, r * 0.9);
+  g.lineStyle(2.5 * unit, COLORS.outline, 1).strokeCircle(0, 0, r);
+  // Little banner pole to read as "marching squad".
+  g.lineStyle(2 * unit, COLORS.outline, 1).lineBetween(r * 0.6, -r * 0.6, r * 0.6, -r * 1.7);
+  g.fillStyle(COLORS.faction[owner], 1).fillTriangle(r * 0.6, -r * 1.7, r * 1.4, -r * 1.45, r * 0.6, -r * 1.2);
+  g.lineStyle(1.5 * unit, COLORS.outline, 1).strokeTriangle(r * 0.6, -r * 1.7, r * 1.4, -r * 1.45, r * 0.6, -r * 1.2);
 }
