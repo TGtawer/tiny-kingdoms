@@ -28,6 +28,16 @@ export function starsFor(summary: BattleSummary, level: LevelData): number {
   return stars;
 }
 
+/** All stars earned (best result per level, summed). Never decreases. */
+export function totalStars(progress: Progress): number {
+  return Object.values(progress.stars).reduce((sum, s) => sum + s, 0);
+}
+
+/** Stars left to spend on spell upgrades. */
+export function freeStars(progress: Progress): number {
+  return Math.max(0, totalStars(progress) - progress.spentStars);
+}
+
 export function bestStars(progress: Progress, levelId: string): number {
   return progress.stars[levelId] ?? 0;
 }

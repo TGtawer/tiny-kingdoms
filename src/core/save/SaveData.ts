@@ -1,8 +1,9 @@
 import { BONUSES, SPELL_IDS, SPELL_UPGRADES, STARS, type SpellId } from '../../config/balance';
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
+import { totalStars } from '../meta/stars';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface SaveData {
   version: number;
@@ -34,6 +35,8 @@ export const MIGRATIONS: Record<number, Migration> = {
   1: (d) => ({ ...d, version: 2, settings: defaultSettings() }),
   // v3 added progress.stars; older saves have no stars yet (sanitizeProgress fills an empty map).
   2: (d) => ({ ...d, version: 3 }),
+  // v4: spell upgrades cost stars; progress.spentStars starts at 0 (levels bought with crystals are kept).
+  3: (d) => ({ ...d, version: 4 }),
 };
 
 /**
@@ -92,6 +95,7 @@ function sanitizeProgress(raw: unknown): Progress {
       if (stars > 0) progress.stars[id] = stars;
     }
   }
+  progress.spentStars = Math.min(totalStars(progress), Math.max(0, Math.floor(num(raw.spentStars, 0))));
   return progress;
 }
 

@@ -39,7 +39,7 @@
   "upgrades.spells": "Spells",
   "upgrades.level": "Lv. {level}/{max}",
   "upgrades.max": "Max",
-  "upgrades.lockedAfter": "Opens after chapter {chapter}",
+  "upgrades.lockedStars": "Unlocks at {need} stars · you have {have}",
   "bonus.startArmy": "Starting army",
   "bonus.startArmy.desc": "+{value} troops in each starting circle",
   "bonus.troopProduction": "Troop production",

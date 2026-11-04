@@ -15,7 +15,7 @@ import { applyBattleResult } from '../core/meta/rewards';
 import { recordStars, starsFor } from '../core/meta/stars';
 import { defeatTip } from '../core/meta/tips';
 import { playerSetupFrom } from '../core/meta/upgrades';
-import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
+import { FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
 import { ArmyView, armyLevelPosition } from '../view/ArmyView';
@@ -127,7 +127,7 @@ export class BattleScene extends Phaser.Scene {
     // Player bonuses, start army and open spells come from meta progression.
     this.world = createWorld(this.level, {
       seed: this.level.chapter * 100 + this.level.index,
-      player: playerSetupFrom(getStore(this).progress, ALL_LEVELS),
+      player: playerSetupFrom(getStore(this).progress),
     });
     this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy, this.world.goal, this.world.capitals.player));
     const enemy2 = this.level.enemy2;

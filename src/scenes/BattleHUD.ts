@@ -215,19 +215,14 @@ export class BattleHUD {
     drawCoinAt(this.coin, px(16) + px(14), barH / 2, px(28));
     this.goldText.setPosition(px(16) + px(34), barH / 2);
     this.placeRate();
-    this.title.setPosition(w / 2, barH / 2);
     this.goalText.setPosition(w / 2, barH + px(HUD.goalBar) / 2);
-    this.leaderIcon.clear();
-    if (this.leader) {
-      const size = px(LEADER_CARD.hudPortrait);
-      drawLeader(this.leaderIcon, this.leader, this.title.x - this.title.width / 2 - px(8) - size / 2, barH / 2, size);
-    }
     this.pauseButton.setPosition(w - px(12) - this.pauseButton.buttonWidth / 2, barH / 2);
     this.speedButton.setPosition(
       this.pauseButton.x - this.pauseButton.buttonWidth / 2 - px(HUD.topBarGap) - this.speedButton.buttonWidth / 2,
       barH / 2,
     );
     this.speedRing.setPosition(this.speedButton.x, this.speedButton.y);
+    this.placeTitle();
 
     const size = px(HUD.spellButton);
     const gap = px(16);
@@ -259,6 +254,7 @@ export class BattleHUD {
       const grew = this.shownRate >= 0 && rate > this.shownRate;
       this.shownRate = rate;
       this.rateText.setText(t('hud.goldRate', { rate: rate.toFixed(1) }));
+      this.placeTitle();
       if (grew) {
         this.scene.tweens.killTweensOf(this.rateText);
         this.rateText.setScale(1.4);
@@ -337,6 +333,34 @@ export class BattleHUD {
 
   private placeRate(): void {
     this.rateText.setPosition(this.goldText.x + this.goldText.width + px(8), px(HUD.topBar) / 2 + px(2));
+    this.placeTitle();
+  }
+
+  /**
+   * Title and leader portrait share the free space between the gold block and the speed button
+   * (reserved even while hidden, so nothing jumps when it appears). Centered when it fits;
+   * on narrow screens the title shrinks and is dropped if it would get too small, the portrait stays.
+   */
+  private placeTitle(): void {
+    const barH = px(HUD.topBar);
+    const gap = px(HUD.topBarGap);
+    const left = this.rateText.x + this.rateText.width + gap;
+    const right = this.speedButton.x - this.speedButton.buttonWidth / 2 - gap;
+    const portrait = this.leader ? px(LEADER_CARD.hudPortrait) : 0;
+    const portraitW = portrait > 0 ? portrait + gap : 0;
+
+    this.title.setScale(1);
+    const scale = Math.min(1, (right - left - portraitW) / this.title.width);
+    const showTitle = scale >= HUD.titleMinScale;
+    this.title.setVisible(showTitle).setScale(showTitle ? scale : 1);
+    const titleW = showTitle ? this.title.displayWidth : 0;
+    const groupW = portraitW + titleW - (titleW === 0 && portrait > 0 ? gap : 0);
+
+    const w = this.scene.scale.width;
+    const x0 = Math.max(left, Math.min(w / 2 - groupW / 2, right - groupW));
+    if (showTitle) this.title.setPosition(x0 + portraitW + titleW / 2, barH / 2);
+    this.leaderIcon.clear();
+    if (this.leader) drawLeader(this.leaderIcon, this.leader, x0 + portrait / 2, barH / 2, portrait);
   }
 
   /** Screen position of the gold counter (for tutorial highlights). */

@@ -90,6 +90,8 @@ export const HUD = {
   pauseButton: 52,
   /** Gap between buttons in the top bar (speed-up and pause), CSS px. */
   topBarGap: 8,
+  /** The level title in the top bar shrinks to fit; below this scale it is hidden. */
+  titleMinScale: 0.75,
   /** Goal plaque under the top bar (non-conquer goals), CSS px. */
   goalBar: 30,
   /** Tutorial hint panel height reserved at the bottom, CSS px. */

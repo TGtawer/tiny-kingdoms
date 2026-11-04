@@ -8,10 +8,10 @@ export type NodeKind = 'normal' | 'temple' | 'fortress' | 'chest' | 'portal' | '
 export const NODE_KINDS: readonly NodeKind[] = ['normal', 'temple', 'fortress', 'chest', 'portal', 'bandits'];
 export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement'];
 
-/** GDD 3.8: a spell becomes available after completing this chapter. */
-export const SPELL_UNLOCK_AFTER_CHAPTER: Record<SpellId, number> = {
-  fireball: 1,
-  reinforcement: 2,
+/** GDD 3.8: a spell opens once the player has earned this many stars in total (stars are not spent on it). */
+export const SPELL_UNLOCK_STARS: Record<SpellId, number> = {
+  fireball: 3,
+  reinforcement: 12,
 };
 
 /** Simulation fixed timestep. */
@@ -217,9 +217,8 @@ export const BONUSES = {
 
 export const SPELL_UPGRADES = {
   maxLevel: 5,
-  /** Cost of level n: round(costBase * costGrowth^(n-1)). */
-  costBase: 80,
-  costGrowth: 1.4,
+  /** Stars spent on level n = starCosts[n - 1] (GDD 4.3). */
+  starCosts: [2, 3, 4, 5, 6],
   perLevel: {
     fireball: { damageShare: 0.05, cooldownSec: -1 },
     reinforcement: { troops: 3, cooldownSec: -1 },

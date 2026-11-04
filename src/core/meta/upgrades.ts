@@ -1,7 +1,7 @@
 import { BONUSES, SPELL_UPGRADES, type SpellId } from '../../config/balance';
-import type { LevelData } from '../level/schema';
 import { defaultModifiers, type PlayerSetup, type SideModifiers } from '../sim/World';
 import { unlockedSpells, type BonusId, type Progress } from './Progress';
+import { freeStars } from './stars';
 
 // TODO(design): GDD 4.3 lists a spell cost upgrade, but BALANCE.md has no numbers for it yet.
 
@@ -15,12 +15,13 @@ export function bonusCost(currentLevel: number): number | null {
   return levelCost(BONUSES.costBase, BONUSES.costGrowth, currentLevel + 1);
 }
 
+/** Stars for the next spell level, or null at max. */
 export function spellUpgradeCost(currentLevel: number): number | null {
   if (currentLevel >= SPELL_UPGRADES.maxLevel) return null;
-  return levelCost(SPELL_UPGRADES.costBase, SPELL_UPGRADES.costGrowth, currentLevel + 1);
+  return SPELL_UPGRADES.starCosts[currentLevel] ?? null;
 }
 
-export type BuyResult = 'ok' | 'maxLevel' | 'notEnoughCrystals' | 'locked';
+export type BuyResult = 'ok' | 'maxLevel' | 'notEnoughCrystals' | 'notEnoughStars' | 'locked';
 
 export function buyBonus(progress: Progress, bonus: BonusId): BuyResult {
   const cost = bonusCost(progress.bonuses[bonus]);
@@ -31,13 +32,13 @@ export function buyBonus(progress: Progress, bonus: BonusId): BuyResult {
   return 'ok';
 }
 
-/** Spell upgrades can be bought once the spell itself is open. */
-export function buySpellUpgrade(progress: Progress, levels: readonly LevelData[], spell: SpellId): BuyResult {
-  if (!unlockedSpells(progress, levels).includes(spell)) return 'locked';
+/** Spell upgrades are bought with stars, once the spell itself is open. */
+export function buySpellUpgrade(progress: Progress, spell: SpellId): BuyResult {
+  if (!unlockedSpells(progress).includes(spell)) return 'locked';
   const cost = spellUpgradeCost(progress.spellUpgrades[spell]);
   if (cost === null) return 'maxLevel';
-  if (progress.crystals < cost) return 'notEnoughCrystals';
-  progress.crystals -= cost;
+  if (freeStars(progress) < cost) return 'notEnoughStars';
+  progress.spentStars += cost;
   progress.spellUpgrades[spell] += 1;
   return 'ok';
 }
@@ -60,10 +61,10 @@ export function modifiersFrom(progress: Progress): SideModifiers {
 }
 
 /** Everything a battle needs from meta progression for the player side. */
-export function playerSetupFrom(progress: Progress, levels: readonly LevelData[]): PlayerSetup {
+export function playerSetupFrom(progress: Progress): PlayerSetup {
   return {
     modifiers: modifiersFrom(progress),
     startArmyBonus: BONUSES.perLevel.startArmy * progress.bonuses.startArmy,
-    unlockedSpells: unlockedSpells(progress, levels),
+    unlockedSpells: unlockedSpells(progress),
   };
 }

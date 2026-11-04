@@ -39,7 +39,7 @@
   "upgrades.spells": "Спецприёмы",
   "upgrades.level": "Ур. {level}/{max}",
   "upgrades.max": "Макс.",
-  "upgrades.lockedAfter": "Откроется после главы {chapter}",
+  "upgrades.lockedStars": "Откроется при {need} звёздах · сейчас {have}",
   "bonus.startArmy": "Стартовая армия",
   "bonus.startArmy.desc": "+{value} войска в каждый стартовый круг",
   "bonus.troopProduction": "Производство войск",
