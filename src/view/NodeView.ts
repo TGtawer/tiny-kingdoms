@@ -5,7 +5,7 @@ import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
 import type { NodeState } from '../core/sim/World';
 import { drawBuilding, drawCrown, drawKind } from './icons';
-import { px, textStyle, type FieldLayout } from './layout';
+import { px, textStyle, type ScreenLayout } from './layout';
 
 export type Highlight = 'none' | 'selected' | 'target' | 'fireball' | 'reinforcement' | 'shield' | 'hint';
 
@@ -57,7 +57,7 @@ export class NodeView extends Phaser.GameObjects.Container {
   }
 
   /** Re-positions and resizes after a layout change. */
-  place(node: NodeState, layout: FieldLayout): void {
+  place(node: NodeState, layout: ScreenLayout): void {
     const p = layout.toScreen(node.x, node.y);
     this.setPosition(p.x, p.y);
     this.radius = layout.nodeRadius(node.size);

@@ -50,3 +50,23 @@ export function explosion(scene: Phaser.Scene, x: number, y: number, radius: num
   });
   ringBurst(scene, x, y, radius, COLORS.fireball);
 }
+
+/** Little dots that burst out of a point and fade (stars earned, a level opened). */
+export function sparks(scene: Phaser.Scene, x: number, y: number, color: number, count: number, distance: number, durationMs: number, size: number, depth = 5): void {
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+    const d = distance * (0.7 + Math.random() * 0.6);
+    const g = scene.add.graphics({ x, y }).setDepth(depth);
+    g.fillStyle(color, 1).fillCircle(0, 0, size);
+    scene.tweens.add({
+      targets: g,
+      x: x + Math.cos(angle) * d,
+      y: y + Math.sin(angle) * d,
+      alpha: 0,
+      scale: 0.5,
+      duration: durationMs,
+      ease: 'Cubic.Out',
+      onComplete: () => g.destroy(),
+    });
+  }
+}

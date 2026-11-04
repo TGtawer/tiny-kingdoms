@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import type { BuildingType, LeaderId, NodeKind, SpellId } from '../config/balance';
-import { COLORS } from '../config/game';
+import { COLORS, STAR_ROUNDING } from '../config/game';
 
 // Simple cartoon icons drawn with Graphics, centered at (x, y), fitting in a box of `size`.
 
@@ -106,11 +106,23 @@ export function drawCrystal(g: Phaser.GameObjects.Graphics, x: number, y: number
 }
 
 /** Left arrow for "back" buttons. */
+/** Left arrow with rounded ends and corners: thick strokes with round caps. */
 export function drawBack(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
   const s = size / 2;
+  const w = s * 0.34;
+  const tip = { x: x - s * 0.62, y };
+  const ends = [
+    { x: x + s * 0.68, y },
+    { x: x - s * 0.02, y: y - s * 0.6 },
+    { x: x - s * 0.02, y: y + s * 0.6 },
+  ];
+  g.lineStyle(w, COLORS.textDark, 1);
   g.fillStyle(COLORS.textDark, 1);
-  g.fillTriangle(x - s * 0.8, y, x - s * 0.05, y - s * 0.7, x - s * 0.05, y + s * 0.7);
-  g.fillRect(x - s * 0.1, y - s * 0.25, s * 0.85, s * 0.5);
+  for (const end of ends) {
+    g.lineBetween(tip.x, tip.y, end.x, end.y);
+    g.fillCircle(end.x, end.y, w / 2);
+  }
+  g.fillCircle(tip.x, tip.y, w / 2);
 }
 
 /** Padlock for locked items. */
@@ -126,9 +138,18 @@ export function drawCheck(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   const s = size / 2;
   g.fillStyle(COLORS.reinforcement, 1).fillCircle(x, y, s);
   g.lineStyle(Math.max(1, size * 0.08), COLORS.outline, 1).strokeCircle(x, y, s);
-  g.lineStyle(Math.max(2, size * 0.16), 0xffffff, 1);
-  g.lineBetween(x - s * 0.45, y, x - s * 0.1, y + s * 0.35);
-  g.lineBetween(x - s * 0.1, y + s * 0.35, x + s * 0.5, y - s * 0.35);
+  // Two strokes with round ends and a round corner (discs at the three points hide the joint).
+  const w = Math.max(2, size * 0.16);
+  const pts = [
+    [x - s * 0.42, y + s * 0.02],
+    [x - s * 0.1, y + s * 0.32],
+    [x + s * 0.45, y - s * 0.3],
+  ] as const;
+  g.lineStyle(w, 0xffffff, 1);
+  g.lineBetween(pts[0][0], pts[0][1], pts[1][0], pts[1][1]);
+  g.lineBetween(pts[1][0], pts[1][1], pts[2][0], pts[2][1]);
+  g.fillStyle(0xffffff, 1);
+  for (const [px, py] of pts) g.fillCircle(px, py, w / 2);
 }
 
 /** Enemy leader portrait in a round frame, centered at (x, y). */
@@ -267,14 +288,32 @@ export function drawStar(g: Phaser.GameObjects.Graphics, x: number, y: number, s
   g.fillStyle(earned ? COLORS.gold : COLORS.starEmpty, 1).fillPath();
 }
 
+/** Five-point star path with rounded tips (and slightly rounded inner corners). */
 function starShape(g: Phaser.GameObjects.Graphics, x: number, y: number, outer: number, inner: number): void {
-  g.beginPath();
-  for (let i = 0; i < 10; i++) {
+  const corners = Array.from({ length: 10 }, (_, i) => {
     const r = i % 2 === 0 ? outer : inner;
     const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    if (i === 0) g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-    else g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-  }
+    return { x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, tip: i % 2 === 0 };
+  });
+  g.beginPath();
+  corners.forEach((c, i) => {
+    const prev = corners[(i + 9) % 10]!;
+    const next = corners[(i + 1) % 10]!;
+    // Cut the corner at share f of both edges and bend a quadratic curve through it.
+    const f = c.tip ? STAR_ROUNDING.tip : STAR_ROUNDING.inner;
+    const ax = c.x + (prev.x - c.x) * f;
+    const ay = c.y + (prev.y - c.y) * f;
+    const bx = c.x + (next.x - c.x) * f;
+    const by = c.y + (next.y - c.y) * f;
+    const steps = c.tip ? 8 : 3;
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      const px = (1 - t) * (1 - t) * ax + 2 * (1 - t) * t * c.x + t * t * bx;
+      const py = (1 - t) * (1 - t) * ay + 2 * (1 - t) * t * c.y + t * t * by;
+      if (i === 0 && k === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+  });
   g.closePath();
 }
 
@@ -308,29 +347,43 @@ export function drawPause(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   g.fillRoundedRect(x + s * 0.17, y - s * 0.6, s * 0.38, s * 1.2, s * 0.1);
 }
 
-/** Speaker with sound waves. */
+/** Speaker with one sound wave (main menu toggle, as in docs/prototypes/living-screens.html). */
 export function drawSpeaker(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
-  const s = size / 2;
-  g.fillStyle(COLORS.textDark, 1);
-  g.fillRect(x - s * 0.8, y - s * 0.28, s * 0.4, s * 0.56);
-  g.fillTriangle(x - s * 0.45, y - s * 0.28, x + s * 0.05, y - s * 0.75, x + s * 0.05, y + s * 0.75);
-  g.fillTriangle(x - s * 0.45, y - s * 0.28, x + s * 0.05, y + s * 0.75, x - s * 0.45, y + s * 0.28);
-  g.lineStyle(Math.max(2, size * 0.09), COLORS.textDark, 1);
-  g.beginPath().arc(x + s * 0.1, y, s * 0.38, -0.8, 0.8).strokePath();
-  g.beginPath().arc(x + s * 0.1, y, s * 0.68, -0.8, 0.8).strokePath();
+  const s = size;
+  g.fillStyle(COLORS.outline, 1);
+  fillPolygon(g, [
+    [x - s * 0.35, y - s * 0.15],
+    [x - s * 0.15, y - s * 0.15],
+    [x + s * 0.1, y - s * 0.38],
+    [x + s * 0.1, y + s * 0.38],
+    [x - s * 0.15, y + s * 0.15],
+    [x - s * 0.35, y + s * 0.15],
+  ]);
+  g.lineStyle(s * 0.09, COLORS.outline, 1);
+  g.beginPath().arc(x + s * 0.12, y, s * 0.28, -0.8, 0.8).strokePath();
 }
 
-/** Two beamed music notes. */
+/** A single eighth note (main menu toggle, as in docs/prototypes/living-screens.html). */
 export function drawNote(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
-  const s = size / 2;
-  const stem = Math.max(2, size * 0.09);
-  g.fillStyle(COLORS.textDark, 1);
-  g.fillEllipse(x - s * 0.45, y + s * 0.5, s * 0.55, s * 0.42);
-  g.fillEllipse(x + s * 0.45, y + s * 0.35, s * 0.55, s * 0.42);
-  g.fillRect(x - s * 0.2 - stem / 2, y - s * 0.6, stem, s * 1.1);
-  g.fillRect(x + s * 0.7 - stem / 2, y - s * 0.75, stem, s * 1.1);
-  g.fillTriangle(x - s * 0.2 - stem / 2, y - s * 0.6, x + s * 0.7 + stem / 2, y - s * 0.75, x + s * 0.7 + stem / 2, y - s * 0.45);
-  g.fillTriangle(x - s * 0.2 - stem / 2, y - s * 0.6, x + s * 0.7 + stem / 2, y - s * 0.45, x - s * 0.2 - stem / 2, y - s * 0.3);
+  const s = size;
+  // Tilted note head: an ellipse rotated by -0.4 rad.
+  const head: Array<[number, number]> = [];
+  const cx = x - s * 0.12;
+  const cy = y + s * 0.25;
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const ex = Math.cos(a) * s * 0.16;
+    const ey = Math.sin(a) * s * 0.12;
+    head.push([cx + ex * Math.cos(-0.4) - ey * Math.sin(-0.4), cy + ex * Math.sin(-0.4) + ey * Math.cos(-0.4)]);
+  }
+  g.fillStyle(COLORS.outline, 1);
+  fillPolygon(g, head);
+  const w = s * 0.09;
+  g.lineStyle(w, COLORS.outline, 1);
+  g.lineBetween(x + s * 0.03, y + s * 0.25, x + s * 0.03, y - s * 0.35);
+  g.lineBetween(x + s * 0.03, y - s * 0.35, x + s * 0.3, y - s * 0.2);
+  // Round the corner where the stem meets the flag.
+  g.fillCircle(x + s * 0.03, y - s * 0.35, w / 2);
 }
 
 /** Red strike-through over an icon: the setting is off. */
@@ -338,4 +391,22 @@ export function drawOff(g: Phaser.GameObjects.Graphics, x: number, y: number, si
   const s = size / 2;
   g.lineStyle(Math.max(3, size * 0.14), COLORS.panel, 1).lineBetween(x - s * 0.8, y - s * 0.8, x + s * 0.8, y + s * 0.8);
   g.lineStyle(Math.max(2, size * 0.09), COLORS.faction.enemy, 1).lineBetween(x - s * 0.8, y - s * 0.8, x + s * 0.8, y + s * 0.8);
+}
+
+/** Fills a closed polygon with the current fill style. */
+function fillPolygon(g: Phaser.GameObjects.Graphics, points: ReadonlyArray<readonly [number, number]>): void {
+  g.beginPath();
+  points.forEach(([px, py], i) => (i === 0 ? g.moveTo(px, py) : g.lineTo(px, py)));
+  g.closePath().fillPath();
+}
+
+/** One half of drawLock (-1 = left, 1 = right), centered like the whole lock: the pieces of a broken lock. */
+export function drawLockHalf(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number, side: -1 | 1): void {
+  const s = size / 2;
+  g.lineStyle(Math.max(2, size * 0.12), COLORS.textDark, 1);
+  const from = side < 0 ? Math.PI : Math.PI * 1.5;
+  g.beginPath().arc(x, y - s * 0.15, s * 0.4, from, from + Math.PI / 2).strokePath();
+  const r = s * 0.15;
+  const radius = side < 0 ? { tl: r, tr: 0, bl: r, br: 0 } : { tl: 0, tr: r, bl: 0, br: r };
+  g.fillStyle(COLORS.textDark, 1).fillRoundedRect(side < 0 ? x - s * 0.6 : x, y - s * 0.15, s * 0.6, s * 0.95, radius);
 }
