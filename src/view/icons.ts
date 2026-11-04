@@ -248,8 +248,19 @@ export function drawKind(g: Phaser.GameObjects.Graphics, kind: NodeKind, x: numb
 
 /** Five-point star: gold when earned, dim when not. */
 export function drawStar(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number, earned: boolean): void {
-  const outer = size / 2;
+  // The outline is a dark star under a smaller fill: strokePath on this shape ignored the line width
+  // (and doubled up when several stars shared one Graphics), so the outlines came out uneven.
+  // The whole star, outline included, stays within `size`.
+  const t = Math.max(1.5, size * 0.07);
+  const outer = size / 2 - t * 1.8;
   const inner = outer * 0.45;
+  starShape(g, x, y, size / 2, inner + t * 1.2);
+  g.fillStyle(COLORS.outline, 1).fillPath();
+  starShape(g, x, y, outer, inner);
+  g.fillStyle(earned ? COLORS.gold : COLORS.starEmpty, 1).fillPath();
+}
+
+function starShape(g: Phaser.GameObjects.Graphics, x: number, y: number, outer: number, inner: number): void {
   g.beginPath();
   for (let i = 0; i < 10; i++) {
     const r = i % 2 === 0 ? outer : inner;
@@ -258,8 +269,6 @@ export function drawStar(g: Phaser.GameObjects.Graphics, x: number, y: number, s
     else g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
   }
   g.closePath();
-  g.fillStyle(earned ? COLORS.gold : COLORS.starEmpty, 1).fillPath();
-  g.lineStyle(Math.max(1, size * 0.07), COLORS.outline, 1).strokePath();
 }
 
 /** Golden crown marking a capital (start castle). */

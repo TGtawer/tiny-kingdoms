@@ -137,7 +137,11 @@ export const RESULT_PANEL = {
   flyStaggerMs: 90,
   flyDurationMs: 520,
   starSize: 40,
-  starGap: 10,
+  /** Width given to each star and its caption, CSS px (shrinks on narrow panels). */
+  starSlot: 92,
+  starLabelSize: 13,
+  /** Room under the stars for the captions, CSS px. */
+  starLabelH: 18,
   /** Delay between stars appearing one by one. */
   starStaggerMs: 260,
 } as const;

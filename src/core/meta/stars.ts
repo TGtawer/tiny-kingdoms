@@ -16,16 +16,21 @@ export function starTimeSec(level: LevelData): number {
   return level.starTimeSec ?? STARS.defaultTimeSec;
 }
 
+/** The three star conditions in display order: victory, faster than the level time, no own node lost. */
+export type StarChecks = [won: boolean, fast: boolean, flawless: boolean];
+
+/** Which star conditions were met. Nothing counts on defeat. */
+export function starChecks(summary: BattleSummary, level: LevelData): StarChecks {
+  if (!summary.won) return [false, false, false];
+  return [true, summary.timeMs <= starTimeSec(level) * 1000, !summary.lostOwnNode];
+}
+
 /**
  * 0 on defeat; on victory 1 star, +1 for winning faster than the level's time, +1 for not losing any own node.
  * TODO(design): whether stars change the crystal reward is TBD (UX.md 4.2); they don't for now.
  */
 export function starsFor(summary: BattleSummary, level: LevelData): number {
-  if (!summary.won) return 0;
-  let stars = 1;
-  if (summary.timeMs <= starTimeSec(level) * 1000) stars += 1;
-  if (!summary.lostOwnNode) stars += 1;
-  return stars;
+  return starChecks(summary, level).filter(Boolean).length;
 }
 
 /** All stars earned (best result per level, summed). Never decreases. */

@@ -26,6 +26,12 @@ interface SpellButton {
 }
 
 /** In-battle overlay: gold, pause button, spell buttons, pause and result panels. */
+/** Victory star row: which of the three conditions were met, and their captions. */
+export interface StarRow {
+  earned: readonly boolean[];
+  labels: readonly string[];
+}
+
 export class BattleHUD {
   private readonly scene: Phaser.Scene;
   private readonly root: Phaser.GameObjects.Container;
@@ -325,7 +331,7 @@ export class BattleHUD {
     crystals: number,
     totalCrystals: number,
     buttons: Array<{ label: string; onClick: () => void }>,
-    extras: { stars?: number; tip?: string } = {},
+    extras: { stars?: StarRow; tip?: string } = {},
   ): void {
     // TODO(stage-6): "double for a rewarded ad" button on victory.
     this.showPanel(title, buttons, { celebrate: won, crystals, totalCrystals, primary: won, ...extras });
@@ -383,7 +389,7 @@ export class BattleHUD {
       primary?: boolean;
       fade?: boolean;
       /** Star rating row under the title (victory). */
-      stars?: number;
+      stars?: StarRow;
       /** One advice line above the buttons (defeat). */
       tip?: string;
     } = {},
@@ -407,7 +413,7 @@ export class BattleHUD {
       const mainH = options.primary ? px(RESULT_PANEL.primaryButtonHeight) : bh;
       const gap = px(12);
       const rewardH = crystals === null ? 0 : px(44);
-      const starsH = options.stars === undefined ? 0 : px(RESULT_PANEL.starSize + 14);
+      const starsH = options.stars === undefined ? 0 : px(RESULT_PANEL.starSize + RESULT_PANEL.starLabelH + 14);
       const tipText = options.tip
         ? scene.add.text(w / 2, 0, options.tip, textStyle(16, COLORS.textDark)).setOrigin(0.5, 0).setAlign('center')
         : null;
@@ -429,7 +435,10 @@ export class BattleHUD {
         .setStroke('#1f2937', px(6));
       overlay.add([dim, panel, titleText]);
 
-      if (options.stars !== undefined) this.drawStars(overlay, w / 2, py0 + px(96) + starsH / 2 - px(10), options.stars, !animated);
+      if (options.stars !== undefined) {
+        const starY = py0 + px(96) + px(RESULT_PANEL.starSize) / 2 - px(8);
+        this.drawStars(overlay, w / 2, starY, Math.min(px(RESULT_PANEL.starSlot), (panelW - px(16)) / 3), options.stars, !animated);
+      }
       if (tipText) {
         tipText.setY(py0 + px(96) + starsH + rewardH);
         overlay.add(tipText);
@@ -489,26 +498,35 @@ export class BattleHUD {
     }
   }
 
-  /** Row of three stars; earned ones pop in one by one the first time. */
-  private drawStars(overlay: Phaser.GameObjects.Container, cx: number, cy: number, stars: number, animate: boolean): void {
+  /**
+   * Row of three stars, each over the label of its condition; earned ones pop in one by one the first time,
+   * missed conditions are dimmed.
+   */
+  private drawStars(overlay: Phaser.GameObjects.Container, cx: number, cy: number, slot: number, row: StarRow, animate: boolean): void {
     const size = px(RESULT_PANEL.starSize);
-    const gap = px(RESULT_PANEL.starGap);
-    for (let i = 0; i < 3; i++) {
-      const x = cx + (i - 1) * (size + gap);
+    let shown = 0;
+    row.earned.forEach((earned, i) => {
+      const x = cx + (i - 1) * slot;
       const empty = this.scene.add.graphics();
       drawStar(empty, 0, 0, size, false);
       empty.setPosition(x, cy);
-      overlay.add(empty);
-      if (i >= stars) continue;
+      const label = this.scene.add
+        .text(x, cy + size / 2 + px(4), row.labels[i] ?? '', textStyle(RESULT_PANEL.starLabelSize, COLORS.textDark))
+        .setOrigin(0.5, 0)
+        .setAlpha(earned ? 1 : 0.5);
+      if (label.width > slot - px(4)) label.setScale((slot - px(4)) / label.width);
+      overlay.add([empty, label]);
+      if (!earned) return;
       const star = this.scene.add.graphics();
       drawStar(star, 0, 0, size, true);
       star.setPosition(x, cy);
       overlay.add(star);
       if (animate) {
         star.setScale(0);
-        this.scene.tweens.add({ targets: star, scale: 1, delay: 200 + i * RESULT_PANEL.starStaggerMs, duration: 260, ease: 'Back.Out' });
+        this.scene.tweens.add({ targets: star, scale: 1, delay: 200 + shown * RESULT_PANEL.starStaggerMs, duration: 260, ease: 'Back.Out' });
       }
-    }
+      shown += 1;
+    });
   }
 
   /** Reward crystals fly from the reward label to the counter, which counts up as they land. */

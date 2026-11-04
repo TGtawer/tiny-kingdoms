@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BONUSES, STARS } from '../../../src/config/balance';
 import { defaultProgress } from '../../../src/core/meta/Progress';
-import { bestStars, recordStars, starsFor, starTimeSec } from '../../../src/core/meta/stars';
+import { bestStars, recordStars, starChecks, starsFor, starTimeSec } from '../../../src/core/meta/stars';
 import { canBuyUpgrade, defeatTip } from '../../../src/core/meta/tips';
 import { parseSave } from '../../../src/core/save/SaveData';
 import { level, node } from '../helpers';
@@ -22,6 +22,12 @@ describe('starsFor', () => {
     [slow, true, 1],
   ])('victory in %i ms, lost a node: %s -> %i stars', (timeMs, lostOwnNode, expected) => {
     expect(starsFor({ won: true, timeMs, lostOwnNode }, lvl)).toBe(expected);
+  });
+
+  it('starChecks names each condition in order: won, fast, flawless', () => {
+    expect(starChecks({ won: true, timeMs: slow, lostOwnNode: false }, lvl)).toEqual([true, false, true]);
+    expect(starChecks({ won: true, timeMs: fast, lostOwnNode: true }, lvl)).toEqual([true, true, false]);
+    expect(starChecks({ won: false, timeMs: fast, lostOwnNode: false }, lvl)).toEqual([false, false, false]);
   });
 
   it('uses the level time when set', () => {

@@ -12,7 +12,7 @@ import { advanceTutorial, currentStep, startTutorial, type TutorialState, type U
 import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
-import { recordStars, starsFor } from '../core/meta/stars';
+import { recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
 import { defeatTip } from '../core/meta/tips';
 import { playerSetupFrom } from '../core/meta/upgrades';
 import { FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
@@ -364,15 +364,15 @@ export class BattleScene extends Phaser.Scene {
     // Rewards are applied and saved right away, so leaving the result screen can't lose them.
     const store = getStore(this);
     const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
-    const stars = starsFor({ won: winner === 'player', timeMs: this.world.tick * TICK_MS, lostOwnNode: this.stats.lostOwnNode }, this.level);
-    recordStars(store.progress, this.level.id, stars);
+    const stars = starChecks({ won: winner === 'player', timeMs: this.world.tick * TICK_MS, lostOwnNode: this.stats.lostOwnNode }, this.level);
+    recordStars(store.progress, this.level.id, stars.filter(Boolean).length);
     store.commit();
     playSfx(winner === 'player' ? 'victory' : 'defeat');
     if (winner === 'player') this.vibrate(HAPTICS.victory);
     this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reason, reward.crystals, stars));
   }
 
-  private showResult(winner: Side, reason: OutcomeReason, crystals: number, stars: number): void {
+  private showResult(winner: Side, reason: OutcomeReason, crystals: number, checks: StarChecks): void {
     // Which goal was met (or why the battle was lost), plus the defeat tip.
     const why = t(`goal.reason.${reason}`);
     const replay = { label: t('result.playAgain'), onClick: () => this.scene.restart({ levelId: this.level.id }) };
@@ -387,6 +387,13 @@ export class BattleScene extends Phaser.Scene {
       this.hud.showResult(t('result.defeat'), false, crystals, total, buttons, { tip: tip ? `${why}\n${t(`tip.${tip}`)}` : why });
       return;
     }
+    // Each star sits over the condition that earns it.
+    const time = starTimeSec(this.level);
+    const clock = `${Math.floor(time / 60)}:${String(time % 60).padStart(2, '0')}`;
+    const stars = {
+      earned: checks,
+      labels: [t('stars.won'), t('stars.fast', { time: clock }), t('stars.flawless')],
+    };
     const next = nextLevel(this.level.id);
     if (next) {
       this.hud.showResult(t('result.victory'), true, crystals, total, [
