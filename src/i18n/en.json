@@ -41,11 +41,8 @@
   "upgrades.spells": "Spells",
   "upgrades.level": "Lv. {level}/{max}",
   "upgrades.max": "Max",
-  "upgrades.spellsChoose": "Spells — pick a new one!",
   "upgrades.open": "Open",
-  "upgrades.nextSlot": "New spell at {need} stars · you have {have}",
-  "upgrades.noSlot": "No free slots",
-  "result.newSpell": "You can open a spell — check Upgrades",
+  "result.newSpell": "New spell: {spell}!",
   "bonus.startArmy": "Starting army",
   "bonus.startArmy.desc": "+{value} troops in each starting circle",
   "bonus.troopProduction": "Troop production",
@@ -111,5 +108,10 @@
   "goal.reason.capitalLost": "Your capital has fallen",
   "boss.dragon": "Dragon strikes in {sec} s",
   "boss.citadel": "The citadel sends a squad in {sec} s",
-  "tut.dragon": "The dragon burns half of the biggest garrison. See the red circle? Move your troops out!"
+  "tut.dragon": "The dragon burns half of the biggest garrison. See the red circle? Move your troops out!",
+  "result.switchSpellHint": "You can switch spells in Upgrades",
+  "result.spellWaiting": "A new spell awaits in Upgrades",
+  "lock.atLevel": "Opens at level {index}",
+  "lock.afterLevel": "Opens after level {index}",
+  "lock.later": "Opens later"
 }

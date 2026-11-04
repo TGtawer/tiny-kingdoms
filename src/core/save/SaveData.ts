@@ -1,10 +1,9 @@
 import { BONUSES, SPELL_IDS, SPELL_UPGRADES, STARS, type SpellId } from '../../config/balance';
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
-import { spellSlots } from '../meta/spellbook';
 import { totalStars } from '../meta/stars';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export interface SaveData {
   version: number;
@@ -49,6 +48,19 @@ export const MIGRATIONS: Record<number, Migration> = {
   },
   // v6 added settings.music; it starts on (sanitizeSettings fills the default).
   5: (d) => ({ ...d, version: 6 }),
+  // v7 (TUTORIAL.md T-3): spells come from the story, not from star slots. Slot choices are dropped,
+  // stars spent on spell upgrades come back, and the spells the story has already given are unlocked.
+  6: (d) => {
+    const progress: Record<string, unknown> = isObject(d.progress) ? { ...d.progress } : {};
+    delete progress.openSpells;
+    const completed = Array.isArray(progress.completed) ? progress.completed : [];
+    const unlocked = [...(completed.includes('c01_l06') ? ['reinforcement'] : []), ...(completed.includes('c01_l10') ? ['fireball'] : [])];
+    return {
+      ...d,
+      version: 7,
+      progress: { ...progress, spellUpgrades: {}, spentStars: 0, unlockedSpells: unlocked, activeSpell: unlocked[0] ?? null },
+    };
+  },
 };
 
 /**
@@ -109,13 +121,11 @@ function sanitizeProgress(raw: unknown): Progress {
     }
   }
   progress.spentStars = Math.min(totalStars(progress), Math.max(0, Math.floor(num(raw.spentStars, 0))));
-  if (Array.isArray(raw.openSpells)) {
-    const open = [...new Set(raw.openSpells.filter((s): s is SpellId => SPELL_IDS.includes(s as SpellId)))];
-    // Never more spells than slots.
-    progress.openSpells = open.slice(0, spellSlots(progress));
+  if (Array.isArray(raw.unlockedSpells)) {
+    progress.unlockedSpells = [...new Set(raw.unlockedSpells.filter((s): s is SpellId => SPELL_IDS.includes(s as SpellId)))];
   }
   const active = raw.activeSpell as SpellId;
-  progress.activeSpell = progress.openSpells.includes(active) ? active : (progress.openSpells[0] ?? null);
+  progress.activeSpell = progress.unlockedSpells.includes(active) ? active : (progress.unlockedSpells[0] ?? null);
   return progress;
 }
 

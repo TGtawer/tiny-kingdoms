@@ -41,11 +41,8 @@
   "upgrades.spells": "Спецприёмы",
   "upgrades.level": "Ур. {level}/{max}",
   "upgrades.max": "Макс.",
-  "upgrades.spellsChoose": "Спецприёмы — выбери новый!",
   "upgrades.open": "Открыть",
-  "upgrades.nextSlot": "Новый приём — при {need} звёздах · сейчас {have}",
-  "upgrades.noSlot": "Свободных слотов нет",
-  "result.newSpell": "Можно открыть спецприём — загляни в «Прокачку»",
+  "result.newSpell": "Новый приём: {spell}!",
   "bonus.startArmy": "Стартовая армия",
   "bonus.startArmy.desc": "+{value} войска в каждый стартовый круг",
   "bonus.troopProduction": "Производство войск",
@@ -111,5 +108,10 @@
   "goal.reason.capitalLost": "Твоя столица пала",
   "boss.dragon": "Дракон ударит через {sec} с",
   "boss.citadel": "Цитадель выпустит отряд через {sec} с",
-  "tut.dragon": "Дракон сжигает половину войск в самом большом гарнизоне. Увидел красный круг — уводи войска!"
+  "tut.dragon": "Дракон сжигает половину войск в самом большом гарнизоне. Увидел красный круг — уводи войска!",
+  "result.switchSpellHint": "Сменить приём можно в «Прокачке»",
+  "result.spellWaiting": "В «Прокачке» тебя ждёт новый приём",
+  "lock.atLevel": "Откроется на уровне {index}",
+  "lock.afterLevel": "Откроется после уровня {index}",
+  "lock.later": "Откроется позже"
 }

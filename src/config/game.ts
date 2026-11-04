@@ -30,6 +30,8 @@ export const COLORS = {
   button: 0xffb53d,
   buttonPressed: 0xe8962a,
   buttonDisabled: 0xc9bfae,
+  /** Not taught yet (TUTORIAL.md T-3): dark face with a lock; text on it is light. */
+  locked: 0x4b4a52,
   /** Secondary buttons next to a main one (result panel). */
   buttonSecondary: 0xf2dcae,
   starEmpty: 0x8b8578,
@@ -477,6 +479,8 @@ export const MENU_BANNER = {
   medalShine: { x: -0.32, y: -0.48, rx: 0.36, ry: 0.16, angle: -0.35, alpha: 0.3 },
   medalRing: { inset: 5, width: 1.5, dash: 3, gap: 4, shade: -0.45, shadowY: 2, shadowShade: -0.35 },
   iconScale: 1.1,
+  /** Locked banner (TUTORIAL.md T-3): cloth and trim darkened, medallion dimmed with a lock on a light disc. */
+  locked: { shade: -0.55, medalDim: 0.55, lockDisc: 0.55, lockSize: 0.62, labelAlpha: 0.7 },
   pulse: { pad: 8, color: 0xffe68c, alpha: 0.5, periodMs: 1600 },
   /** Labels: font size share of the width (side banners capped), the second line smaller and yellow. */
   labelMain: 0.2,

@@ -2,8 +2,8 @@ import * as Phaser from 'phaser';
 import { BONUSES, SPELL_UPGRADES, SPELL_IDS, type SpellId } from '../config/balance';
 import { COLORS } from '../config/game';
 import { BONUS_IDS, type BonusId } from '../core/meta/Progress';
-import { activeSpell, canOpenSpell, nextSlotStars, openSpell, setActiveSpell } from '../core/meta/spellbook';
-import { freeStars, totalStars } from '../core/meta/stars';
+import { activeSpell, claimableSpell, setActiveSpell, spellUnlockLevel, unlockSpell } from '../core/meta/spellbook';
+import { freeStars } from '../core/meta/stars';
 import { bonusCost, buyBonus, buySpellUpgrade, spellUpgradeCost } from '../core/meta/upgrades';
 import { t } from '../i18n/i18n';
 import { Button } from '../view/Button';
@@ -12,6 +12,7 @@ import { px, textStyle } from '../view/layout';
 import { mapTrack } from '../core/audio/playlist';
 import { audioFiles, playMusic } from '../view/music';
 import { drawMeadow, topBar } from '../view/ui';
+import { getLevel } from '../levels';
 import { getStore } from './registry';
 
 export interface UpgradesData {
@@ -32,9 +33,9 @@ interface Row {
   currency: 'crystal' | 'star';
   balance: number;
   buy: () => void;
-  /** Spell not open yet but a slot is free: an "Open" button replaces the buy button. */
+  /** A spell the story has given but the player has not claimed yet: an "Open" button replaces the buy button. */
   open?: () => void;
-  /** Open spells: a radio mark at the left; tapping the row makes the spell active. */
+  /** Unlocked spells: a radio mark at the left; tapping the row makes the spell active. */
   spell?: { active: boolean; select: () => void };
 }
 
@@ -96,12 +97,14 @@ export class UpgradesScene extends Phaser.Scene {
       buy: () => afterBuy(buyBonus(progress, id) === 'ok'),
     }));
 
-    const earned = totalStars(progress);
     const free = freeStars(progress);
     const active = activeSpell(progress);
-    const slotFree = canOpenSpell(progress);
-    const nextSlot = nextSlotStars(progress);
-    const lockedText = nextSlot === null ? t('upgrades.noSlot') : t('upgrades.nextSlot', { need: nextSlot, have: earned });
+    const claimable = claimableSpell(progress);
+    // Spells come from the story (TUTORIAL.md T-3): a locked one says after which level it opens.
+    const lockedText = (id: SpellId): string => {
+      const level = getLevel(spellUnlockLevel(id));
+      return level?.chapter === 1 ? t('lock.afterLevel', { index: level.index }) : t('lock.later');
+    };
     const spellRows: Row[] = SPELL_IDS.map((id: SpellId) => {
       const s = SPELL_UPGRADES.perLevel;
       const desc =
@@ -110,7 +113,7 @@ export class UpgradesScene extends Phaser.Scene {
           : id === 'reinforcement'
             ? t('spell.reinforcement.desc', { troops: s.reinforcement.troops, cooldown: -s.reinforcement.cooldownSec })
             : t('spell.shield.desc', { sec: s.shield.durationSec, cooldown: -s.shield.cooldownSec });
-      const isOpen = progress.openSpells.includes(id);
+      const isOpen = progress.unlockedSpells.includes(id);
       return {
         title: t(`spell.${id}`),
         desc,
@@ -120,8 +123,8 @@ export class UpgradesScene extends Phaser.Scene {
         currency: 'star',
         balance: free,
         ...(isOpen ? { spell: { active: id === active, select: () => afterBuy(id !== active && setActiveSpell(progress, id)) } } : {}),
-        ...(!isOpen && slotFree ? { open: () => afterBuy(openSpell(progress, id) === 'ok') } : {}),
-        ...(!isOpen && !slotFree ? { locked: lockedText } : {}),
+        ...(!isOpen && id === claimable ? { open: () => afterBuy(unlockSpell(progress, id)) } : {}),
+        ...(!isOpen && id !== claimable ? { locked: lockedText(id) } : {}),
         buy: () => afterBuy(buySpellUpgrade(progress, id) === 'ok'),
       };
     });
@@ -153,7 +156,7 @@ export class UpgradesScene extends Phaser.Scene {
 
     header(t('upgrades.bonuses'));
     bonusRows.forEach(row);
-    header(slotFree ? t('upgrades.spellsChoose') : t('upgrades.spells'), free);
+    header(t('upgrades.spells'), free);
     spellRows.forEach(row);
   }
 

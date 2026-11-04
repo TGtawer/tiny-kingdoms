@@ -9,6 +9,13 @@ export interface DefeatSummary {
   hadVeinWithoutMine: boolean;
 }
 
+/** What the player has been taught so far (unlocks.ts): tips only suggest open things (TUTORIAL.md T-3). */
+export interface TipAvailability {
+  barracks: boolean;
+  mine: boolean;
+  upgrades: boolean;
+}
+
 /** i18n key suffix of the tip (`tip.<id>`); 'upgrades' also offers the Upgrades button. */
 export type DefeatTip = 'barracks' | 'mine' | 'upgrades';
 
@@ -21,9 +28,9 @@ export function canBuyUpgrade(progress: Progress): boolean {
 }
 
 /** One tip for the defeat screen, by simple rules in priority order; null when none applies. */
-export function defeatTip(summary: DefeatSummary, progress: Progress): DefeatTip | null {
-  if (!summary.builtBarracks) return 'barracks';
-  if (summary.hadVeinWithoutMine && !summary.builtMine) return 'mine';
-  if (canBuyUpgrade(progress)) return 'upgrades';
+export function defeatTip(summary: DefeatSummary, progress: Progress, available: TipAvailability): DefeatTip | null {
+  if (available.barracks && !summary.builtBarracks) return 'barracks';
+  if (available.mine && summary.hadVeinWithoutMine && !summary.builtMine) return 'mine';
+  if (available.upgrades && canBuyUpgrade(progress)) return 'upgrades';
   return null;
 }

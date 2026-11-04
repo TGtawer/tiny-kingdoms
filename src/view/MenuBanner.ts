@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, cssColor, FONT_FAMILY, MENU_BANNER, MENU_FX, type MenuBannerId } from '../config/game';
-import { drawMenuIcon, shade, type MenuIcon } from './icons';
+import { drawLock, drawMenuIcon, shade, type MenuIcon } from './icons';
 
 const B = MENU_BANNER;
 
@@ -35,6 +35,8 @@ export interface BannerSpec {
   labels: readonly string[];
   /** When the drop starts in the entrance, ms. */
   dropDelayMs: number;
+  /** Not opened yet (TUTORIAL.md T-3): darkened cloth, lock on the medallion; still pressable. */
+  locked?: boolean;
 }
 
 type Pt = readonly [number, number];
@@ -56,6 +58,7 @@ export class MenuBanner {
   private readonly fontSize: number;
   private imp = 0;
   private flash = 0;
+  private labelAlpha = 1;
 
   constructor(
     scene: Phaser.Scene,
@@ -91,6 +94,7 @@ export class MenuBanner {
         .setStroke(cssColor(COLORS.outline), (j ? B.labelSecondStroke : B.labelStroke) * frame.s)
         .setDepth(labelDepth);
     });
+    this.labelAlpha = spec.locked ? B.locked.labelAlpha : 1;
 
     // The whole cloth with its tip is the touch area (always far above 48 px).
     const left = frameX(frame, spec.x - spec.w / 2);
@@ -126,7 +130,7 @@ export class MenuBanner {
     const lx = frameX(this.frame, x + this.sway(t, B.labelAt));
     this.labels.forEach((label, j) => {
       const ly = cy + this.fontSize * 0.8 + j * this.fontSize * 1.05;
-      label.setPosition(lx, frameY(this.frame, ly)).setAlpha(content);
+      label.setPosition(lx, frameY(this.frame, ly)).setAlpha(content * this.labelAlpha);
     });
   }
 
@@ -169,7 +173,10 @@ export class MenuBanner {
     const g = this.cloth;
     g.clear();
     if (drop <= 0) return;
-    const { x, y, w, color, trim } = this.spec;
+    const { x, y, w } = this.spec;
+    const locked = this.spec.locked === true;
+    const color = locked ? shade(this.spec.color, B.locked.shade) : this.spec.color;
+    const trim = locked ? shade(this.spec.trim, B.locked.shade) : this.spec.trim;
     const len = this.spec.len * drop;
     const tipH = B.tipH * drop;
     const st = this.flat ? B.flat : B.rich;
@@ -293,6 +300,13 @@ export class MenuBanner {
       dashed(g, ring, M.dash, M.gap);
     }
     drawMenuIcon(g, this.spec.icon, 0, 0, r * B.iconScale);
+    if (this.spec.locked) {
+      // Dim the medallion and put a lock in the middle.
+      g.fillStyle(COLORS.outline, B.locked.medalDim).fillCircle(0, 0, r);
+      g.fillStyle(COLORS.panel, 1).fillCircle(0, 0, r * B.locked.lockDisc);
+      g.lineStyle(B.outline, COLORS.outline, 1).strokeCircle(0, 0, r * B.locked.lockDisc);
+      drawLock(g, 0, 0, r * B.locked.lockSize);
+    }
   }
 }
 

@@ -9,10 +9,26 @@ export const NODE_KINDS: readonly NodeKind[] = ['normal', 'temple', 'fortress', 
 export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement', 'shield'];
 
 /**
- * GDD 3.8: each entry is a total of earned stars that gives one more spell slot; the player chooses which spell
- * to open in it (stars are not spent). One open spell is active in battle.
+ * GDD 3.8, TUTORIAL.md T-3: spells are given by the story in a fixed order, not chosen.
+ * `tour`: claimed in the Upgrades tour after the first win on that level; `afterWin`: the first win on that level.
+ * TODO(design): chapter 2 does not exist yet, so the shield is not reachable.
  */
-export const SPELL_SLOT_STARS: readonly number[] = [3, 12, 24];
+export const SPELL_UNLOCKS: Record<SpellId, { tour: string } | { afterWin: string }> = {
+  reinforcement: { tour: 'c01_l06' },
+  fireball: { afterWin: 'c01_l10' },
+  shield: { afterWin: 'c02_l10' },
+};
+
+/**
+ * TUTORIAL.md T-3: when buildings and screens open. Buildings: from that level on (in play order);
+ * Upgrades: after the first win on that level. The enemy always has every building.
+ */
+export const FEATURE_UNLOCKS = {
+  barracks: 'c01_l03',
+  tower: 'c01_l05',
+  mine: 'c02_l01',
+  upgrades: { afterWin: 'c01_l06' },
+} as const;
 
 /** Simulation fixed timestep. */
 export const TICK_MS = 100;

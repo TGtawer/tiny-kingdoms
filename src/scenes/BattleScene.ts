@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DRAGON, SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
+import { DRAGON, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
 import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
@@ -13,12 +13,13 @@ import { advanceTutorial, currentStep, startTutorial, type TutorialState, type U
 import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
-import { canOpenSpell } from '../core/meta/spellbook';
+import { activeSpell, claimableSpell, grantWinSpells } from '../core/meta/spellbook';
 import { bestStars, recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
 import { isCompleted } from '../core/meta/Progress';
 import { defeatTip } from '../core/meta/tips';
+import { featureLevel, isFeatureAvailable, isGoldVisible } from '../core/meta/unlocks';
 import { playerSetupFrom } from '../core/meta/upgrades';
-import { FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
+import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
 import { ArmyView, armyLevelPosition } from '../view/ArmyView';
@@ -80,6 +81,8 @@ export class BattleScene extends Phaser.Scene {
   private stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
   /** After a win: what the chapter map animates when the player goes there from the result panel (V-3). */
   private mapReveal: MapReveal | null = null;
+  /** Spells this win gave (TUTORIAL.md T-3), for the result panel. */
+  private newSpells: SpellId[] = [];
   /** "How many will leave" badge at the end of a swipe; one reused Text. */
   private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
@@ -130,6 +133,7 @@ export class BattleScene extends Phaser.Scene {
     this.inPortal = new Set();
     this.stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
     this.mapReveal = null;
+    this.newSpells = [];
 
     this.platform = getPlatform(this);
     // Seed per level: the AI's timing jitter is reproducible for a given level.
@@ -160,6 +164,8 @@ export class BattleScene extends Phaser.Scene {
       onSpeed: () => this.toggleSpeed(),
       onSpell: (spell) => this.toggleSpell(spell),
     });
+    // Gold stays hidden until there is something to spend it on (TUTORIAL.md T-3); it is still earned.
+    this.hud.setGoldVisible(isGoldVisible(this.level.id, getStore(this).progress, ALL_LEVELS));
     this.tutorialView = this.tutorial ? new TutorialView(this) : null;
 
     this.relayout();
@@ -392,6 +398,7 @@ export class BattleScene extends Phaser.Scene {
     const firstWin = !isCompleted(store.progress, this.level.id);
     const previousStars = bestStars(store.progress, this.level.id);
     const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
+    if (winner === 'player') this.newSpells = grantWinSpells(store.progress, this.level.id);
     const stars = starChecks({ won: winner === 'player', timeMs: this.world.tick * TICK_MS, lostOwnNode: this.stats.lostOwnNode }, this.level);
     const starCount = stars.filter(Boolean).length;
     recordStars(store.progress, this.level.id, starCount);
@@ -420,7 +427,9 @@ export class BattleScene extends Phaser.Scene {
     const toMap = { label: t('result.toMap'), onClick: () => this.toMap() };
     const total = getStore(this).progress.crystals;
     if (winner !== 'player') {
-      const tip = defeatTip(this.stats, getStore(this).progress);
+      const progress = getStore(this).progress;
+      const open = (f: 'barracks' | 'mine' | 'upgrades'): boolean => isFeatureAvailable(f, this.level.id, progress, ALL_LEVELS);
+      const tip = defeatTip(this.stats, progress, { barracks: open('barracks'), mine: open('mine'), upgrades: open('upgrades') });
       const buttons = [replay, toMap];
       if (tip === 'upgrades') {
         buttons.splice(1, 0, { label: t('menu.upgrades'), onClick: () => this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }) });
@@ -435,8 +444,7 @@ export class BattleScene extends Phaser.Scene {
       earned: checks,
       labels: [t('stars.won'), t('stars.fast', { time: clock }), t('stars.flawless')],
     };
-    // A new spell slot was earned: point the player to the Upgrades screen to pick one.
-    const winTip = canOpenSpell(getStore(this).progress) ? `${why}\n${t('result.newSpell')}` : why;
+    const winTip = [why, ...this.spellNews()].join('\n');
     const next = nextLevel(this.level.id);
     if (next) {
       this.hud.showResult(t('result.victory'), true, crystals, total, [
@@ -447,6 +455,27 @@ export class BattleScene extends Phaser.Scene {
     } else {
       this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], { stars, tip: winTip });
     }
+  }
+
+  /**
+   * Result lines about spells (TUTORIAL.md T-3): "New spell: X" for spells this win gave, plus the switch hint when
+   * the new one did not become active; or a pointer to the Upgrades screen when a spell waits to be claimed there.
+   */
+  private spellNews(): string[] {
+    const progress = getStore(this).progress;
+    if (this.newSpells.length > 0) {
+      const lines = this.newSpells.map((spell) => t('result.newSpell', { spell: t(`spell.${spell}`) }));
+      if (this.newSpells.some((spell) => spell !== activeSpell(progress))) lines.push(t('result.switchSpellHint'));
+      return lines;
+    }
+    return claimableSpell(progress) ? [t('result.spellWaiting')] : [];
+  }
+
+  /** "Opens at level N" for a building the player has not been taught yet; null if it can be built. */
+  private buildingLock(type: BuildingType): string | null {
+    if (isFeatureAvailable(type, this.level.id, getStore(this).progress, ALL_LEVELS)) return null;
+    const at = featureLevel(type, ALL_LEVELS);
+    return at ? t('lock.atLevel', { index: at.index }) : t('lock.later');
   }
 
   /** To the chapter map; after a win the map plays the level-open animation (not from the pause panel). */
@@ -747,7 +776,12 @@ export class BattleScene extends Phaser.Scene {
     this.showInfo(node);
     // Temples hold no buildings: no build menu, the info label explains why.
     if (node.kind === 'temple') return;
-    this.menu = new BuildMenu(this, this.world.nodes[nodeId]!, (choice) => this.onBuild(nodeId, choice)).setDepth(90);
+    this.menu = new BuildMenu(
+      this,
+      this.world.nodes[nodeId]!,
+      (choice) => this.onBuild(nodeId, choice),
+      (type) => this.buildingLock(type),
+    ).setDepth(90);
     this.menu.refresh(this.world.sides.player.gold);
     this.hud.setSpellBarVisible(false);
   }

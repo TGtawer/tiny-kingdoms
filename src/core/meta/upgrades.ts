@@ -33,9 +33,9 @@ export function buyBonus(progress: Progress, bonus: BonusId): BuyResult {
   return 'ok';
 }
 
-/** Spell upgrades are bought with stars, once the spell itself is open. */
+/** Spell upgrades are bought with stars, only for unlocked spells. */
 export function buySpellUpgrade(progress: Progress, spell: SpellId): BuyResult {
-  if (!progress.openSpells.includes(spell)) return 'locked';
+  if (!progress.unlockedSpells.includes(spell)) return 'locked';
   const cost = spellUpgradeCost(progress.spellUpgrades[spell]);
   if (cost === null) return 'maxLevel';
   if (freeStars(progress) < cost) return 'notEnoughStars';

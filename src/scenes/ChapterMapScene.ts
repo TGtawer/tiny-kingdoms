@@ -1,18 +1,20 @@
 import * as Phaser from 'phaser';
+import { FEATURE_UNLOCKS } from '../config/balance';
 import { COLORS, DRAG_THRESHOLD_PX, HUD, MAP, MAP_FX } from '../config/game';
 import { mapTrack } from '../core/audio/playlist';
 import type { LevelData } from '../core/level/schema';
 import { currentLevel, isCompleted, isUnlocked } from '../core/meta/Progress';
 import { bestStars } from '../core/meta/stars';
+import { isUpgradesOpen } from '../core/meta/unlocks';
 import { t } from '../i18n/i18n';
-import { ALL_LEVELS, CHAPTERS } from '../levels';
-import { ringBurst, sparks } from '../view/effects';
+import { ALL_LEVELS, CHAPTERS, getLevel } from '../levels';
+import { ringBurst, sparks, toast } from '../view/effects';
 import { drawCheck, drawLock, drawLockHalf, drawStar } from '../view/icons';
 import { clamp, px, textStyle, type Point } from '../view/layout';
 import { MAP_DEPTH, MapScenery } from '../view/MapScenery';
 import { audioFiles, playMusic } from '../view/music';
 import { playSfx } from '../view/sound';
-import { meadowTile, textButton, topBar } from '../view/ui';
+import { lockedButton, meadowTile, textButton, topBar } from '../view/ui';
 import { getStore } from './registry';
 
 /** A won battle to show on the map (docs/VISUALS.md V-3). Progress is already saved; this is only the picture. */
@@ -214,9 +216,18 @@ export class ChapterMapScene extends Phaser.Scene {
     topBar(this, t('map.chapter', { chapter: this.chapter }), progress.crystals, () => this.scene.start('MenuScene'));
     const strip = this.add.graphics();
     strip.fillStyle(COLORS.outline, 0.28).fillRect(0, h - bottomH, w, bottomH);
-    textButton(this, w / 2, h - bottomH / 2, Math.min(w - px(48), px(260)), px(56), t('menu.upgrades'), () =>
-      this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }),
-    );
+    const upW = Math.min(w - px(48), px(260));
+    if (isUpgradesOpen(progress)) {
+      textButton(this, w / 2, h - bottomH / 2, upW, px(56), t('menu.upgrades'), () =>
+        this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }),
+      );
+    } else {
+      // Locked until the first win on its level (TUTORIAL.md T-3): a tap says when it opens.
+      const afterIndex = getLevel(FEATURE_UNLOCKS.upgrades.afterWin)?.index ?? 0;
+      lockedButton(this, w / 2, h - bottomH / 2, upW, px(56), t('menu.upgrades'), () =>
+        toast(this, w / 2, h - bottomH - px(6), t('lock.afterLevel', { index: afterIndex })),
+      );
+    }
     for (const obj of this.children.list.slice(uiStart)) {
       const o = obj as Phaser.GameObjects.GameObject & Partial<Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>;
       if (o instanceof Phaser.GameObjects.Container) o.setScrollFactor(0, 0, true);

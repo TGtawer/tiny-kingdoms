@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import { COLORS } from '../config/game';
+import { COLORS, cssColor, INFO_LABEL_MS } from '../config/game';
 import { px, textStyle } from './layout';
 
 /** Expanding ring that fades out. */
@@ -19,6 +19,25 @@ export function ringBurst(scene: Phaser.Scene, x: number, y: number, radius: num
 /** Squash-and-stretch pop on a game object (e.g. a captured node). */
 export function pop(scene: Phaser.Scene, target: Phaser.GameObjects.Components.Transform): void {
   scene.tweens.add({ targets: target, scale: 1.18, duration: 110, yoyo: true, ease: 'Quad.Out' });
+}
+
+/**
+ * Short label on a panel that fades after INFO_LABEL_MS (e.g. "Opens at level 3" on a locked button).
+ * Screen coordinates (does not scroll with the camera), kept inside the screen; `y` is the bottom edge.
+ */
+export function toast(scene: Phaser.Scene, x: number, y: number, text: string, depth = 300): Phaser.GameObjects.Text {
+  const label = scene.add
+    .text(x, y, text, textStyle(15, COLORS.textDark))
+    .setOrigin(0.5, 1)
+    .setAlign('center')
+    .setBackgroundColor(cssColor(COLORS.panel))
+    .setPadding(px(10), px(6), px(10), px(6))
+    .setScrollFactor(0)
+    .setDepth(depth);
+  const w = scene.scale.width;
+  label.setX(Math.min(Math.max(x, label.width / 2 + px(6)), w - label.width / 2 - px(6)));
+  scene.tweens.add({ targets: label, alpha: 0, delay: INFO_LABEL_MS, duration: 300, onComplete: () => label.destroy() });
+  return label;
 }
 
 /** Floating number such as "-8" above a point. */

@@ -61,6 +61,8 @@ export class BattleHUD {
   private readonly spells: SpellButton[] = [];
   private overlay: Phaser.GameObjects.Container | null = null;
   private shownGold = -1;
+  /** Gold counter hidden until the player can spend gold (TUTORIAL.md T-3). */
+  private goldVisible = true;
 
   constructor(scene: Phaser.Scene, title: string, spells: readonly SpellId[], callbacks: HudCallbacks) {
     this.scene = scene;
@@ -179,6 +181,15 @@ export class BattleHUD {
     };
     dim.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, close);
     scene.time.delayedCall(LEADER_CARD.autoCloseMs, close);
+  }
+
+  /** Shows or hides the gold counter and income; the title takes the freed space. */
+  setGoldVisible(visible: boolean): void {
+    this.goldVisible = visible;
+    this.coin.setVisible(visible);
+    this.goldText.setVisible(visible);
+    this.rateText.setVisible(visible);
+    this.placeTitle();
   }
 
   get hasSpellBar(): boolean {
@@ -365,7 +376,7 @@ export class BattleHUD {
   private placeTitle(): void {
     const barH = px(HUD.topBar);
     const gap = px(HUD.topBarGap);
-    const left = this.rateText.x + this.rateText.width + gap;
+    const left = this.goldVisible ? this.rateText.x + this.rateText.width + gap : px(16);
     const right = this.speedButton.x - this.speedButton.buttonWidth / 2 - gap;
     const portrait = this.leader ? px(LEADER_CARD.hudPortrait) : 0;
     const portraitW = portrait > 0 ? portrait + gap : 0;
