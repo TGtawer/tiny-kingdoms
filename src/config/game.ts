@@ -191,3 +191,17 @@ export const SHIELD_FX = {
   /** The dome blinks during the last ms of the shield. */
   blinkMs: 2000,
 } as const;
+
+/** Main menu UI layer, CSS px. */
+export const MENU_LAYOUT = {
+  panelPadding: 18,
+  /** Room left on each side of the buttons, CSS px. */
+  sideClearance: 30,
+  panelAlpha: 0.88,
+  /** Title drop shadow offset, CSS px. */
+  titleShadow: 5,
+  /** Flowers per (100 CSS px)^2 on the menu meadow. */
+  flowerDensity: 1.6,
+  flowerColors: [0xfde047, 0xf9a8d4, 0xffffff, 0xc4b5fd],
+} as const;
+
