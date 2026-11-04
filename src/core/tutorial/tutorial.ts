@@ -9,7 +9,7 @@ import type { World } from '../sim/World';
 /**
  * Step-by-step tutorial (GDD 6, TUTORIAL.md T-4): one short hint at a time, highlights and a finger showing
  * the gesture. A step ends when the player does what it asks (or after a few seconds for info-only steps).
- * While a `slow` step waits for the player, the whole battle runs at TUTORIAL.slowMo.
+ * While a `slow` step waits for the player, the whole battle runs at SLOW_MO.speed (see sim/clock.ts).
  */
 
 /** HUD elements a step can point at: the gold counter, the spell button, the goal plaque. */
@@ -50,7 +50,7 @@ export interface TutorialStep {
   highlight?: TutorialAnchor[];
   finger?: FingerHint;
   until: StepCondition;
-  /** The battle runs at TUTORIAL.slowMo while this step waits for the player. Not for `time` steps. */
+  /** The battle runs at SLOW_MO.speed while this step waits for the player. Not for `time` steps. */
   slow?: boolean;
 }
 
@@ -85,29 +85,9 @@ export function currentStep(state: TutorialState): TutorialStep | null {
   return state.script.steps[state.index] ?? null;
 }
 
-/** Simulation speed factor from the tutorial: TUTORIAL.slowMo while a `slow` step waits, otherwise 1. */
-export function tutorialSpeed(state: TutorialState | null): number {
-  return state && currentStep(state)?.slow ? TUTORIAL.slowMo : 1;
-}
-
-/**
- * Fixed-step clock for one frame of `deltaMs` real time. `speed()` is read before every tick, so a slow
- * tutorial step that ends mid-frame speeds the rest of the frame up at once. `tick()` returns false to stop
- * (battle over). Returns the new accumulator (simulation ms towards the next tick).
- */
-export function runClock(accumulatorMs: number, deltaMs: number, speed: () => number, tick: () => boolean): number {
-  let acc = accumulatorMs;
-  let left = deltaMs;
-  for (;;) {
-    const s = speed();
-    // Real ms until the next tick at the current speed.
-    const need = (TICK_MS - acc) / s;
-    // The epsilon absorbs float noise from frame deltas such as 1000 / 60.
-    if (left < need - 1e-6) return acc + left * s;
-    left = Math.max(0, left - need);
-    acc = 0;
-    if (!tick()) return 0;
-  }
+/** Whether the tutorial slows the battle down now: a `slow` step is waiting for the player. */
+export function isTutorialSlow(state: TutorialState | null): boolean {
+  return state !== null && currentStep(state)?.slow === true;
 }
 
 /** Checks the current step against this tick's events; moves to the next step if done. Returns true on change. */

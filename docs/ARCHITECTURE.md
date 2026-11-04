@@ -25,10 +25,11 @@ src/
       bandits.ts          # набеги лагерей разбойников
       specials/           # боссы 10-х уровней: mage.ts, citadel.ts, dragon.ts (в резерве)
       victory.ts          # проверка победы/поражения
+      clock.ts            # фиксированный шаг и скорость боя: ускорение, замедление на время выбора
     ai/
       EnemyAI.ts          # выдаёт commands на основе World и параметров уровня
     tutorial/
-      tutorial.ts         # шаги обучения: условия, замедление (TUTORIAL.md)
+      tutorial.ts         # шаги обучения: условия, какие шаги замедляют бой (TUTORIAL.md)
     level/
       schema.ts           # тип LevelData + валидация
       loader.ts

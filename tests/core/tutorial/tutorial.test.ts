@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { TUTORIAL } from '../../../src/config/balance';
+import { SLOW_MO, TUTORIAL } from '../../../src/config/balance';
+import { battleSpeed, runClock } from '../../../src/core/sim/clock';
 import { defaultProgress } from '../../../src/core/meta/Progress';
 import {
   advanceTutorial,
   currentStep,
-  runClock,
   shouldRunTutorial,
   startTutorial,
-  tutorialSpeed,
+  isTutorialSlow,
   validateTutorial,
   type StepCondition,
   type TutorialScript,
@@ -138,13 +138,20 @@ describe('slow-down (TUTORIAL.md T-4)', () => {
     ],
   };
 
-  it('a slow step runs the battle at TUTORIAL.slowMo; the next step at full speed', () => {
+  it('a slow step slows the battle down; the next step does not', () => {
     const world = freezeEconomy(lineWorld());
     const t = startTutorial(slowScript, world.tick);
-    expect(tutorialSpeed(t)).toBe(TUTORIAL.slowMo);
+    expect(isTutorialSlow(t)).toBe(true);
     advanceTutorial(t, world, step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N' }]));
-    expect(tutorialSpeed(t)).toBe(1);
-    expect(tutorialSpeed(null)).toBe(1);
+    expect(isTutorialSlow(t)).toBe(false);
+    expect(isTutorialSlow(null)).toBe(false);
+  });
+
+  it('while slowed the battle runs at SLOW_MO.speed (85% slower), the speed-up ignored', () => {
+    expect(SLOW_MO.speed).toBe(0.15);
+    expect(battleSpeed(1, true)).toBe(SLOW_MO.speed);
+    expect(battleSpeed(2, true)).toBe(SLOW_MO.speed);
+    expect(battleSpeed(2, false)).toBe(2);
   });
 
   it('fewer ticks per frame while slow', () => {
@@ -155,11 +162,12 @@ describe('slow-down (TUTORIAL.md T-4)', () => {
       return ticks;
     };
     expect(count(1)).toBe(10);
-    expect(count(TUTORIAL.slowMo)).toBe(2);
+    expect(count(0.2)).toBe(2);
+    expect(count(SLOW_MO.speed)).toBe(1);
   });
 
   it('the speed is re-read every tick: finishing the step mid-frame speeds the rest of the frame up', () => {
-    let speed: number = TUTORIAL.slowMo;
+    let speed: number = 0.2;
     let ticks = 0;
     // One tick needs 500 ms of real time at 0.2; after it the step is done and the rest runs at ×1.
     const acc = runClock(0, 1000, () => speed, () => {

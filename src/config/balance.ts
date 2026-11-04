@@ -164,10 +164,16 @@ export const SPEED_UP = {
   multiplier: 2,
 } as const;
 
+/**
+ * Slow-down while the player is choosing (BALANCE.md «Замедление»): a tutorial step waits for them, the build menu
+ * is open, or a swipe is being drawn. The whole battle runs at `speed`: 85% slower.
+ */
+export const SLOW_MO = {
+  speed: 0.15,
+} as const;
+
 /** Tutorial (TUTORIAL.md T-4, BALANCE.md «Обучение»). */
 export const TUTORIAL = {
-  /** Battle speed while a step waits for the player: 80% slower (corridor 0.15–0.25). */
-  slowMo: 0.2,
   /** Info-only steps (`until: time`) last at most this long. */
   infoStepMaxSec: 4,
 } as const;

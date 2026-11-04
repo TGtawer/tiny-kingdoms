@@ -6,16 +6,16 @@ import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/En
 import type { LevelData } from '../core/level/schema';
 import { sendAmount, type Command } from '../core/sim/commands';
 import { armyPath, blockingNode, isPortalLink } from '../core/sim/pathfinding';
+import { battleSpeed, runClock } from '../core/sim/clock';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
 import {
   advanceTutorial,
   currentStep,
-  runClock,
   shouldRunTutorial,
   startTutorial,
-  tutorialSpeed,
+  isTutorialSlow,
   type TutorialState,
   type UiEvent,
 } from '../core/tutorial/tutorial';
@@ -217,12 +217,12 @@ export class BattleScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     if (!this.paused && !this.ended) {
-      // While a tutorial step waits for the player, the whole battle runs slowed down (TUTORIAL.md T-4);
-      // the step can end mid-frame, so the speed is re-read every tick.
+      // While the player is choosing, the whole battle runs slowed down (sim/clock.ts);
+      // the choice can end mid-frame, so the speed is re-read every tick.
       this.accumulator = runClock(
         this.accumulator,
         Math.min(delta, MAX_FRAME_DELTA_MS),
-        () => this.speed * tutorialSpeed(this.tutorial),
+        () => battleSpeed(this.speed, this.isChoosing()),
         () => {
           this.tickOnce();
           return !this.ended;
@@ -937,14 +937,22 @@ export class BattleScene extends Phaser.Scene {
 
   // ---- Speed-up ---------------------------------------------------------------------------------
 
+  /**
+   * The player is choosing: a tutorial step waits for them, the build menu is open, or a swipe is being drawn.
+   * The battle runs at SLOW_MO.speed meanwhile.
+   */
+  private isChoosing(): boolean {
+    return isTutorialSlow(this.tutorial) || this.menu !== null || this.drag !== null;
+  }
+
   /** The speed-up is offered only while the player holds more than SPEED_UP.unlockShare of all nodes. */
   private speedAvailable(): boolean {
     return ownedShare(this.world, 'player') > SPEED_UP.unlockShare;
   }
 
   private syncSpeed(): void {
-    // No speed-up while a tutorial step slows the battle down.
-    const available = !this.ended && this.speedAvailable() && tutorialSpeed(this.tutorial) === 1;
+    // No speed-up button while a tutorial step slows the battle down.
+    const available = !this.ended && this.speedAvailable() && !isTutorialSlow(this.tutorial);
     if (!available) this.speed = 1;
     this.hud.setSpeed(available, this.speed);
   }
