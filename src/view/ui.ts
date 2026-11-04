@@ -25,6 +25,45 @@ export function drawMeadow(g: Phaser.GameObjects.Graphics, w: number, h: number)
   }
 }
 
+/**
+ * Seamless meadow tile (grass color with tufts) baked into a texture, for maps larger than the screen:
+ * a TileSprite of it scrolls with the world. Tufts near an edge are repeated on the opposite side.
+ * Returns the texture key; `sizeCss` is the tile side in CSS px.
+ */
+export function meadowTile(scene: Phaser.Scene, sizeCss: number): string {
+  const size = Math.round(px(sizeCss));
+  const key = `meadow-tile-${size}`;
+  if (scene.textures.exists(key)) return key;
+  const g = scene.make.graphics({}, false);
+  g.fillStyle(COLORS.background, 1).fillRect(0, 0, size, size);
+  let seed = 12345;
+  const rnd = (): number => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  const count = Math.round((size * size) / (px(70) * px(70)));
+  g.lineStyle(px(2), COLORS.backgroundDark, 0.8);
+  for (let i = 0; i < count; i++) {
+    const x0 = rnd() * size;
+    const y0 = rnd() * size;
+    const s = px(4 + rnd() * 3);
+    // Draw the tuft in the tile and in the neighbours it pokes into, so the edges match up.
+    for (const dx of [-size, 0, size]) {
+      for (const dy of [-size, 0, size]) {
+        const x = x0 + dx;
+        const y = y0 + dy;
+        if (x + s < 0 || x - s > size || y < 0 || y - s * 1.5 > size) continue;
+        g.lineBetween(x - s, y, x - s * 0.4, y - s * 1.2);
+        g.lineBetween(x, y, x, y - s * 1.5);
+        g.lineBetween(x + s, y, x + s * 0.4, y - s * 1.2);
+      }
+    }
+  }
+  g.generateTexture(key, size, size);
+  g.destroy();
+  return key;
+}
+
 /** Rounded button with a centered text label. Sizes in game px. */
 export function textButton(
   scene: Phaser.Scene,

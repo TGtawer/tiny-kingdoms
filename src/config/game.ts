@@ -115,6 +115,8 @@ export const MAP = {
   starSize: 18,
   /** White highlight on the level nodes (upper left). */
   nodeShineAlpha: 0.28,
+  /** Side of the seamless meadow tile under the map, CSS px. */
+  meadowTile: 280,
   /** The node face is this share of the radius smaller and higher than the rim: a dark lip shows below. */
   nodeLip: 0.08,
 } as const;
