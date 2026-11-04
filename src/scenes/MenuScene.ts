@@ -3,12 +3,16 @@ import { COLORS, MENU_LAYOUT } from '../config/game';
 import { currentLevel } from '../core/meta/Progress';
 import { t } from '../i18n/i18n';
 import { ALL_LEVELS, FIRST_LEVEL } from '../levels';
+import { Button } from '../view/Button';
+import { drawNote, drawOff, drawSpeaker } from '../view/icons';
 import { px, textStyle } from '../view/layout';
+import { isMusicEnabled, playMusic, setMusicEnabled } from '../view/music';
+import { isSoundEnabled, setSoundEnabled } from '../view/sound';
 import { crystalCounter, drawFlowers, drawMeadow, textButton } from '../view/ui';
 import type { BattleSceneData } from './BattleScene';
 import { getStore } from './registry';
 
-/** Main menu on a flowery meadow: title, Play (→ the next level right away), Map, Upgrades. */
+/** Main menu on a flowery meadow: title, Play (→ the next level right away), Map, Upgrades; sound and music toggles. */
 export class MenuScene extends Phaser.Scene {
   private meadow!: Phaser.GameObjects.Graphics;
   /** Everything of the menu UI layer, rebuilt on resize. */
@@ -19,6 +23,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    playMusic('music_menu');
     this.meadow = this.add.graphics().setDepth(-1);
     this.build();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.build, this);
@@ -46,6 +51,7 @@ export class MenuScene extends Phaser.Scene {
   private buildUi(w: number, h: number): void {
     const progress = getStore(this).progress;
     crystalCounter(this, w - px(14), px(30), progress.crystals);
+    this.settingsToggles();
 
     const level = currentLevel(progress, ALL_LEVELS) ?? FIRST_LEVEL;
     const bw = Math.min(w - px(MENU_LAYOUT.sideClearance) * 2, px(300));
@@ -83,5 +89,47 @@ export class MenuScene extends Phaser.Scene {
     textButton(this, w / 2, top + (bh + gap) * 2, bw, bh, t('menu.upgrades'), () =>
       this.scene.start('UpgradesScene', { from: 'MenuScene' }),
     );
+  }
+
+  /** Sound and music on/off in the top-left corner (the battle pause panel has the same toggles). */
+  private settingsToggles(): void {
+    const store = getStore(this);
+    const size = px(MENU_LAYOUT.toggleSize);
+    const y = px(MENU_LAYOUT.toggleMargin) + size / 2;
+    const toggles = [
+      {
+        on: isSoundEnabled(),
+        icon: drawSpeaker,
+        flip: () => {
+          store.settings.sound = !store.settings.sound;
+          setSoundEnabled(store.settings.sound);
+        },
+      },
+      {
+        on: isMusicEnabled(),
+        icon: drawNote,
+        flip: () => {
+          store.settings.music = !store.settings.music;
+          setMusicEnabled(store.settings.music);
+        },
+      },
+    ];
+    toggles.forEach((toggle, i) => {
+      const x = px(MENU_LAYOUT.toggleMargin) + size / 2 + i * (size + px(MENU_LAYOUT.toggleGap));
+      const button = new Button(this, x, y, {
+        width: size,
+        height: size,
+        radius: size / 2,
+        onClick: () => {
+          toggle.flip();
+          store.commit();
+          this.build();
+        },
+      });
+      const icon = this.add.graphics();
+      toggle.icon(icon, 0, -px(2), size * 0.55);
+      if (!toggle.on) drawOff(icon, 0, -px(2), size * 0.6);
+      button.add(icon);
+    });
   }
 }

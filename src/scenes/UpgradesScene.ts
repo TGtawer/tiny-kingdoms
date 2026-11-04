@@ -9,6 +9,8 @@ import { t } from '../i18n/i18n';
 import { Button } from '../view/Button';
 import { drawCrystal, drawLock, drawStar } from '../view/icons';
 import { px, textStyle } from '../view/layout';
+import { mapTrack } from '../core/audio/playlist';
+import { audioFiles, playMusic } from '../view/music';
 import { drawMeadow, topBar } from '../view/ui';
 import { getStore } from './registry';
 
@@ -52,6 +54,8 @@ export class UpgradesScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Same track as the chapter map: map ↔ upgrades keeps playing from the same place.
+    playMusic(mapTrack(audioFiles()));
     this.build();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.build, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.build, this));

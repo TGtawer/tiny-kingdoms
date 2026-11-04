@@ -11,7 +11,8 @@ import { registerServices } from './scenes/registry';
 import { UpgradesScene } from './scenes/UpgradesScene';
 import { SaveStore } from './save/SaveStore';
 import { display } from './view/layout';
-import { setSoundEnabled, setSoundSuspended } from './view/sound';
+import { preloadMusic, setMusicEnabled, setMusicSuspended } from './view/music';
+import { preloadSfx, setSoundEnabled, setSoundSuspended } from './view/sound';
 
 // No browser context menu or long-press menu anywhere in the game.
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -32,6 +33,7 @@ async function main(): Promise<void> {
   const store = await SaveStore.load(platform);
   initI18n(platform.lang());
   setSoundEnabled(store.settings.sound);
+  setMusicEnabled(store.settings.music);
 
   const host = document.getElementById('game')!;
   display.dpr = currentDpr();
@@ -69,6 +71,7 @@ async function main(): Promise<void> {
 
   const pauseGame = (): void => {
     setSoundSuspended(true);
+    setMusicSuspended(true);
     game.sound.pauseAll();
     game.loop.sleep();
   };
@@ -76,6 +79,7 @@ async function main(): Promise<void> {
     game.loop.wake();
     game.sound.resumeAll();
     setSoundSuspended(false);
+    setMusicSuspended(false);
   };
   platform.setPauseHandlers({ pause: pauseGame, resume: resumeGame });
 
@@ -90,8 +94,12 @@ async function main(): Promise<void> {
     }
   });
 
-  // Signal readiness after the first frame has been rendered.
-  game.events.once(Phaser.Core.Events.POST_RENDER, () => platform.ready());
+  // Signal readiness after the first frame has been rendered; audio files load in the background after that.
+  game.events.once(Phaser.Core.Events.POST_RENDER, () => {
+    platform.ready();
+    preloadSfx();
+    preloadMusic();
+  });
 }
 
 void main();

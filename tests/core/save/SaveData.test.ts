@@ -48,7 +48,7 @@ describe('settings (v2)', () => {
   it('a v1 save gets default settings', () => {
     const save = parseSave({ version: 1, updatedAt: 1, progress: { crystals: 5 } });
     expect(save.version).toBe(SAVE_VERSION);
-    expect(save.settings).toEqual({ sound: true });
+    expect(save.settings).toEqual({ sound: true, music: true });
     expect(save.progress.crystals).toBe(5);
   });
 
@@ -97,5 +97,18 @@ describe('newerSave', () => {
     expect(newerSave(null, a)).toBe(a);
     expect(newerSave(a, null)).toBe(a);
     expect(newerSave(null, null)).toBeNull();
+  });
+});
+
+describe('music setting (v6)', () => {
+  it('a v5 save gets music on and keeps its sound setting', () => {
+    const save = parseSave({ version: 5, settings: { sound: false } });
+    expect(save.version).toBe(SAVE_VERSION);
+    expect(save.settings).toEqual({ sound: false, music: true });
+  });
+
+  it('keeps a stored music setting and drops bad values', () => {
+    expect(parseSave({ version: 6, settings: { sound: true, music: false } }).settings.music).toBe(false);
+    expect(parseSave({ version: 6, settings: { music: 1 } }).settings.music).toBe(true);
   });
 });

@@ -4,7 +4,7 @@ import { spellSlots } from '../meta/spellbook';
 import { totalStars } from '../meta/stars';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export interface SaveData {
   version: number;
@@ -12,17 +12,19 @@ export interface SaveData {
   updatedAt: number;
   progress: Progress;
   settings: Settings;
-  // TODO(stage-6): purchases (remove_ads); TODO(stage-7): music and language settings.
+  // TODO(stage-6): purchases (remove_ads); TODO(stage-7): language setting.
 }
 
 /** Player settings kept between sessions. */
 export interface Settings {
   /** Sound effects and vibration. */
   sound: boolean;
+  /** Music and jingles. */
+  music: boolean;
 }
 
 export function defaultSettings(): Settings {
-  return { sound: true };
+  return { sound: true, music: true };
 }
 
 export function defaultSave(now = 0): SaveData {
@@ -45,6 +47,8 @@ export const MIGRATIONS: Record<number, Migration> = {
     const open = [...(stars >= 3 ? ['fireball'] : []), ...(stars >= 12 ? ['reinforcement'] : [])];
     return { ...d, version: 5, progress: { ...progress, openSpells: open, activeSpell: open[0] ?? null } };
   },
+  // v6 added settings.music; it starts on (sanitizeSettings fills the default).
+  5: (d) => ({ ...d, version: 6 }),
 };
 
 /**
@@ -81,6 +85,7 @@ export function parseSave(raw: unknown, migrations: Record<number, Migration> = 
 function sanitizeSettings(raw: unknown): Settings {
   const settings = defaultSettings();
   if (isObject(raw) && typeof raw.sound === 'boolean') settings.sound = raw.sound;
+  if (isObject(raw) && typeof raw.music === 'boolean') settings.music = raw.music;
   return settings;
 }
 

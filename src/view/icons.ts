@@ -307,3 +307,35 @@ export function drawPause(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   g.fillRoundedRect(x - s * 0.55, y - s * 0.6, s * 0.38, s * 1.2, s * 0.1);
   g.fillRoundedRect(x + s * 0.17, y - s * 0.6, s * 0.38, s * 1.2, s * 0.1);
 }
+
+/** Speaker with sound waves. */
+export function drawSpeaker(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
+  const s = size / 2;
+  g.fillStyle(COLORS.textDark, 1);
+  g.fillRect(x - s * 0.8, y - s * 0.28, s * 0.4, s * 0.56);
+  g.fillTriangle(x - s * 0.45, y - s * 0.28, x + s * 0.05, y - s * 0.75, x + s * 0.05, y + s * 0.75);
+  g.fillTriangle(x - s * 0.45, y - s * 0.28, x + s * 0.05, y + s * 0.75, x - s * 0.45, y + s * 0.28);
+  g.lineStyle(Math.max(2, size * 0.09), COLORS.textDark, 1);
+  g.beginPath().arc(x + s * 0.1, y, s * 0.38, -0.8, 0.8).strokePath();
+  g.beginPath().arc(x + s * 0.1, y, s * 0.68, -0.8, 0.8).strokePath();
+}
+
+/** Two beamed music notes. */
+export function drawNote(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
+  const s = size / 2;
+  const stem = Math.max(2, size * 0.09);
+  g.fillStyle(COLORS.textDark, 1);
+  g.fillEllipse(x - s * 0.45, y + s * 0.5, s * 0.55, s * 0.42);
+  g.fillEllipse(x + s * 0.45, y + s * 0.35, s * 0.55, s * 0.42);
+  g.fillRect(x - s * 0.2 - stem / 2, y - s * 0.6, stem, s * 1.1);
+  g.fillRect(x + s * 0.7 - stem / 2, y - s * 0.75, stem, s * 1.1);
+  g.fillTriangle(x - s * 0.2 - stem / 2, y - s * 0.6, x + s * 0.7 + stem / 2, y - s * 0.75, x + s * 0.7 + stem / 2, y - s * 0.45);
+  g.fillTriangle(x - s * 0.2 - stem / 2, y - s * 0.6, x + s * 0.7 + stem / 2, y - s * 0.45, x - s * 0.2 - stem / 2, y - s * 0.3);
+}
+
+/** Red strike-through over an icon: the setting is off. */
+export function drawOff(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
+  const s = size / 2;
+  g.lineStyle(Math.max(3, size * 0.14), COLORS.panel, 1).lineBetween(x - s * 0.8, y - s * 0.8, x + s * 0.8, y + s * 0.8);
+  g.lineStyle(Math.max(2, size * 0.09), COLORS.faction.enemy, 1).lineBetween(x - s * 0.8, y - s * 0.8, x + s * 0.8, y + s * 0.8);
+}

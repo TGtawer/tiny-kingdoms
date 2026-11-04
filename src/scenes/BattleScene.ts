@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DRAGON, SPEED_UP, TICK_MS, type SpellId } from '../config/balance';
-import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS } from '../config/game';
+import { ARMY_FX, COLORS, cssColor, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAX_FRAME_DELTA_MS, MUSIC, type JingleId } from '../config/game';
+import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
 import { sendAmount, type Command, type SendMode } from '../core/sim/commands';
@@ -25,6 +26,7 @@ import { explosion, floatText, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, textStyle, type Point } from '../view/layout';
 import { NodeView, type Highlight } from '../view/NodeView';
 import { RoadView } from '../view/RoadView';
+import { audioFiles, canPlayJingle, isMusicEnabled, playJingle, playMusic, setMusicDucked, setMusicEnabled, stopMusic } from '../view/music';
 import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
 import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
@@ -169,7 +171,10 @@ export class BattleScene extends Phaser.Scene {
       this.hud.destroy();
       this.tutorialView?.destroy();
       this.tutorialView = null;
+      setMusicDucked(false);
     });
+    // Same level, same track: "Play again" keeps it, "Next" crossfades to the next level's one.
+    playMusic(battleTrack(this.level, MUSIC.battleTracks, audioFiles()));
 
     this.platform.gameplayStart();
 
@@ -378,11 +383,23 @@ export class BattleScene extends Phaser.Scene {
     const store = getStore(this);
     const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
     const stars = starChecks({ won: winner === 'player', timeMs: this.world.tick * TICK_MS, lostOwnNode: this.stats.lostOwnNode }, this.level);
-    recordStars(store.progress, this.level.id, stars.filter(Boolean).length);
+    const starCount = stars.filter(Boolean).length;
+    recordStars(store.progress, this.level.id, starCount);
     store.commit();
-    playSfx(winner === 'player' ? 'victory' : 'defeat');
-    if (winner === 'player') this.vibrate(HAPTICS.victory);
-    this.time.delayedCall(RESULT_DELAY_MS, () => this.showResult(winner, reason, reward.crystals, stars));
+
+    // The music fades out; the jingle comes with the result panel. Without a jingle the synth effect plays now.
+    const won = winner === 'player';
+    const next = nextLevel(this.level.id);
+    const chapterDone = won && next?.chapter !== this.level.chapter;
+    const jingle: JingleId | null = resultJingle(won, starCount, chapterDone, audioFiles());
+    const withJingle = canPlayJingle(jingle);
+    stopMusic(MUSIC.endFadeMs);
+    if (!withJingle) playSfx(won ? 'victory' : 'defeat');
+    if (won) this.vibrate(HAPTICS.victory);
+    this.time.delayedCall(RESULT_DELAY_MS, () => {
+      if (withJingle) playJingle(jingle);
+      this.showResult(winner, reason, reward.crystals, stars);
+    });
   }
 
   private showResult(winner: Side, reason: OutcomeReason, crystals: number, checks: StarChecks): void {
@@ -810,6 +827,13 @@ export class BattleScene extends Phaser.Scene {
     store.commit();
   }
 
+  private toggleMusic(): void {
+    const store = getStore(this);
+    store.settings.music = !store.settings.music;
+    setMusicEnabled(store.settings.music);
+    store.commit();
+  }
+
   // ---- Speed-up ---------------------------------------------------------------------------------
 
   /** The speed-up is offered only while the player holds more than SPEED_UP.unlockShare of all nodes. */
@@ -848,13 +872,18 @@ export class BattleScene extends Phaser.Scene {
       () => this.resume(),
       () => this.scene.restart({ levelId: this.level.id }),
       () => this.toMap(),
-      { on: isSoundEnabled(), toggle: () => this.toggleSound() },
+      {
+        sound: { on: isSoundEnabled(), toggle: () => this.toggleSound() },
+        music: { on: isMusicEnabled(), toggle: () => this.toggleMusic() },
+      },
     );
+    setMusicDucked(true);
   }
 
   private resume(): void {
     this.paused = false;
     this.hud.hideOverlay();
+    setMusicDucked(false);
     this.platform.gameplayStart();
   }
 
