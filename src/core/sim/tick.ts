@@ -73,6 +73,9 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
   if (world.boss?.type === 'dragon') events.push(...stepDragon(world, world.boss));
   else if (world.boss?.type === 'citadel') events.push(...stepCitadel(world, world.boss));
 
+  for (const node of Object.values(world.nodes)) {
+    if (node.shieldTicks > 0) node.shieldTicks -= 1;
+  }
   for (const side of Object.values(world.sides)) {
     for (const spell of SPELL_IDS) {
       side.spellCooldowns[spell] = Math.max(0, side.spellCooldowns[spell] - TICK_MS);

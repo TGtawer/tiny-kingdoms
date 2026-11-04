@@ -70,15 +70,22 @@ export function drawSpell(g: Phaser.GameObjects.Graphics, spell: SpellId, x: num
     g.fillCircle(x, y + s * 0.2, s * 0.6);
     g.strokeCircle(x, y + s * 0.2, s * 0.6);
     g.fillStyle(0xffd23f, 1).fillCircle(x, y + s * 0.3, s * 0.32);
+  } else if (spell === 'reinforcement') {
+    // Green circle with a plus.
+    g.fillStyle(COLORS.reinforcement, 1).fillCircle(x, y, s * 0.8);
+    g.strokeCircle(x, y, s * 0.8);
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(x - s * 0.13, y - s * 0.5, s * 0.26, s * 1.0);
+    g.fillRect(x - s * 0.5, y - s * 0.13, s * 1.0, s * 0.26);
   } else {
-    // Shield with a plus.
-    g.fillStyle(COLORS.reinforcement, 1);
+    // Light-blue shield with a shine.
+    g.fillStyle(COLORS.shield, 1);
     g.fillRoundedRect(x - s * 0.65, y - s * 0.8, s * 1.3, s * 1.0, s * 0.2);
     g.fillTriangle(x - s * 0.65, y + s * 0.1, x + s * 0.65, y + s * 0.1, x, y + s * 0.9);
     g.strokeRoundedRect(x - s * 0.65, y - s * 0.8, s * 1.3, s * 1.0, s * 0.2);
-    g.fillStyle(0xffffff, 1);
-    g.fillRect(x - s * 0.1, y - s * 0.55, s * 0.2, s * 0.8);
-    g.fillRect(x - s * 0.4, y - s * 0.25, s * 0.8, s * 0.2);
+    g.lineBetween(x - s * 0.65, y + s * 0.1, x, y + s * 0.9);
+    g.lineBetween(x + s * 0.65, y + s * 0.1, x, y + s * 0.9);
+    g.fillStyle(0xffffff, 0.7).fillRoundedRect(x - s * 0.4, y - s * 0.6, s * 0.22, s * 0.8, s * 0.1);
   }
 }
 

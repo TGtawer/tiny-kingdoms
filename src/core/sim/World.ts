@@ -38,6 +38,8 @@ export interface NodeState {
   portalPair: string | null;
   /** Bandit camps: tick of the next raid. */
   raidTick: number | null;
+  /** Shield spell: ticks left while the node can't be attacked (0 = no shield). */
+  shieldTicks: number;
 }
 
 export interface ArmyState {
@@ -57,6 +59,7 @@ export interface ArmyState {
 export interface SpellModifiers {
   fireball: { killShareBonus: number; cooldownReductionSec: number };
   reinforcement: { extraTroops: number; cooldownReductionSec: number };
+  shield: { extraDurationSec: number; cooldownReductionSec: number };
 }
 
 /** Bonuses from meta progression (player) or level params (enemy). */
@@ -104,6 +107,7 @@ export function defaultModifiers(): SideModifiers {
     spells: {
       fireball: { killShareBonus: 0, cooldownReductionSec: 0 },
       reinforcement: { extraTroops: 0, cooldownReductionSec: 0 },
+      shield: { extraDurationSec: 0, cooldownReductionSec: 0 },
     },
   };
 }
@@ -142,6 +146,7 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
       kind: n.kind ?? 'normal',
       portalPair: n.portalPair ?? null,
       raidTick: n.kind === 'bandits' ? Math.round(SPECIAL_NODES.bandits.raidEveryMs / TICK_MS) : null,
+      shieldTicks: 0,
     };
   }
   const pairs = new Map<string, string[]>();

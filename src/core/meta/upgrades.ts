@@ -1,6 +1,7 @@
 import { BONUSES, SPELL_UPGRADES, type SpellId } from '../../config/balance';
 import { defaultModifiers, type PlayerSetup, type SideModifiers } from '../sim/World';
-import { unlockedSpells, type BonusId, type Progress } from './Progress';
+import type { BonusId, Progress } from './Progress';
+import { activeSpell } from './spellbook';
 import { freeStars } from './stars';
 
 // TODO(design): GDD 4.3 lists a spell cost upgrade, but BALANCE.md has no numbers for it yet.
@@ -34,7 +35,7 @@ export function buyBonus(progress: Progress, bonus: BonusId): BuyResult {
 
 /** Spell upgrades are bought with stars, once the spell itself is open. */
 export function buySpellUpgrade(progress: Progress, spell: SpellId): BuyResult {
-  if (!unlockedSpells(progress).includes(spell)) return 'locked';
+  if (!progress.openSpells.includes(spell)) return 'locked';
   const cost = spellUpgradeCost(progress.spellUpgrades[spell]);
   if (cost === null) return 'maxLevel';
   if (freeStars(progress) < cost) return 'notEnoughStars';
@@ -57,14 +58,18 @@ export function modifiersFrom(progress: Progress): SideModifiers {
   mods.spells.fireball.cooldownReductionSec = -spell.fireball.cooldownSec * s.fireball;
   mods.spells.reinforcement.extraTroops = spell.reinforcement.troops * s.reinforcement;
   mods.spells.reinforcement.cooldownReductionSec = -spell.reinforcement.cooldownSec * s.reinforcement;
+  mods.spells.shield.extraDurationSec = spell.shield.durationSec * s.shield;
+  mods.spells.shield.cooldownReductionSec = -spell.shield.cooldownSec * s.shield;
   return mods;
 }
 
 /** Everything a battle needs from meta progression for the player side. */
 export function playerSetupFrom(progress: Progress): PlayerSetup {
+  const active = activeSpell(progress);
   return {
     modifiers: modifiersFrom(progress),
     startArmyBonus: BONUSES.perLevel.startArmy * progress.bonuses.startArmy,
-    unlockedSpells: unlockedSpells(progress),
+    // Only the active spell goes into battle (GDD 3.8).
+    unlockedSpells: active ? [active] : [],
   };
 }

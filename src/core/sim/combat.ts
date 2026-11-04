@@ -5,7 +5,7 @@ import { defenseStrength, strengthOf, type ArmyState, type NodeState, type World
 /** Below this, a remainder counts as zero (guards against float noise). */
 const EPSILON = 1e-9;
 
-export type ArrivalOutcome = 'reinforced' | 'destroyedByTower' | 'repelled' | 'captured';
+export type ArrivalOutcome = 'reinforced' | 'destroyedByTower' | 'repelled' | 'captured' | 'shielded';
 
 export interface ArrivalResult {
   armyId: string;
@@ -49,6 +49,9 @@ export function arrive(world: World, army: ArmyState): ArrivalResult {
     node.troops += army.count;
     return { ...base, outcome: 'reinforced', towerDamage: 0 };
   }
+
+  // A shielded node takes no harm: the hostile army breaks on the shield.
+  if (node.shieldTicks > 0) return { ...base, outcome: 'shielded', towerDamage: 0 };
 
   const damage = Math.min(army.count, towerDamage(node));
   const attackers = army.count - damage;

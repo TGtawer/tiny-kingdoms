@@ -54,7 +54,7 @@ export function stepDragon(world: World, dragon: DragonState): DragonEvent[] {
   if (world.tick >= dragon.strikeTick) {
     if (dragon.targetId) {
       const node = world.nodes[dragon.targetId]!;
-      const killed = node.troops * DRAGON.burnShare;
+      const killed = node.shieldTicks > 0 ? 0 : node.troops * DRAGON.burnShare;
       node.troops -= killed;
       events.push({ type: 'dragonStrike', nodeId: node.id, killed });
     }

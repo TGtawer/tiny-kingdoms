@@ -1,9 +1,10 @@
 import { BONUSES, SPELL_IDS, SPELL_UPGRADES, STARS, type SpellId } from '../../config/balance';
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
+import { spellSlots } from '../meta/spellbook';
 import { totalStars } from '../meta/stars';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export interface SaveData {
   version: number;
@@ -37,6 +38,13 @@ export const MIGRATIONS: Record<number, Migration> = {
   2: (d) => ({ ...d, version: 3 }),
   // v4: spell upgrades cost stars; progress.spentStars starts at 0 (levels bought with crystals are kept).
   3: (d) => ({ ...d, version: 4 }),
+  // v5: spells are chosen per slot and one is active. Keep what v4 had open by its fixed thresholds.
+  4: (d) => {
+    const progress = isObject(d.progress) ? d.progress : {};
+    const stars = isObject(progress.stars) ? Object.values(progress.stars).reduce<number>((sum, v) => sum + num(v, 0), 0) : 0;
+    const open = [...(stars >= 3 ? ['fireball'] : []), ...(stars >= 12 ? ['reinforcement'] : [])];
+    return { ...d, version: 5, progress: { ...progress, openSpells: open, activeSpell: open[0] ?? null } };
+  },
 };
 
 /**
@@ -96,6 +104,13 @@ function sanitizeProgress(raw: unknown): Progress {
     }
   }
   progress.spentStars = Math.min(totalStars(progress), Math.max(0, Math.floor(num(raw.spentStars, 0))));
+  if (Array.isArray(raw.openSpells)) {
+    const open = [...new Set(raw.openSpells.filter((s): s is SpellId => SPELL_IDS.includes(s as SpellId)))];
+    // Never more spells than slots.
+    progress.openSpells = open.slice(0, spellSlots(progress));
+  }
+  const active = raw.activeSpell as SpellId;
+  progress.activeSpell = progress.openSpells.includes(active) ? active : (progress.openSpells[0] ?? null);
   return progress;
 }
 

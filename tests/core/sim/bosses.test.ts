@@ -59,6 +59,15 @@ describe('dragon', () => {
     expect(world.nodes.Q!.troops).toBeCloseTo(38, 9);
   });
 
+  it('a shield on the marked node takes the strike', () => {
+    const world = freezeEconomy(createWorld(dragonLevel()));
+    runFor(world, ticks(DRAGON.everyMs) - 2);
+    world.nodes.P!.shieldTicks = 50;
+    const events = runFor(world, 3);
+    expect(events).toContainEqual({ type: 'dragonStrike', nodeId: 'P', killed: 0 });
+    expect(world.nodes.P!.troops).toBe(30);
+  });
+
   it('strikes again every interval', () => {
     const world = freezeEconomy(createWorld(dragonLevel()));
     const events = runFor(world, ticks(DRAGON.everyMs * 3) + 1);

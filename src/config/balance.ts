@@ -2,17 +2,17 @@
 
 export type NodeSize = 'small' | 'medium' | 'large';
 export type BuildingType = 'mine' | 'barracks' | 'tower';
-export type SpellId = 'fireball' | 'reinforcement';
+export type SpellId = 'fireball' | 'reinforcement' | 'shield';
 /** Special node kinds (GDD 3.12); 'normal' is the default. */
 export type NodeKind = 'normal' | 'temple' | 'fortress' | 'chest' | 'portal' | 'bandits';
 export const NODE_KINDS: readonly NodeKind[] = ['normal', 'temple', 'fortress', 'chest', 'portal', 'bandits'];
-export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement'];
+export const SPELL_IDS: readonly SpellId[] = ['fireball', 'reinforcement', 'shield'];
 
-/** GDD 3.8: a spell opens once the player has earned this many stars in total (stars are not spent on it). */
-export const SPELL_UNLOCK_STARS: Record<SpellId, number> = {
-  fireball: 3,
-  reinforcement: 12,
-};
+/**
+ * GDD 3.8: each entry is a total of earned stars that gives one more spell slot; the player chooses which spell
+ * to open in it (stars are not spent). One open spell is active in battle.
+ */
+export const SPELL_SLOT_STARS: readonly number[] = [3, 12, 24];
 
 /** Simulation fixed timestep. */
 export const TICK_MS = 100;
@@ -137,9 +137,12 @@ export const SPEED_UP = {
 export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
   fireball: { killShare: number; minKill: number };
   reinforcement: { troops: number };
+  shield: { durationSec: number };
 } = {
   fireball: { cost: 40, cooldownSec: 20, killShare: 0.4, minKill: 5 },
   reinforcement: { cost: 30, cooldownSec: 25, troops: 10 },
+  /** Own node can't be attacked for durationSec: hostile armies that arrive are destroyed. */
+  shield: { cost: 30, cooldownSec: 30, durationSec: 8 },
 };
 
 export const START_GOLD = {
@@ -222,5 +225,6 @@ export const SPELL_UPGRADES = {
   perLevel: {
     fireball: { damageShare: 0.05, cooldownSec: -1 },
     reinforcement: { troops: 3, cooldownSec: -1 },
+    shield: { durationSec: 1, cooldownSec: -1 },
   },
 } as const;

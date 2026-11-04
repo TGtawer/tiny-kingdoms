@@ -32,7 +32,7 @@ describe('parseSave', () => {
     expect(save.progress.crystals).toBe(0);
     expect(save.progress.completed).toEqual(['a', 'b']);
     expect(save.progress.bonuses).toEqual({ startArmy: 2, troopProduction: 0, goldIncome: BONUSES.maxLevel, unitStrength: 0 });
-    expect(save.progress.spellUpgrades).toEqual({ fireball: 0, reinforcement: 0 });
+    expect(save.progress.spellUpgrades).toEqual({ fireball: 0, reinforcement: 0, shield: 0 });
   });
 
   it('runs migrations from older versions', () => {
@@ -67,6 +67,24 @@ describe('spent stars (v4)', () => {
   it('spent stars are clamped to 0..earned', () => {
     expect(parseSave({ version: 4, progress: { stars: { a: 3, b: 2 }, spentStars: 99 } }).progress.spentStars).toBe(5);
     expect(parseSave({ version: 4, progress: { stars: { a: 3 }, spentStars: -4 } }).progress.spentStars).toBe(0);
+  });
+});
+
+describe('chosen spells (v5)', () => {
+  it('a v4 save keeps the spells its fixed thresholds had opened', () => {
+    const save = parseSave({ version: 4, progress: { stars: { a: 3, b: 3, c: 3, d: 3 } } });
+    expect(save.progress.openSpells).toEqual(['fireball', 'reinforcement']);
+    expect(save.progress.activeSpell).toBe('fireball');
+    expect(parseSave({ version: 4, progress: { stars: { a: 1 } } }).progress.openSpells).toEqual([]);
+  });
+
+  it('drops unknown spells, never keeps more than the slots, fixes a bad active spell', () => {
+    const save = parseSave({
+      version: 5,
+      progress: { stars: { a: 3 }, openSpells: ['meteor', 'reinforcement', 'fireball'], activeSpell: 'fireball' },
+    });
+    expect(save.progress.openSpells).toEqual(['reinforcement']);
+    expect(save.progress.activeSpell).toBe('reinforcement');
   });
 });
 
