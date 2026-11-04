@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { COLORS } from '../config/game';
 import type { World } from '../core/sim/World';
-import { px, type FieldLayout } from './layout';
+import { px, type ScreenLayout } from './layout';
 
 /** All roads in a single Graphics object; redrawn only on layout change. */
 export class RoadView {
@@ -11,7 +11,7 @@ export class RoadView {
     this.g = scene.add.graphics();
   }
 
-  draw(world: World, layout: FieldLayout): void {
+  draw(world: World, layout: ScreenLayout): void {
     const g = this.g;
     g.clear();
     const width = Math.max(px(8), layout.scale * 0.016);
@@ -39,6 +39,11 @@ export class RoadView {
         g.lineBetween(p.x + ux * t, p.y + uy * t, p.x + ux * (t + dash), p.y + uy * (t + dash));
       }
     }
+  }
+
+  /** The Graphics with all roads (to put it into a container). */
+  get gameObject(): Phaser.GameObjects.Graphics {
+    return this.g;
   }
 
   destroy(): void {

@@ -106,11 +106,23 @@ export function drawCrystal(g: Phaser.GameObjects.Graphics, x: number, y: number
 }
 
 /** Left arrow for "back" buttons. */
+/** Left arrow with rounded ends and corners: thick strokes with round caps. */
 export function drawBack(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
   const s = size / 2;
+  const w = s * 0.34;
+  const tip = { x: x - s * 0.62, y };
+  const ends = [
+    { x: x + s * 0.68, y },
+    { x: x - s * 0.02, y: y - s * 0.6 },
+    { x: x - s * 0.02, y: y + s * 0.6 },
+  ];
+  g.lineStyle(w, COLORS.textDark, 1);
   g.fillStyle(COLORS.textDark, 1);
-  g.fillTriangle(x - s * 0.8, y, x - s * 0.05, y - s * 0.7, x - s * 0.05, y + s * 0.7);
-  g.fillRect(x - s * 0.1, y - s * 0.25, s * 0.85, s * 0.5);
+  for (const end of ends) {
+    g.lineBetween(tip.x, tip.y, end.x, end.y);
+    g.fillCircle(end.x, end.y, w / 2);
+  }
+  g.fillCircle(tip.x, tip.y, w / 2);
 }
 
 /** Padlock for locked items. */
@@ -308,29 +320,43 @@ export function drawPause(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   g.fillRoundedRect(x + s * 0.17, y - s * 0.6, s * 0.38, s * 1.2, s * 0.1);
 }
 
-/** Speaker with sound waves. */
+/** Speaker with one sound wave (main menu toggle, as in docs/prototypes/living-screens.html). */
 export function drawSpeaker(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
-  const s = size / 2;
-  g.fillStyle(COLORS.textDark, 1);
-  g.fillRect(x - s * 0.8, y - s * 0.28, s * 0.4, s * 0.56);
-  g.fillTriangle(x - s * 0.45, y - s * 0.28, x + s * 0.05, y - s * 0.75, x + s * 0.05, y + s * 0.75);
-  g.fillTriangle(x - s * 0.45, y - s * 0.28, x + s * 0.05, y + s * 0.75, x - s * 0.45, y + s * 0.28);
-  g.lineStyle(Math.max(2, size * 0.09), COLORS.textDark, 1);
-  g.beginPath().arc(x + s * 0.1, y, s * 0.38, -0.8, 0.8).strokePath();
-  g.beginPath().arc(x + s * 0.1, y, s * 0.68, -0.8, 0.8).strokePath();
+  const s = size;
+  g.fillStyle(COLORS.outline, 1);
+  fillPolygon(g, [
+    [x - s * 0.35, y - s * 0.15],
+    [x - s * 0.15, y - s * 0.15],
+    [x + s * 0.1, y - s * 0.38],
+    [x + s * 0.1, y + s * 0.38],
+    [x - s * 0.15, y + s * 0.15],
+    [x - s * 0.35, y + s * 0.15],
+  ]);
+  g.lineStyle(s * 0.09, COLORS.outline, 1);
+  g.beginPath().arc(x + s * 0.12, y, s * 0.28, -0.8, 0.8).strokePath();
 }
 
-/** Two beamed music notes. */
+/** A single eighth note (main menu toggle, as in docs/prototypes/living-screens.html). */
 export function drawNote(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
-  const s = size / 2;
-  const stem = Math.max(2, size * 0.09);
-  g.fillStyle(COLORS.textDark, 1);
-  g.fillEllipse(x - s * 0.45, y + s * 0.5, s * 0.55, s * 0.42);
-  g.fillEllipse(x + s * 0.45, y + s * 0.35, s * 0.55, s * 0.42);
-  g.fillRect(x - s * 0.2 - stem / 2, y - s * 0.6, stem, s * 1.1);
-  g.fillRect(x + s * 0.7 - stem / 2, y - s * 0.75, stem, s * 1.1);
-  g.fillTriangle(x - s * 0.2 - stem / 2, y - s * 0.6, x + s * 0.7 + stem / 2, y - s * 0.75, x + s * 0.7 + stem / 2, y - s * 0.45);
-  g.fillTriangle(x - s * 0.2 - stem / 2, y - s * 0.6, x + s * 0.7 + stem / 2, y - s * 0.45, x - s * 0.2 - stem / 2, y - s * 0.3);
+  const s = size;
+  // Tilted note head: an ellipse rotated by -0.4 rad.
+  const head: Array<[number, number]> = [];
+  const cx = x - s * 0.12;
+  const cy = y + s * 0.25;
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const ex = Math.cos(a) * s * 0.16;
+    const ey = Math.sin(a) * s * 0.12;
+    head.push([cx + ex * Math.cos(-0.4) - ey * Math.sin(-0.4), cy + ex * Math.sin(-0.4) + ey * Math.cos(-0.4)]);
+  }
+  g.fillStyle(COLORS.outline, 1);
+  fillPolygon(g, head);
+  const w = s * 0.09;
+  g.lineStyle(w, COLORS.outline, 1);
+  g.lineBetween(x + s * 0.03, y + s * 0.25, x + s * 0.03, y - s * 0.35);
+  g.lineBetween(x + s * 0.03, y - s * 0.35, x + s * 0.3, y - s * 0.2);
+  // Round the corner where the stem meets the flag.
+  g.fillCircle(x + s * 0.03, y - s * 0.35, w / 2);
 }
 
 /** Red strike-through over an icon: the setting is off. */
@@ -338,4 +364,11 @@ export function drawOff(g: Phaser.GameObjects.Graphics, x: number, y: number, si
   const s = size / 2;
   g.lineStyle(Math.max(3, size * 0.14), COLORS.panel, 1).lineBetween(x - s * 0.8, y - s * 0.8, x + s * 0.8, y + s * 0.8);
   g.lineStyle(Math.max(2, size * 0.09), COLORS.faction.enemy, 1).lineBetween(x - s * 0.8, y - s * 0.8, x + s * 0.8, y + s * 0.8);
+}
+
+/** Fills a closed polygon with the current fill style. */
+function fillPolygon(g: Phaser.GameObjects.Graphics, points: ReadonlyArray<readonly [number, number]>): void {
+  g.beginPath();
+  points.forEach(([px, py], i) => (i === 0 ? g.moveTo(px, py) : g.lineTo(px, py)));
+  g.closePath().fillPath();
 }

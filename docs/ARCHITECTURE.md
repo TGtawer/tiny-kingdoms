@@ -67,6 +67,9 @@ src/
     audioContext.ts       # общий Web Audio контекст, разблокировка по первому тапу
     sound.ts              # эффекты: файл из SFX.files или синтез
     music.ts              # музыка (стрим через <audio>, кроссфейд) и джинглы
+    MenuBackdrop.ts       # фоновый бой ИИ против ИИ в главном меню (уровень levels/menu_background.json)
+    MenuAmbient.ts        # тени облаков и птицы в меню
+    ShinyTitle.ts         # заголовок на canvas-текстуре с бликом
   i18n/
     i18n.ts
     ru.json

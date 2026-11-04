@@ -37,7 +37,16 @@ export interface Point {
  * available area with a uniform scale (so distances stay proportional to the simulation).
  * In portrait the field is rotated 90° when that makes it larger; the left side (player) goes down.
  */
-export class FieldLayout {
+/** Maps field units to screen px and sizes nodes; what node and road views need from a layout. */
+export interface ScreenLayout {
+  /** Screen px per field unit (road width follows it). */
+  readonly scale: number;
+  toScreen(x: number, y: number): Point;
+  nodeRadius(size: NodeSize): number;
+  hitRadius(size: NodeSize): number;
+}
+
+export class FieldLayout implements ScreenLayout {
   readonly rotated: boolean;
   /** Screen px per field unit. */
   readonly scale: number;

@@ -1,0 +1,739 @@
+<title>Живые экраны Tiny Kingdoms</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap">
+<style>
+/* Layout: two phone frames (menu, map) side by side, each with its own effect switches; stacks on phones. */
+:root {
+  --bg: #eef2ea;
+  --surface: #ffffff;
+  --fg: #1f2937;
+  --muted: #5b6656;
+  --line: #d5ddcf;
+  --accent: #e8962a;
+  --accent-soft: #fff1da;
+  --bezel: #1f2937;
+  --tag-free: #2f7d32;
+  --tag-mid: #a35c00;
+  --font-ui: "Rubik", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171c16; --surface: #20271f; --fg: #e8eee4; --muted: #a3ae9d; --line: #354033;
+    --accent: #ffb53d; --accent-soft: #3a2f1c; --bezel: #0b0f0b; --tag-free: #7fd483; --tag-mid: #ffc06b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #171c16; --surface: #20271f; --fg: #e8eee4; --muted: #a3ae9d; --line: #354033;
+  --accent: #ffb53d; --accent-soft: #3a2f1c; --bezel: #0b0f0b; --tag-free: #7fd483; --tag-mid: #ffc06b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+header h1 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; text-wrap: balance; font-weight: 700; }
+header p { margin: 0; color: var(--muted); max-width: 64ch; }
+.screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.screen { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; min-width: 0; }
+.phone {
+  width: 100%; max-width: 372px; padding: 6px; border-radius: 34px; background: var(--bezel);
+  box-shadow: 0 10px 30px rgba(0,0,0,.18); flex: 0 0 auto;
+}
+.phone canvas { display: block; width: 100%; aspect-ratio: 9 / 16; border-radius: 28px; touch-action: none; }
+.panel { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.panel h2 { font-size: 18px; margin: 0; font-weight: 700; }
+.panel .sub { color: var(--muted); font-size: 13px; margin: -6px 0 2px; }
+.opt { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.opt input { margin: 3px 0 0; width: 18px; height: 18px; accent-color: var(--accent); }
+.opt label { font-weight: 500; cursor: pointer; }
+.opt .note { grid-column: 2; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.tag { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; margin-left: 6px; }
+.tag.free { color: var(--tag-free); }
+.tag.mid { color: var(--tag-mid); }
+button.act {
+  font: inherit; font-weight: 700; padding: 10px 14px; border-radius: 12px; border: 2px solid var(--fg);
+  background: var(--accent); color: #1f2937; cursor: pointer; box-shadow: 0 3px 0 var(--fg); text-align: left;
+}
+button.act:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--fg); }
+button.act:focus-visible, .opt input:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+.bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.hint { font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Живые экраны Tiny Kingdoms</h1>
+    <p>Прототип анимаций для главного меню и карты глав в стиле игры: всё нарисовано кодом, как в Phaser Graphics. Включай и выключай эффекты справа от каждого экрана и выбирай, что оставить. Карту можно прокручивать пальцем или колесом.</p>
+  </header>
+  <div class="bar">
+    <button class="act" id="pauseBtn" type="button">Пауза</button>
+    <span class="hint" id="motionHint" hidden>В системе включено «уменьшение движения», поэтому анимация на паузе. Нажми «Пуск».</span>
+  </div>
+
+  <div class="screens">
+    <section class="screen" aria-label="Главное меню">
+      <div class="phone"><canvas id="menu" width="720" height="1280" aria-label="Прототип главного меню"></canvas></div>
+      <div class="panel">
+        <h2>Главное меню</h2>
+        <p class="sub">Что уже есть в игре: цветы на лугу и покачивание заголовка.</p>
+        <div class="opt"><input type="checkbox" id="m-battle" checked><label for="m-battle">Бой ИИ против ИИ на фоне<span class="tag mid">средне</span></label><span class="note">Сразу видно, во что играешь. В игре — те же World, EnemyAI, NodeView, 6–8 узлов.</span></div>
+        <div class="opt"><input type="checkbox" id="m-veil" checked><label for="m-veil">Дымка поверх боя<span class="tag free">дёшево</span></label><span class="note">Бой не спорит с кнопками за внимание.</span></div>
+        <div class="opt"><input type="checkbox" id="m-clouds" checked><label for="m-clouds">Тени облаков<span class="tag free">дёшево</span></label><span class="note">Большие мягкие тени медленно плывут по лугу.</span></div>
+        <div class="opt"><input type="checkbox" id="m-birds" checked><label for="m-birds">Птицы<span class="tag free">дёшево</span></label><span class="note">Пара птиц иногда пролетает сверху.</span></div>
+        <div class="opt"><input type="checkbox" id="m-shine" checked><label for="m-shine">Блик на заголовке<span class="tag free">дёшево</span></label><span class="note">Раз в 4 секунды по названию пробегает свет.</span></div>
+        <div class="opt"><input type="checkbox" id="m-pulse" checked><label for="m-pulse">Пульс кнопки «Играть»<span class="tag free">дёшево</span></label><span class="note">Взгляд сразу идёт на главное действие.</span></div>
+        <button class="act" id="m-enter" type="button">Показать анимацию входа</button>
+      </div>
+    </section>
+
+    <section class="screen" aria-label="Карта глав">
+      <div class="phone"><canvas id="map" width="720" height="1280" aria-label="Прототип карты глав"></canvas></div>
+      <div class="panel">
+        <h2>Карта глав</h2>
+        <p class="sub">Что уже есть в игре: пульс текущего уровня и звёзды под пройденными.</p>
+        <div class="opt"><input type="checkbox" id="p-flag" checked><label for="p-flag">Отряд над текущим уровнем<span class="tag free">дёшево</span></label><span class="note">Фишка игрока подпрыгивает над следующим уровнем.</span></div>
+        <div class="opt"><input type="checkbox" id="p-road" checked><label for="p-road">Дорога к следующему уровню<span class="tag free">дёшево</span></label><span class="note">Бегущие штрихи к цели, закрытая часть дороги приглушена.</span></div>
+        <div class="opt"><input type="checkbox" id="p-decor" checked><label for="p-decor">Декор: деревья, домики, мельница<span class="tag free">дёшево</span></label><span class="note">Один раз рисуется в текстуры, дальше только двигается.</span></div>
+        <div class="opt"><input type="checkbox" id="p-sway" checked><label for="p-sway">Покачивание деревьев<span class="tag free">дёшево</span></label><span class="note">Еле заметный ветер, крылья мельницы крутятся.</span></div>
+        <div class="opt"><input type="checkbox" id="p-clouds" checked><label for="p-clouds">Облака с параллаксом<span class="tag free">дёшево</span></label><span class="note">При прокрутке облака едут быстрее земли — появляется глубина.</span></div>
+        <div class="opt"><input type="checkbox" id="p-walk" checked><label for="p-walk">Отряд гуляет по пройденному пути<span class="tag free">дёшево</span></label><span class="note">Маленький синий отряд ходит между пройденными уровнями.</span></div>
+        <button class="act" id="p-unlock" type="button">Показать открытие уровня после победы</button>
+        <span class="hint">Звёзды прилетают под уровень 4, дорога прорисовывается, замок на уровне 5 ломается, отряд перепрыгивает.</span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---- Game palette (src/config/game.ts) ----
+  const C = {
+    bg: '#7cc46a', bgDark: '#5fa653', outline: '#1f2937', road: '#f0dca0', roadEdge: '#b89a5a',
+    gold: '#ffc83d', goldDark: '#b7811a', panel: '#fff6e0', panelEdge: '#8a5a2b', button: '#ffb53d',
+    buttonDark: '#e8962a', white: '#ffffff', textDark: '#1f2937',
+    faction: { player: '#3b82f6', enemy: '#ef4444', neutral: '#9ca3af' },
+    factionDark: { player: '#1e4fb8', enemy: '#a82020', neutral: '#5f6672' },
+  };
+  const FONT = '"Trebuchet MS", "Segoe UI", Rubik, Arial, sans-serif';
+  const W = 360, H = 640;
+  const TAU = Math.PI * 2;
+
+  const $ = (id) => document.getElementById(id);
+  const on = (id) => $(id).checked;
+
+  // ---- Helpers ----
+  function rng(seed) { return () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }; }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  const easeInOut = (t) => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const seg01 = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+
+  function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function text(ctx, s, x, y, size, color = C.white, stroke = 5, align = 'center') {
+    ctx.font = `bold ${size}px ${FONT}`; ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    if (stroke) { ctx.lineWidth = stroke; ctx.strokeStyle = C.outline; ctx.strokeText(s, x, y); }
+    ctx.fillStyle = color; ctx.fillText(s, x, y);
+  }
+
+  function makeMeadow(seed, flowers) {
+    const cv = document.createElement('canvas'); cv.width = W * 2; cv.height = H * 2;
+    const g = cv.getContext('2d'); g.scale(2, 2);
+    g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+    const r = rng(seed);
+    g.strokeStyle = C.bgDark; g.lineWidth = 2; g.globalAlpha = .8; g.lineCap = 'round';
+    const n = Math.round(W * H / (70 * 70));
+    for (let i = 0; i < n; i++) {
+      const x = r() * W, y = r() * H, s = 4 + r() * 3;
+      g.beginPath(); g.moveTo(x - s, y); g.lineTo(x - s * .4, y - s * 1.2); g.moveTo(x, y); g.lineTo(x, y - s * 1.5);
+      g.moveTo(x + s, y); g.lineTo(x + s * .4, y - s * 1.2); g.stroke();
+    }
+    g.globalAlpha = 1;
+    if (flowers) {
+      const cols = ['#ffffff', '#ffd6e7', '#fff3a3', '#d9c8ff'];
+      for (let i = 0; i < 55; i++) {
+        const x = r() * W, y = r() * H, rr = 2.2 + r() * 1.6;
+        g.fillStyle = cols[Math.floor(r() * cols.length)];
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { g.beginPath(); g.arc(x + dx * rr, y + dy * rr, rr, 0, TAU); g.fill(); }
+        g.fillStyle = '#f59e0b'; g.beginPath(); g.arc(x, y, rr * .7, 0, TAU); g.fill();
+      }
+    }
+    return cv;
+  }
+
+  // Node body as in NodeView.drawBody.
+  function drawNode(ctx, x, y, r, owner, scale = 1, override) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+    const face = override ? override.face : C.faction[owner];
+    const dark = override ? override.dark : C.factionDark[owner];
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(0, r * .82, r * .95, r * .3, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(0, r * .1, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = face; ctx.beginPath(); ctx.arc(0, 0, r * .92, 0, TAU); ctx.fill();
+    ctx.lineWidth = Math.max(2, r * .09); ctx.strokeStyle = C.outline; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.beginPath(); ctx.ellipse(-r * .3, -r * .45, r * .4, r * .19, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  // Squad marker as in ArmyView.
+  function drawSquad(ctx, x, y, owner, count, r = 12) {
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(0, r * .9, r, r * .3, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = C.factionDark[owner]; ctx.beginPath(); ctx.arc(0, r * .12, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = C.faction[owner]; ctx.beginPath(); ctx.arc(0, 0, r * .9, 0, TAU); ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = C.outline; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r * .6, -r * .6); ctx.lineTo(r * .6, -r * 1.7); ctx.stroke();
+    ctx.fillStyle = C.faction[owner]; ctx.beginPath(); ctx.moveTo(r * .6, -r * 1.7); ctx.lineTo(r * 1.4, -r * 1.45); ctx.lineTo(r * .6, -r * 1.2); ctx.closePath(); ctx.fill();
+    ctx.lineWidth = 1.5; ctx.stroke();
+    if (count !== undefined) text(ctx, String(count), 0, 0, 12, C.white, 3);
+    ctx.restore();
+  }
+  function drawStar(ctx, x, y, size, earned, scale = 1) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? size * .22 : size * .5;
+      ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    ctx.closePath(); ctx.fillStyle = earned ? C.gold : 'rgba(31,41,55,.35)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = C.outline; ctx.stroke(); ctx.restore();
+  }
+  function drawLock(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y);
+    ctx.lineWidth = s * .12; ctx.strokeStyle = C.outline; ctx.beginPath(); ctx.arc(0, -s * .12, s * .22, Math.PI, 0); ctx.stroke();
+    ctx.fillStyle = C.outline; rrect(ctx, -s * .32, -s * .12, s * .64, s * .48, s * .08); ctx.fill();
+    ctx.restore();
+  }
+  function drawCheck(ctx, x, y, s, scale = 1) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+    ctx.fillStyle = '#22c55e'; ctx.beginPath(); ctx.arc(0, 0, s * .5, 0, TAU); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = C.outline; ctx.stroke();
+    ctx.lineWidth = s * .14; ctx.strokeStyle = C.white; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-s * .22, 0); ctx.lineTo(-s * .05, s * .17); ctx.lineTo(s * .24, -s * .16); ctx.stroke();
+    ctx.restore();
+  }
+  function drawCrystal(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y);
+    ctx.beginPath(); ctx.moveTo(0, -s * .5); ctx.lineTo(s * .38, -s * .1); ctx.lineTo(0, s * .5); ctx.lineTo(-s * .38, -s * .1); ctx.closePath();
+    ctx.fillStyle = '#38bdf8'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = C.outline; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(0, -s * .5); ctx.lineTo(-s * .38, -s * .1); ctx.lineTo(0, -s * .05); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  function button(ctx, cx, cy, w, h, label, size, scale = 1, glow = 0) {
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(scale, scale);
+    if (glow > 0) { ctx.fillStyle = `rgba(255,224,120,${.45 * glow})`; rrect(ctx, -w / 2 - 7, -h / 2 - 7, w + 14, h + 14, 20); ctx.fill(); }
+    ctx.fillStyle = 'rgba(31,41,55,.35)'; rrect(ctx, -w / 2, -h / 2 + 5, w, h, 16); ctx.fill();
+    ctx.fillStyle = C.button; rrect(ctx, -w / 2, -h / 2, w, h, 16); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.22)'; rrect(ctx, -w / 2 + 6, -h / 2 + 5, w - 12, h * .32, 10); ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = C.outline; rrect(ctx, -w / 2, -h / 2, w, h, 16); ctx.stroke();
+    text(ctx, label, 0, -2, size, C.textDark, 0);
+    ctx.restore();
+  }
+  function ringBurst(list, x, y, r, color, t) { list.push({ kind: 'ring', x, y, r, color, t0: t, dur: .45 }); }
+  function drawFx(ctx, list, t) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      const f = list[i]; const k = (t - f.t0) / f.dur;
+      if (k >= 1) { list.splice(i, 1); continue; }
+      if (k < 0) continue;
+      if (f.kind === 'ring') {
+        ctx.globalAlpha = 1 - k; ctx.lineWidth = 4; ctx.strokeStyle = f.color;
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (1 + .7 * easeOutCubic(k)), 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+      } else if (f.kind === 'spark') {
+        const e = easeOutCubic(k); ctx.globalAlpha = 1 - k; ctx.fillStyle = f.color;
+        ctx.beginPath(); ctx.arc(f.x + Math.cos(f.a) * f.d * e, f.y + Math.sin(f.a) * f.d * e, 2.5 * (1 - k * .5), 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+      }
+    }
+  }
+  function sparks(list, x, y, color, t, n = 8) {
+    for (let i = 0; i < n; i++) list.push({ kind: 'spark', x, y, a: i / n * TAU + Math.random() * .4, d: 18 + Math.random() * 14, color, t0: t, dur: .5 });
+  }
+
+  function setupCanvas(cv) {
+    const ctx = cv.getContext('2d');
+    function fit() {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const cssW = cv.getBoundingClientRect().width || W;
+      cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssW * 16 / 9 * dpr);
+    }
+    fit(); window.addEventListener('resize', fit);
+    return { ctx, begin() { ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0); } };
+  }
+
+  // =====================================================================================
+  // MAIN MENU
+  // =====================================================================================
+  const menu = (() => {
+    const cv = $('menu'); const S = setupCanvas(cv); const ctx = S.ctx;
+    const meadow = makeMeadow(12345, true);
+    const fx = [];
+    let enterT = 0;
+
+    // Background battle: two capitals in opposite corners, neutrals in between.
+    const LAYOUT = [
+      [52, 92, 'L'], [180, 110, 'M'], [308, 88, 'M'],
+      [44, 246, 'S'], [316, 244, 'S'],
+      [56, 598, 'M'], [180, 588, 'S'], [306, 600, 'L'],
+    ];
+    const ROADS = [[0, 1], [1, 2], [0, 3], [2, 4], [3, 4], [3, 5], [4, 7], [5, 6], [6, 7]];
+    const SIZE = { L: { r: 24, cap: 50, rate: 1.2 }, M: { r: 21, cap: 35, rate: .8 }, S: { r: 18, cap: 20, rate: .5 } };
+    const adj = LAYOUT.map(() => []);
+    for (const [a, b] of ROADS) { adj[a].push(b); adj[b].push(a); }
+    let nodes, armies, thinkAt, side, ended, fade, battleT;
+    function reset() {
+      nodes = LAYOUT.map(([x, y, s], i) => ({ x, y, ...SIZE[s], owner: i === 0 ? 'player' : i === 7 ? 'enemy' : 'neutral', troops: i === 0 || i === 7 ? 14 : 5 + Math.floor(Math.random() * 6), pop: 0 }));
+      armies = []; thinkAt = .8; side = Math.random() < .5 ? 'player' : 'enemy'; ended = null; fade = 0; battleT = 0;
+    }
+    reset();
+
+    function think(t) {
+      const mine = nodes.map((n, i) => i).filter((i) => nodes[i].owner === side && nodes[i].troops >= 6);
+      const moves = [];
+      for (const i of mine) {
+        const send = Math.floor(nodes[i].troops * .75);
+        for (const j of adj[i]) {
+          const target = nodes[j];
+          if (target.owner !== side && send > target.troops + 1) moves.push({ i, j, w: 3 + (target.owner !== 'neutral' ? 2 : 0) + Math.random() });
+          else if (target.owner === side && nodes[i].troops > target.troops + 12) moves.push({ i, j, w: Math.random() * 1.2 });
+        }
+      }
+      if (moves.length) {
+        moves.sort((a, b) => b.w - a.w);
+        const m = moves[0]; const from = nodes[m.i]; const count = Math.floor(from.troops * .75);
+        from.troops -= count;
+        armies.push({ from: m.i, to: m.j, owner: side, count, p: 0, len: Math.hypot(nodes[m.j].x - from.x, nodes[m.j].y - from.y) });
+      }
+      side = side === 'player' ? 'enemy' : 'player';
+      thinkAt = t + .55 + Math.random() * .5;
+    }
+
+    function step(dt, t) {
+      battleT += dt;
+      for (const n of nodes) if (n.owner !== 'neutral' && n.troops < n.cap) n.troops = Math.min(n.cap, n.troops + n.rate * dt);
+      if (t >= thinkAt && !ended) think(t);
+      for (let k = armies.length - 1; k >= 0; k--) {
+        const a = armies[k]; a.p += 44 * dt / a.len;
+        if (a.p < 1) continue;
+        armies.splice(k, 1);
+        const n = nodes[a.to];
+        if (n.owner === a.owner) n.troops += a.count;
+        else {
+          n.troops -= a.count;
+          if (n.troops < 0) { n.owner = a.owner; n.troops = -n.troops; n.pop = t; ringBurst(fx, n.x, n.y, n.r, C.faction[a.owner], t); }
+          else ringBurst(fx, n.x, n.y, n.r * .9, C.white, t);
+        }
+      }
+      const owners = new Set(nodes.filter((n) => n.owner !== 'neutral').map((n) => n.owner));
+      if (!ended && (owners.size === 1 || battleT > 120)) ended = t;
+      if (ended && t - ended > 3) { fade = Math.min(1, fade + dt * 2); if (fade >= 1) reset(); }
+    }
+
+    function drawBattle(t) {
+      ctx.lineCap = 'round';
+      for (const [a, b] of ROADS) {
+        const A = nodes[a], B = nodes[b];
+        ctx.strokeStyle = C.roadEdge; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+        ctx.strokeStyle = C.road; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+      }
+      for (const n of nodes) {
+        const k = seg01(t - n.pop, 0, .22); const s = n.pop && k < 1 ? 1 + .18 * Math.sin(k * Math.PI) : 1;
+        drawNode(ctx, n.x, n.y, n.r, n.owner, s);
+        text(ctx, String(Math.floor(n.troops)), n.x, n.y, Math.round(n.r * .7), C.white, Math.max(2, n.r * .14));
+      }
+      for (const a of armies) {
+        const A = nodes[a.from], B = nodes[a.to];
+        const bob = Math.abs(Math.sin((t + a.from) * 9)) * 2;
+        drawSquad(ctx, lerp(A.x, B.x, a.p), lerp(A.y, B.y, a.p) - bob, a.owner, a.count, 11);
+      }
+    }
+
+    const titleCanvas = document.createElement('canvas');
+    function drawTitle(x, y, size, t) {
+      // Rendered to an offscreen canvas so the shine can be clipped to the letters.
+      const w = 340, h = 90, sc = 2;
+      titleCanvas.width = w * sc; titleCanvas.height = h * sc;
+      const g = titleCanvas.getContext('2d'); g.scale(sc, sc);
+      g.font = `bold ${size}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+      g.fillStyle = C.outline; g.fillText('Tiny Kingdoms', w / 2, h / 2 + 5);
+      g.lineWidth = 8; g.strokeStyle = C.outline; g.strokeText('Tiny Kingdoms', w / 2, h / 2);
+      g.fillStyle = C.gold; g.fillText('Tiny Kingdoms', w / 2, h / 2);
+      if (on('m-shine')) {
+        const period = 4, k = (t % period) / .8;
+        if (k < 1) {
+          g.globalCompositeOperation = 'source-atop';
+          const bx = -60 + k * (w + 120);
+          const grad = g.createLinearGradient(bx - 30, 0, bx + 30, 0);
+          grad.addColorStop(0, 'rgba(255,255,255,0)'); grad.addColorStop(.5, 'rgba(255,255,255,.75)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+          g.save(); g.translate(bx, h / 2); g.rotate(.35); g.fillStyle = grad; g.fillRect(-30 - bx, -h, w + 60, h * 2); g.restore();
+          g.globalCompositeOperation = 'source-over';
+        }
+      }
+      ctx.drawImage(titleCanvas, x - w / 2, y - h / 2, w, h);
+    }
+
+    const clouds = [
+      { x: 40, y: 140, s: 1.2, v: 7 }, { x: 260, y: 420, s: 1.6, v: 5 }, { x: -120, y: 560, s: 1, v: 9 },
+    ];
+    let birds = null, nextBirds = 2;
+
+    function speakerIcon(x, y, s) {
+      ctx.fillStyle = C.outline;
+      ctx.beginPath(); ctx.moveTo(x - s * .35, y - s * .15); ctx.lineTo(x - s * .15, y - s * .15); ctx.lineTo(x + s * .1, y - s * .38);
+      ctx.lineTo(x + s * .1, y + s * .38); ctx.lineTo(x - s * .15, y + s * .15); ctx.lineTo(x - s * .35, y + s * .15); ctx.closePath(); ctx.fill();
+      ctx.lineWidth = s * .09; ctx.strokeStyle = C.outline; ctx.beginPath(); ctx.arc(x + s * .12, y, s * .28, -.8, .8); ctx.stroke();
+    }
+    function noteIcon(x, y, s) {
+      ctx.fillStyle = C.outline; ctx.beginPath(); ctx.ellipse(x - s * .12, y + s * .25, s * .16, s * .12, -.4, 0, TAU); ctx.fill();
+      ctx.lineWidth = s * .09; ctx.strokeStyle = C.outline; ctx.beginPath(); ctx.moveTo(x + s * .03, y + s * .25); ctx.lineTo(x + s * .03, y - s * .35); ctx.lineTo(x + s * .3, y - s * .2); ctx.stroke();
+    }
+
+    function frame(t, dt) {
+      S.begin();
+      ctx.drawImage(meadow, 0, 0, W, H);
+      if (on('m-battle')) {
+        step(dt, t);
+        ctx.save(); ctx.globalAlpha = 1 - fade; drawBattle(t); drawFx(ctx, fx, t); ctx.restore();
+        if (on('m-veil')) { ctx.fillStyle = 'rgba(124,196,106,.42)'; ctx.fillRect(0, 0, W, H); }
+      }
+      if (on('m-clouds')) {
+        for (const c of clouds) {
+          c.x += c.v * dt; if (c.x > W + 160) c.x = -200;
+          ctx.fillStyle = 'rgba(20,60,20,.10)';
+          for (const [dx, dy, r] of [[0, 0, 46], [44, -8, 38], [-40, 6, 34], [20, 18, 36]]) { ctx.beginPath(); ctx.ellipse(c.x + dx * c.s, c.y + dy * c.s, r * c.s, r * .62 * c.s, 0, 0, TAU); ctx.fill(); }
+        }
+      }
+      if (on('m-birds')) {
+        if (!birds && t > nextBirds) birds = { t0: t, y: 60 + Math.random() * 80, dir: Math.random() < .5 ? 1 : -1 };
+        if (birds) {
+          const k = (t - birds.t0) / 7; const x = birds.dir > 0 ? lerp(-30, W + 30, k) : lerp(W + 30, -30, k);
+          for (const [ox, oy, ph] of [[0, 0, 0], [-16 * birds.dir, 9, 1.3]]) {
+            const flap = Math.sin((t + ph) * 11) * 4;
+            ctx.strokeStyle = C.outline; ctx.lineWidth = 2; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(x + ox - 7, birds.y + oy - flap); ctx.quadraticCurveTo(x + ox - 3, birds.y + oy - 2, x + ox, birds.y + oy + 1);
+            ctx.quadraticCurveTo(x + ox + 3, birds.y + oy - 2, x + ox + 7, birds.y + oy - flap); ctx.stroke();
+          }
+          if (k >= 1) { birds = null; nextBirds = t + 6 + Math.random() * 6; }
+        }
+      }
+
+      // ---- UI layer (MenuScene layout) ----
+      const e = t - enterT;
+      const bw = 300, bh = 64, gap = 18, pad = 20, top = H * .5;
+      const panelW = bw + pad * 2, panelH = bh * 3 + gap * 2 + pad * 2, panelX = W / 2 - panelW / 2, panelY = top - bh / 2 - pad;
+
+      const uiA = seg01(e, 0, .3);
+      ctx.globalAlpha = uiA;
+      for (const [i, fn] of [[0, speakerIcon], [1, noteIcon]]) {
+        const x = 12 + 22 + i * 52, y = 12 + 22;
+        ctx.fillStyle = 'rgba(31,41,55,.35)'; ctx.beginPath(); ctx.arc(x, y + 4, 22, 0, TAU); ctx.fill();
+        ctx.fillStyle = C.button; ctx.beginPath(); ctx.arc(x, y, 22, 0, TAU); ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = C.outline; ctx.stroke(); fn(x, y - 1, 24);
+      }
+      text(ctx, '120', W - 14, 30, 22, C.white, 5, 'right'); drawCrystal(ctx, W - 14 - 40 - 12, 30, 22);
+      ctx.globalAlpha = 1;
+
+      const pk = easeOutBack(seg01(e, .15, .5));
+      ctx.save(); ctx.globalAlpha = seg01(e, .15, .35); ctx.translate(W / 2, panelY + panelH / 2); ctx.scale(lerp(.9, 1, pk), lerp(.9, 1, pk)); ctx.translate(-W / 2, -(panelY + panelH / 2));
+      ctx.fillStyle = 'rgba(31,41,55,.25)'; rrect(ctx, panelX + 4, panelY + 6, panelW, panelH, 26); ctx.fill();
+      ctx.fillStyle = 'rgba(255,246,224,.88)'; rrect(ctx, panelX, panelY, panelW, panelH, 26); ctx.fill();
+      ctx.lineWidth = 4; ctx.strokeStyle = C.panelEdge; rrect(ctx, panelX, panelY, panelW, panelH, 26); ctx.stroke();
+      ctx.restore();
+
+      const labels = [['Играть · Ур. 4', 26], ['Карта', 20], ['Прокачка', 20]];
+      labels.forEach(([label, size], i) => {
+        const k = easeOutBack(seg01(e, .3 + i * .09, .62 + i * .09));
+        const y = top + i * (bh + gap) + (1 - k) * 60;
+        let s = 1, glow = 0;
+        if (i === 0 && on('m-pulse') && e > 1) { const p = (Math.sin((t - enterT) * TAU / 1.6) + 1) / 2; s = 1 + .035 * p; glow = p; }
+        ctx.save(); ctx.globalAlpha = seg01(e, .3 + i * .09, .45 + i * .09); button(ctx, W / 2, y, bw, bh, label, size, s, glow); ctx.restore();
+      });
+
+      const titleY = Math.min(H * .28, panelY - 56 * .9);
+      const drop = easeOutBack(seg01(e, 0, .6));
+      const bobY = Math.sin(t * TAU / 2.8) * 6 * seg01(e, .6, 1);
+      ctx.save(); ctx.globalAlpha = seg01(e, 0, .15); drawTitle(W / 2, lerp(titleY - 140, titleY, drop) - bobY, 43, t); ctx.restore();
+    }
+    $('m-enter').addEventListener('click', () => { enterT = clock; });
+    return { frame, startEnter: () => { enterT = clock; } };
+  })();
+
+  // =====================================================================================
+  // CHAPTER MAP
+  // =====================================================================================
+  const map = (() => {
+    const cv = $('map'); const S = setupCanvas(cv); const ctx = S.ctx;
+    const barH = 60, bottomH = 84, spacing = 118, margin = 80, R = 36, amp = 110, N = 10;
+    const pathLen = (N - 1) * spacing;
+    const worldH = Math.max(H, barH + bottomH + pathLen + 2 * margin);
+    const startY = worldH - bottomH - margin;
+    const pts = Array.from({ length: N }, (_, i) => ({ x: W / 2 + amp * Math.sin(i * 1.1), y: startY - i * spacing }));
+    const STARS = [3, 2, 3, 2, 3, 0, 0, 0, 0, 0];
+    let done = 3; // levels 1..done completed; next = done + 1
+    let scroll = clamp(pts[done].y - (barH + (H - barH - bottomH) / 2), 0, worldH - H);
+    const fx = [];
+    let anim = null;
+
+    // World meadow (tiled once).
+    const ground = document.createElement('canvas'); ground.width = W * 2; ground.height = worldH * 2;
+    (() => { const g = ground.getContext('2d'); const tile = makeMeadow(4242, false); for (let y = 0; y < worldH; y += H) g.drawImage(tile, 0, y * 2); })();
+
+    // ---- Decorations: placed once, away from the road and nodes ----
+    const decor = [];
+    (() => {
+      const r = rng(9001);
+      const distSeg = (px, py, a, b) => { const dx = b.x - a.x, dy = b.y - a.y; const k = clamp(((px - a.x) * dx + (py - a.y) * dy) / (dx * dx + dy * dy), 0, 1); return Math.hypot(px - a.x - k * dx, py - a.y - k * dy); };
+      const free = (x, y, rad) => {
+        for (const p of pts) if (Math.hypot(p.x - x, p.y - y) < R + rad + 22) return false;
+        for (let i = 0; i < N - 1; i++) if (distSeg(x, y, pts[i], pts[i + 1]) < rad + 14) return false;
+        for (const d of decor) if (Math.hypot(d.x - x, d.y - y) < rad + d.rad + 4) return false;
+        return true;
+      };
+      const kinds = [['tree', 14, 5], ['pine', 13, 4], ['bush', 9, 3], ['house', 15, 1.4], ['pond', 22, .5], ['mill', 18, .35]];
+      const total = kinds.reduce((s, k) => s + k[2], 0);
+      let tries = 0; let mills = 0, ponds = 0;
+      while (decor.length < 46 && tries++ < 4000) {
+        let pick = r() * total, kind;
+        for (const k of kinds) { if ((pick -= k[2]) <= 0) { kind = k; break; } }
+        kind = kind || kinds[0];
+        if (kind[0] === 'mill' && mills >= 2) continue;
+        if (kind[0] === 'pond' && ponds >= 2) continue;
+        const x = 16 + r() * (W - 32), y = barH + 10 + r() * (worldH - barH - 20);
+        if (!free(x, y, kind[1])) continue;
+        if (kind[0] === 'mill') mills++; if (kind[0] === 'pond') ponds++;
+        decor.push({ kind: kind[0], x, y, rad: kind[1], ph: r() * TAU, tint: r() });
+      }
+      decor.sort((a, b) => a.y - b.y);
+    })();
+
+    function drawDecor(d, t) {
+      const sway = on('p-sway') ? Math.sin(t * 1.6 + d.ph) : 0;
+      ctx.save(); ctx.translate(d.x, d.y);
+      ctx.lineWidth = 2; ctx.strokeStyle = C.outline;
+      if (d.kind === 'pond') {
+        ctx.fillStyle = '#4fa3d9'; ctx.beginPath(); ctx.ellipse(0, 0, 22, 12, 0, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.ellipse(-4 + sway, -2, 9, 3, 0, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+      } else if (d.kind === 'bush') {
+        ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(0, 6, 10, 3.5, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#3f8f3a'; for (const [x, y, r] of [[-5, 0, 6], [5, 0, 6], [0, -4, 7]]) { ctx.beginPath(); ctx.arc(x + sway * .5, y, r, 0, TAU); ctx.fill(); }
+        ctx.beginPath(); ctx.arc(sway * .5, -1, 9, Math.PI * .95, Math.PI * 2.05); ctx.stroke();
+      } else if (d.kind === 'tree') {
+        ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.beginPath(); ctx.ellipse(2, 10, 12, 4, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#8a5a2b'; ctx.fillRect(-2.5, -2, 5, 12); ctx.strokeRect(-2.5, -2, 5, 12);
+        ctx.save(); ctx.translate(0, 0); ctx.rotate(sway * .035);
+        ctx.fillStyle = d.tint > .5 ? '#2f8a3a' : '#3c9a3f'; ctx.beginPath(); ctx.arc(0, -10, 12, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.beginPath(); ctx.arc(-4, -14, 4.5, 0, TAU); ctx.fill();
+        ctx.restore();
+      } else if (d.kind === 'pine') {
+        ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.beginPath(); ctx.ellipse(2, 10, 10, 3.5, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#8a5a2b'; ctx.fillRect(-2, 4, 4, 7);
+        ctx.rotate(sway * .03);
+        ctx.fillStyle = '#25704a';
+        for (const [y, w] of [[6, 11], [-2, 9], [-10, 7]]) { ctx.beginPath(); ctx.moveTo(-w, y); ctx.lineTo(0, y - 13); ctx.lineTo(w, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      } else if (d.kind === 'house') {
+        ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.beginPath(); ctx.ellipse(2, 9, 15, 4, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#fff6e0'; ctx.fillRect(-11, -6, 22, 15); ctx.strokeRect(-11, -6, 22, 15);
+        ctx.fillStyle = d.tint > .5 ? '#d9534f' : '#c2703d'; ctx.beginPath(); ctx.moveTo(-14, -5); ctx.lineTo(0, -18); ctx.lineTo(14, -5); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#8a5a2b'; ctx.fillRect(-3, 1, 6, 8);
+        ctx.fillStyle = '#ffd56b'; ctx.fillRect(5, -2, 4, 4);
+        if (on('p-sway')) { const k = (t * .5 + d.ph) % 1; ctx.fillStyle = `rgba(255,255,255,${.55 * (1 - k)})`; ctx.beginPath(); ctx.arc(7 + k * 6, -18 - k * 16, 3 + k * 4, 0, TAU); ctx.fill(); }
+      } else if (d.kind === 'mill') {
+        ctx.fillStyle = 'rgba(0,0,0,.16)'; ctx.beginPath(); ctx.ellipse(2, 12, 14, 4, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#fff6e0'; ctx.beginPath(); ctx.moveTo(-9, 12); ctx.lineTo(-6, -12); ctx.lineTo(6, -12); ctx.lineTo(9, 12); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#c2703d'; ctx.beginPath(); ctx.moveTo(-8, -11); ctx.lineTo(0, -20); ctx.lineTo(8, -11); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.save(); ctx.translate(0, -12); ctx.rotate(on('p-sway') ? t * 1.4 + d.ph : d.ph);
+        ctx.fillStyle = '#e9e1cc';
+        for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.fillRect(1, -2.5, 17, 5); ctx.strokeRect(1, -2.5, 17, 5); }
+        ctx.fillStyle = C.outline; ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    const clouds = Array.from({ length: 7 }, (_, i) => ({ x: (i * 137) % W, y: i * (worldH / 7) + 40, s: .8 + (i % 3) * .3, v: 4 + (i % 4) * 2 }));
+
+    function roadPath(a, b, frac = 1) {
+      ctx.beginPath(); ctx.moveTo(pts[a].x, pts[a].y);
+      ctx.lineTo(lerp(pts[a].x, pts[b].x, frac), lerp(pts[a].y, pts[b].y, frac));
+    }
+
+    // ---- Unlock animation: win on `done + 1` ----
+    function startUnlock() {
+      done = 3; anim = { t0: clock, from: 3, scroll0: scroll, broke: false, popped: false, stars: [false, false, false] };
+    }
+
+    function frame(t, dt) {
+      S.begin();
+      let a = null;
+      if (anim) {
+        a = t - anim.t0;
+        const won = anim.from; // index of the level just won (0-based)
+        if (!anim.popped && a >= 0) { anim.popped = true; ringBurst(fx, pts[won].x, pts[won].y, R, C.faction.player, t); }
+        STARS[won] = 2;
+        [0, 1, 2].forEach((i) => { if (!anim.stars[i] && a >= .35 + i * .25) { anim.stars[i] = true; if (i < STARS[won]) sparks(fx, pts[won].x + (i - 1) * 18, pts[won].y + R + 9, C.gold, t); } });
+        if (!anim.broke && a >= 2.4) { anim.broke = true; ringBurst(fx, pts[won + 1].x, pts[won + 1].y, R, C.gold, t); sparks(fx, pts[won + 1].x, pts[won + 1].y, C.gold, t, 12); }
+        const target = clamp(pts[won + 1].y - (barH + (H - barH - bottomH) / 2), 0, worldH - H);
+        scroll = lerp(anim.scroll0, target, easeInOut(seg01(a, .9, 2.3)));
+        if (a > 3.6) { done = won + 1; anim = null; a = null; }
+      }
+      const isDone = (i) => anim ? (i < anim.from || (i === anim.from && a >= 0)) : i < done;
+      const nextIdx = anim ? (a >= 2.4 ? anim.from + 1 : anim.from) : done;
+
+      ctx.save(); ctx.translate(0, -scroll);
+      ctx.drawImage(ground, 0, 0, W, worldH);
+      if (on('p-decor')) for (const d of decor) if (d.kind === 'pond') drawDecor(d, t);
+
+      // Road: walked part solid, the rest dimmed; animated dashes toward the next level.
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const dimFuture = on('p-road');
+      for (let i = 0; i < N - 1; i++) {
+        const walked = i + 1 <= (anim ? anim.from : done);
+        ctx.globalAlpha = walked || !dimFuture ? 1 : .5;
+        ctx.strokeStyle = C.roadEdge; ctx.lineWidth = 18; roadPath(i, i + 1); ctx.stroke();
+        ctx.strokeStyle = C.road; ctx.lineWidth = 11; roadPath(i, i + 1); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      if (anim) {
+        const k = easeInOut(seg01(a, 1.1, 1.9));
+        if (k > 0) {
+          ctx.strokeStyle = C.roadEdge; ctx.lineWidth = 18; roadPath(anim.from, anim.from + 1, k); ctx.stroke();
+          ctx.strokeStyle = C.road; ctx.lineWidth = 11; roadPath(anim.from, anim.from + 1, k); ctx.stroke();
+        }
+      } else if (on('p-road') && done < N) {
+        const i = done - 1;
+        ctx.save(); ctx.setLineDash([10, 12]); ctx.lineDashOffset = -t * 28; ctx.strokeStyle = C.white; ctx.lineWidth = 4;
+        roadPath(i, i + 1); ctx.stroke(); ctx.restore();
+      }
+
+      if (on('p-decor')) for (const d of decor) if (d.kind !== 'pond') drawDecor(d, t);
+
+      // Level nodes.
+      for (let i = 0; i < N; i++) {
+        const p = pts[i];
+        const completed = isDone(i);
+        const next = i === nextIdx && !completed;
+        const open = completed || next;
+        let s = 1;
+        if (next) s = 1 + .04 * (1 + Math.sin(t * TAU / 1.2));
+        if (anim && i === anim.from) s *= 1 + .16 * Math.sin(seg01(a, 0, .25) * Math.PI);
+        if (anim && i === anim.from + 1 && a >= 2.4) s = easeOutBack(seg01(a, 2.4, 2.75)) * (1 + .04 * (1 + Math.sin(t * TAU / 1.2)));
+        if (next) drawNode(ctx, p.x, p.y, R, 'player', s, { face: C.gold, dark: C.goldDark });
+        else drawNode(ctx, p.x, p.y, R, open ? 'player' : 'neutral', s);
+        if (open) text(ctx, String(i + 1), p.x, p.y, 29 * s, C.white, 5);
+        else {
+          let lx = p.x, ly = p.y;
+          if (anim && i === anim.from + 1) {
+            if (a >= 1.9 && a < 2.4) lx += Math.sin(a * 60) * 3 * seg01(a, 1.9, 2.1);
+          }
+          drawLock(ctx, lx, ly, R * .9);
+        }
+        if (completed) {
+          const cs = anim && i === anim.from ? easeOutBack(seg01(a, .15, .45)) : 1;
+          drawCheck(ctx, p.x + R * .7, p.y - R * .7, R * .6, cs);
+          for (let k = 0; k < 3; k++) {
+            let ss = 1;
+            if (anim && i === anim.from) ss = easeOutBack(seg01(a, .35 + k * .25, .65 + k * .25));
+            if (ss > 0) drawStar(ctx, p.x + (k - 1) * 18, p.y + R + 9, 17, k < STARS[i], ss);
+          }
+        }
+      }
+
+      // Broken lock halves fly apart over the freshly opened level.
+      if (anim && a >= 2.4 && a < 3.1) {
+        const p = pts[anim.from + 1]; const k = seg01(a, 2.4, 3.1); ctx.globalAlpha = 1 - k;
+        for (const dir of [-1, 1]) {
+          ctx.save(); ctx.translate(p.x + dir * 34 * k, p.y - 26 * Math.sin(k * Math.PI) + 46 * k * k); ctx.rotate(dir * k * 1.6);
+          ctx.beginPath(); ctx.rect(dir < 0 ? -20 : 0, -22, 20, 44); ctx.clip(); drawLock(ctx, 0, 0, R * .9); ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // Squad walking along the completed path.
+      if (on('p-walk') && !anim && done >= 2) {
+        const span = done - 1, period = span * 4.2;
+        const u = (t % (period * 2)) / period; const pos = u <= 1 ? u * span : (2 - u) * span;
+        const i0 = Math.min(Math.floor(pos), span - 1), f = pos - i0;
+        const x = lerp(pts[i0].x, pts[i0 + 1].x, f), y = lerp(pts[i0].y, pts[i0 + 1].y, f);
+        drawSquad(ctx, x, y - Math.abs(Math.sin(t * 9)) * 2, 'player', undefined, 8);
+      }
+
+      // Player token over the current level (hops to the new one during the unlock).
+      if (on('p-flag')) {
+        let x, y, hop;
+        if (anim && a < 2.6) { x = pts[anim.from].x; y = pts[anim.from].y; hop = Math.abs(Math.sin(t * 3.2)) * 10; }
+        else if (anim) {
+          const k = seg01(a, 2.6, 3.4); const A = pts[anim.from], B = pts[anim.from + 1];
+          x = lerp(A.x, B.x, k); y = lerp(A.y, B.y, k); hop = Math.abs(Math.sin(k * Math.PI * 3)) * 22;
+        } else { x = pts[Math.min(done, N - 1)].x; y = pts[Math.min(done, N - 1)].y; hop = Math.abs(Math.sin(t * 3.2)) * 10; }
+        const sq = 1 - hop / 60;
+        ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(x, y - R - 6, 10 * sq, 3.5 * sq, 0, 0, TAU); ctx.fill();
+        drawSquad(ctx, x, y - R - 18 - hop, 'player', undefined, 13);
+      }
+      drawFx(ctx, fx, t);
+      ctx.restore();
+
+      // Clouds closer to the camera: parallax 1.4× the ground scroll.
+      if (on('p-clouds')) {
+        for (const c of clouds) {
+          c.x += c.v * dt; if (c.x > W + 90) c.x = -110;
+          const y = ((c.y - scroll * 1.4) % (worldH * 1.4) + worldH * 1.4) % (worldH * 1.4) - 60;
+          if (y < -80 || y > H + 80) continue;
+          ctx.fillStyle = 'rgba(20,60,20,.12)';
+          for (const [dx, dy, r] of [[0, 0, 26], [24, 4, 20], [-22, 6, 18]]) { ctx.beginPath(); ctx.ellipse(c.x + dx * c.s + 18, y + dy * c.s + 26, r * c.s, r * .6 * c.s, 0, 0, TAU); ctx.fill(); }
+          ctx.fillStyle = 'rgba(255,255,255,.92)';
+          for (const [dx, dy, r] of [[0, 0, 26], [24, 4, 20], [-22, 6, 18], [8, -10, 18]]) { ctx.beginPath(); ctx.ellipse(c.x + dx * c.s, y + dy * c.s, r * c.s, r * .7 * c.s, 0, 0, TAU); ctx.fill(); }
+        }
+      }
+
+      // Fixed UI (topBar + bottom strip).
+      ctx.fillStyle = 'rgba(31,41,55,.28)'; ctx.fillRect(0, 0, W, barH);
+      ctx.fillStyle = 'rgba(31,41,55,.35)'; rrect(ctx, 12, 8 + 4, 44, 44, 12); ctx.fill();
+      ctx.fillStyle = C.button; rrect(ctx, 12, 8, 44, 44, 12); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.outline; ctx.stroke();
+      ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(42, 30); ctx.lineTo(26, 30); ctx.moveTo(33, 22); ctx.lineTo(25, 30); ctx.lineTo(33, 38); ctx.stroke();
+      text(ctx, 'Глава 1', W / 2, barH / 2, 22);
+      text(ctx, '120', W - 14, barH / 2, 22, C.white, 5, 'right'); drawCrystal(ctx, W - 14 - 40 - 12, barH / 2, 22);
+      ctx.fillStyle = 'rgba(31,41,55,.28)'; ctx.fillRect(0, H - bottomH, W, bottomH);
+      button(ctx, W / 2, H - bottomH / 2, 260, 56, 'Прокачка', 20);
+    }
+
+    // Scroll by drag or wheel.
+    let drag = null;
+    const toWorld = (dy) => dy * (W / cv.getBoundingClientRect().width);
+    cv.addEventListener('pointerdown', (e) => { if (anim) return; drag = { y: e.clientY }; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener('pointermove', (e) => { if (!drag) return; scroll = clamp(scroll - toWorld(e.clientY - drag.y), 0, worldH - H); drag.y = e.clientY; });
+    const end = () => { drag = null; };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+    cv.addEventListener('wheel', (e) => { if (anim) return; e.preventDefault(); scroll = clamp(scroll + e.deltaY * .6, 0, worldH - H); }, { passive: false });
+    $('p-unlock').addEventListener('click', () => { if (!running) toggleRun(); startUnlock(); });
+    return { frame };
+  })();
+
+  // ---- Loop ----
+  let clock = 0, last = performance.now(), running = true;
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function toggleRun() {
+    running = !running; $('pauseBtn').textContent = running ? 'Пауза' : 'Пуск';
+    if (running) $('motionHint').hidden = true;
+    last = performance.now();
+  }
+  $('pauseBtn').addEventListener('click', toggleRun);
+  $('m-enter').addEventListener('click', () => { if (!running) toggleRun(); });
+  function loop(now) {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    if (running) clock += dt;
+    const d = running ? dt : 0;
+    menu.frame(clock, d); map.frame(clock, d);
+    requestAnimationFrame(loop);
+  }
+  // Render a settled first frame (entrance finished) so a still capture shows the full screens.
+  clock = 1.2; menu.frame(clock, 0); map.frame(clock, 0);
+  if (reduced) { running = false; $('pauseBtn').textContent = 'Пуск'; $('motionHint').hidden = false; }
+  else menu.startEnter();
+  requestAnimationFrame(loop);
+})();
+</script>

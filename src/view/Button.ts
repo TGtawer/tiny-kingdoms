@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { COLORS, MIN_TOUCH_PX } from '../config/game';
+import { COLORS, BUTTON_STYLE, MIN_TOUCH_PX } from '../config/game';
 import { px } from './layout';
 import { playSfx } from './sound';
 
@@ -29,7 +29,7 @@ export class Button extends Phaser.GameObjects.Container {
     this.btnW = Math.max(options.width, px(MIN_TOUCH_PX));
     this.btnH = Math.max(options.height, px(MIN_TOUCH_PX));
     this.baseColor = options.color ?? COLORS.button;
-    this.radius = options.radius ?? px(14);
+    this.radius = options.radius ?? px(BUTTON_STYLE.radius);
 
     this.bg = scene.add.graphics();
     this.add(this.bg);
@@ -76,16 +76,25 @@ export class Button extends Phaser.GameObjects.Container {
     return this;
   }
 
+  /**
+   * Glossy cartoon button (docs/prototypes/living-screens.html): soft shadow below, colored face,
+   * a permanent highlight band on top, outline. Pressed: the face sinks toward the shadow.
+   */
   private redraw(): void {
     const g = this.bg;
+    const s = BUTTON_STYLE;
     const w = this.btnW;
     const h = this.btnH;
+    const r = Math.min(this.radius, h / 2, w / 2);
     const color = !this.enabled ? COLORS.buttonDisabled : this.pressed ? COLORS.buttonPressed : this.baseColor;
-    const lift = this.pressed ? 0 : px(4);
+    const top = -h / 2 + (this.pressed ? px(s.pressDrop) : 0);
     g.clear();
-    // Cartoon "3D" button: dark base, colored face, outline.
-    g.fillStyle(COLORS.outline, 0.85).fillRoundedRect(-w / 2, -h / 2 + px(4), w, h - px(4), this.radius);
-    g.fillStyle(color, 1).fillRoundedRect(-w / 2, -h / 2 + px(4) - lift, w, h - px(4), this.radius);
-    g.lineStyle(px(2.5), COLORS.outline, 1).strokeRoundedRect(-w / 2, -h / 2 + px(4) - lift, w, h - px(4), this.radius);
+    g.fillStyle(COLORS.outline, s.shadowAlpha).fillRoundedRect(-w / 2, -h / 2 + px(s.shadowOffset), w, h, r);
+    g.fillStyle(color, 1).fillRoundedRect(-w / 2, top, w, h, r);
+    const inset = px(s.shineInset);
+    const shineH = h * s.shineHeight;
+    const shineR = Math.min(px(s.shineRadius), shineH / 2);
+    g.fillStyle(0xffffff, s.shineAlpha).fillRoundedRect(-w / 2 + inset, top + px(s.shineTop), w - inset * 2, shineH, shineR);
+    g.lineStyle(px(s.outline), COLORS.outline, 1).strokeRoundedRect(-w / 2, top, w, h, r);
   }
 }

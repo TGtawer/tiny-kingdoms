@@ -229,8 +229,25 @@ export const SHIELD_FX = {
 } as const;
 
 /** Main menu UI layer, CSS px. */
+/** Look of every Button (as in docs/prototypes/living-screens.html), CSS px. */
+export const BUTTON_STYLE = {
+  radius: 16,
+  outline: 3,
+  /** Soft shadow under the face: offset down and opacity. */
+  shadowOffset: 5,
+  shadowAlpha: 0.35,
+  /** Permanent highlight band in the upper part: inset from the sides and the top, height share, radius. */
+  shineInset: 6,
+  shineTop: 5,
+  shineHeight: 0.32,
+  shineRadius: 10,
+  shineAlpha: 0.22,
+  /** The face moves down this much while pressed. */
+  pressDrop: 3,
+} as const;
+
 export const MENU_LAYOUT = {
-  panelPadding: 18,
+  panelPadding: 20,
   /** Room left on each side of the buttons, CSS px. */
   sideClearance: 30,
   panelAlpha: 0.88,
@@ -239,9 +256,116 @@ export const MENU_LAYOUT = {
   /** Flowers per (100 CSS px)^2 on the menu meadow. */
   flowerDensity: 1.6,
   flowerColors: [0xfde047, 0xf9a8d4, 0xffffff, 0xc4b5fd],
-  /** Sound / music toggle buttons in the top-left corner, CSS px. */
-  toggleSize: 48,
-  toggleMargin: 10,
+  /** Round sound / music toggles in the top-left corner, CSS px (drawn 44, touch area 48). */
+  toggleSize: 44,
+  toggleHit: 48,
+  toggleMargin: 12,
   toggleGap: 8,
+  /** Shadow under a toggle, CSS px down (opacity and outline as BUTTON_STYLE). */
+  toggleShadow: 4,
+  /** Highlight on a toggle: ellipse center above the middle and half-axes, shares of the radius. */
+  toggleShineY: 0.48,
+  toggleShineW: 0.62,
+  toggleShineH: 0.26,
+  /** Icon box inside a toggle. */
+  toggleIcon: 24,
+} as const;
+
+/**
+ * Living main menu (docs/VISUALS.md V-1, prototype docs/prototypes/living-screens.html).
+ * Sizes are CSS px of a 360x640 portrait; times are ms. Each `show*` flag turns one effect off for profiling.
+ */
+export const MENU_FX = {
+  showBattle: true,
+  showVeil: true,
+  showCloudShadows: true,
+  showBirds: true,
+  showShine: true,
+  showPulse: true,
+  showEntrance: true,
+
+  /** AI-vs-AI backdrop battle (src/levels/menu_background.json). */
+  battle: {
+    /** The level frame (its coordinates are this portrait divided by its height). */
+    frameW: 360,
+    frameH: 640,
+    /** Simulation speed: armies of a real battle look too fast on the small menu field. */
+    simSpeed: 0.6,
+    nodeRadius: { small: 18, medium: 21, large: 24 },
+    /** Nodes grow with the screen, but not beyond this factor. */
+    maxRadiusScale: 1.4,
+    armyScale: 0.85,
+    /** A battle that lasts longer than this is restarted anyway, s. */
+    maxSec: 120,
+    /** Pause after a battle is decided, then the fade-out, then a new battle. */
+    restartDelayMs: 3000,
+    fadeMs: 500,
+  },
+  /** Meadow-colored veil between the battle and the UI. */
+  veilAlpha: 0.42,
+  cloudShadows: {
+    color: 0x143c14,
+    alpha: 0.1,
+    /** One shadow = a few ellipses [dx, dy, rx]; ry = rx * flatten. */
+    blobs: [
+      [0, 0, 46],
+      [44, -8, 38],
+      [-40, 6, 34],
+      [20, 18, 36],
+    ],
+    flatten: 0.62,
+    /** Each shadow: start x and y as a share of the screen, size scale, speed px/s. */
+    items: [
+      { x: 0.11, y: 0.22, scale: 1.2, speed: 7 },
+      { x: 0.72, y: 0.66, scale: 1.6, speed: 5 },
+      { x: -0.33, y: 0.88, scale: 1, speed: 9 },
+    ],
+  },
+  birds: {
+    minGapMs: 6000,
+    maxGapMs: 12000,
+    flightMs: 7000,
+    /** Flight height band: top and height, CSS px. */
+    bandTop: 60,
+    bandHeight: 80,
+    /** Wing half-span and flap amplitude, CSS px; flap speed rad/s. */
+    wing: 7,
+    flapAmp: 4,
+    flapSpeed: 11,
+    lineWidth: 2,
+    /** The second bird: behind, lower, phase-shifted. */
+    followX: 16,
+    followY: 9,
+    followPhase: 1.3,
+  },
+  shine: {
+    periodMs: 4000,
+    durationMs: 800,
+    width: 60,
+    angleDeg: 20,
+    alpha: 0.75,
+  },
+  pulse: {
+    scale: 1.035,
+    periodMs: 1600,
+    glowPad: 7,
+    glowColor: 0xffe078,
+    glowAlpha: 0.45,
+  },
+  entrance: {
+    titleDrop: 140,
+    titleMs: 600,
+    /** Toggles and crystals fade in. */
+    cornerMs: 300,
+    panelDelayMs: 150,
+    panelMs: 350,
+    panelFromScale: 0.9,
+    buttonDelaysMs: [300, 390, 480],
+    buttonMs: 320,
+    buttonRise: 60,
+  },
+  /** Title bob after the entrance: CSS px and half-period. */
+  titleBob: 6,
+  titleBobMs: 1400,
 } as const;
 

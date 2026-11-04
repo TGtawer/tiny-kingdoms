@@ -54,11 +54,16 @@ export function textButton(
   height: number,
   label: string,
   onClick: () => void,
-  sizeCss = 20,
-  color?: number,
+  options: { size?: number; color?: number } = {},
 ): Button {
-  const button = new Button(scene, x, y, { width, height, onClick, ...(color !== undefined ? { color } : {}) });
-  button.add(scene.add.text(0, -px(2), label, textStyle(sizeCss, COLORS.textDark)).setOrigin(0.5));
+  const { size = 20, color } = options;
+  const button = new Button(scene, x, y, {
+    width,
+    height,
+    onClick,
+    ...(color !== undefined ? { color } : {}),
+  });
+  button.add(scene.add.text(0, -px(2), label, textStyle(size, COLORS.textDark)).setOrigin(0.5));
   return button;
 }
 

@@ -1,0 +1,134 @@
+{
+  "id": "menu_background",
+  "chapter": 0,
+  "index": 1,
+  "playerStartGold": 20,
+  "enemy": {
+    "productionMult": 1,
+    "startGold": 20,
+    "aiThinkMs": 1500,
+    "aggression": 0.5
+  },
+  "nodes": [
+    {
+      "id": "blue",
+      "x": 0.0813,
+      "y": 0.1437,
+      "size": "large",
+      "owner": "player",
+      "troops": 14,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "n1",
+      "x": 0.2812,
+      "y": 0.1719,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 7,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n2",
+      "x": 0.4813,
+      "y": 0.1375,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 9,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n3",
+      "x": 0.0688,
+      "y": 0.3844,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n4",
+      "x": 0.4938,
+      "y": 0.3812,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 6,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n5",
+      "x": 0.0875,
+      "y": 0.9344,
+      "size": "medium",
+      "owner": "neutral",
+      "troops": 9,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "n6",
+      "x": 0.2812,
+      "y": 0.9187,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 7,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "red",
+      "x": 0.4781,
+      "y": 0.9375,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 14,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    }
+  ],
+  "roads": [
+    [
+      "blue",
+      "n1"
+    ],
+    [
+      "n1",
+      "n2"
+    ],
+    [
+      "blue",
+      "n3"
+    ],
+    [
+      "n2",
+      "n4"
+    ],
+    [
+      "n3",
+      "n4"
+    ],
+    [
+      "n3",
+      "n5"
+    ],
+    [
+      "n4",
+      "red"
+    ],
+    [
+      "n5",
+      "n6"
+    ],
+    [
+      "n6",
+      "red"
+    ]
+  ]
+}
