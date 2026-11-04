@@ -41,11 +41,6 @@ export class RoadView {
     }
   }
 
-  /** The Graphics with all roads (to put it into a container). */
-  get gameObject(): Phaser.GameObjects.Graphics {
-    return this.g;
-  }
-
   destroy(): void {
     this.g.destroy();
   }

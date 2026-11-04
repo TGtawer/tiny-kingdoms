@@ -25,26 +25,6 @@ export function drawMeadow(g: Phaser.GameObjects.Graphics, w: number, h: number)
   }
 }
 
-/** Small deterministic flowers scattered over the meadow (main menu). */
-export function drawFlowers(g: Phaser.GameObjects.Graphics, w: number, h: number, density: number, colors: readonly number[]): void {
-  let seed = 777;
-  const rnd = (): number => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff;
-  };
-  const count = Math.round(((w * h) / (px(100) * px(100))) * density);
-  for (let i = 0; i < count; i++) {
-    const x = rnd() * w;
-    const y = rnd() * h;
-    const r = px(2.2 + rnd() * 1.6);
-    const color = colors[Math.floor(rnd() * colors.length)] ?? 0xffffff;
-    // Four petals around a yellow-orange heart.
-    g.fillStyle(color, 0.95);
-    g.fillCircle(x - r, y, r).fillCircle(x + r, y, r).fillCircle(x, y - r, r).fillCircle(x, y + r, r);
-    g.fillStyle(0xf59e0b, 1).fillCircle(x, y, r * 0.7);
-  }
-}
-
 /** Rounded button with a centered text label. Sizes in game px. */
 export function textButton(
   scene: Phaser.Scene,

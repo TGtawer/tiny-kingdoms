@@ -1,0 +1,502 @@
+<!--
+  Tiny Kingdoms — утверждённое главное меню для ТЕЛЕФОНА (портрет 360×640), вариант «Турнир», плоские знамёна.
+  Визуальный эталон для реализации в Phaser (docs/VISUALS.md, этап V-4): внешний вид, координаты, размеры, цвета и тайминги брать отсюда.
+  Код здесь — Canvas 2D, не Phaser. Координаты — объект DEFAULTS.mobile; отрисовка — drawMobile(..., flat = true), banner(..., { flat: true }), garland().
+  Вариант с объёмными знамёнами (canvas #m) отклонён и скрыт; десктоп — в menu-desktop-night.html.
+-->
+<title>Главное меню: телефон</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap">
+<style>
+/* Layout: toolbar, then phone (tournament) + its panel and desktop window (night) + its panel; export box at the bottom. */
+:root {
+  --bg: #eef2ea; --surface: #ffffff; --fg: #1f2937; --muted: #5b6656; --line: #d5ddcf; --accent: #ffb53d; --bezel: #1f2937;
+  --chrome: #dde3d8; --chrome-dot: #b4bdae; --edit: #2563eb;
+  --font-ui: "Rubik", "Segoe UI", system-ui, sans-serif; --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #171c16; --surface: #20271f; --fg: #e8eee4; --muted: #a3ae9d; --line: #354033; --bezel: #0b0f0b; --chrome: #2a3229; --chrome-dot: #4a5548; --edit: #60a5fa; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #171c16; --surface: #20271f; --fg: #e8eee4; --muted: #a3ae9d; --line: #354033; --bezel: #0b0f0b; --chrome: #2a3229; --chrome-dot: #4a5548; --edit: #60a5fa; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 40px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; font-weight: 700; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 72ch; }
+.bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+button.act { font: inherit; font-weight: 700; padding: 9px 14px; border-radius: 12px; border: 2px solid var(--fg); background: var(--accent); color: #1f2937; cursor: pointer; box-shadow: 0 3px 0 var(--fg); }
+button.act.ghost { background: var(--surface); color: var(--fg); }
+button.act[aria-pressed="true"] { background: var(--edit); color: #fff; }
+button.act:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--fg); }
+button.act:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+.screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 330px)); gap: 24px; align-items: start; }
+.desk { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 980px; }
+.desk h2 { font-size: 17px; margin: 0; }
+.badge { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; background: var(--accent); color: #1f2937; margin-left: 8px; vertical-align: 2px; }
+.col .sub { margin: -6px 0 0; color: var(--muted); font-size: 13px; }
+.col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.col h2 { font-size: 17px; margin: 0; }
+.phone { width: 100%; max-width: 330px; padding: 5px; border-radius: 30px; background: var(--bezel); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
+.phone canvas { display: block; width: 100%; aspect-ratio: 9 / 16; border-radius: 25px; touch-action: manipulation; }
+.win { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 12px 30px rgba(0,0,0,.16); background: var(--chrome); }
+.win .top { display: flex; align-items: center; gap: 6px; padding: 8px 12px; }
+.win .top i { width: 10px; height: 10px; border-radius: 50%; background: var(--chrome-dot); display: block; }
+.win canvas { display: block; width: 100%; aspect-ratio: 16 / 9; touch-action: manipulation; }
+body.editing canvas { touch-action: none; cursor: grab; outline: 3px solid var(--edit); outline-offset: -3px; }
+.sel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 64px; }
+.selname { margin: 0; font-weight: 700; }
+.hint { margin: 0; color: var(--muted); font-size: 13px; }
+.srow { display: grid; grid-template-columns: 70px 1fr 44px; gap: 10px; align-items: center; }
+.srow input { width: 100%; accent-color: var(--edit); }
+.srow output { font-variant-numeric: tabular-nums; text-align: right; }
+.export { display: flex; flex-direction: column; gap: 8px; }
+.export textarea { width: 100%; min-height: 150px; font-family: var(--font-mono); font-size: 12.5px; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; resize: vertical; }
+/* Reference file: only the approved phone screen is shown. */
+.screens > .col:first-child, .desk, .export, #edit, #reset, .sel { display: none !important; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Главное меню: телефон</h1>
+    <p>Утверждённое главное меню Tiny Kingdoms для телефона, вариант «Турнир» с плоскими знамёнами, 360×640. Эталон для реализации: знамёна можно нажимать, «Анимация входа» показывает появление.</p>
+  </header>
+  <div class="bar">
+    <button class="act" id="edit" type="button" aria-pressed="false">Режим правки</button>
+    <button class="act ghost" id="enter" type="button">Анимация входа</button>
+    <button class="act ghost" id="reset" type="button">Сбросить расстановку</button>
+  </div>
+  <div class="screens">
+    <section class="col" aria-label="Телефон, вариант 1: объёмные знамёна">
+      <h2>Телефон · Вариант 1 · Объёмные</h2>
+      <p class="sub">Складки, тени, вышитая строчка. Гирлянда закреплена на шатрах.</p>
+      <div class="phone"><canvas id="m" aria-label="Меню на телефоне, турнир, объёмные знамёна"></canvas></div>
+      <div class="sel" id="selM"></div>
+    </section>
+    <section class="col" aria-label="Телефон, вариант 2: плоские знамёна">
+      <h2>Телефон · Турнир · 360×640<span class="badge">Главный экран</span></h2>
+      <p class="sub">Без складок и строчки, ровная заливка, тонкий блик по краю и блик на медальоне, как на узлах игры.</p>
+      <div class="phone"><canvas id="m2" aria-label="Меню на телефоне, турнир, плоские знамёна"></canvas></div>
+      <div class="sel" id="selM2"></div>
+    </section>
+  </div>
+  <section class="desk" aria-label="Десктоп: ночной замок">
+    <h2>Десктоп · Ночной замок · 1280×720<span class="badge">Главный экран</span></h2>
+    <div class="win"><div class="top"><i></i><i></i><i></i></div><canvas id="d" aria-label="Меню на десктопе, вариант ночной замок"></canvas></div>
+    <div class="sel" id="selD"></div>
+  </section>
+  <section class="export" aria-label="Координаты">
+    <div class="bar"><button class="act" id="copy" type="button">Скопировать координаты</button><span class="hint">Координаты в пикселях игры: телефон 360×640, десктоп 1280×720.</span></div>
+    <label class="hint" for="json">Текущая расстановка</label>
+    <textarea id="json" readonly spellcheck="false"></textarea>
+  </section>
+</div>
+
+<script>
+
+(() => {
+  const C = {
+    bg: '#7cc46a', bgDark: '#5fa653', outline: '#1f2937', gold: '#ffc83d', goldDark: '#b7811a', panel: '#fff6e0', panelEdge: '#8a5a2b',
+    button: '#ffb53d', white: '#ffffff', blue: '#3b82f6', blueDark: '#1e4fb8', red: '#ef4444', redDark: '#a82020',
+  };
+  const FONT = '"Trebuchet MS", "Segoe UI", Rubik, Arial, sans-serif';
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const seg = (t, a, b) => clamp((t - a) / (b - a), 0, 1);
+  const back = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+  const outC = (t) => 1 - Math.pow(1 - t, 3);
+  function rng(s) { return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; }
+  function rrect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function shade(hex, f) { const n = parseInt(hex.slice(1), 16); let r = n >> 16, gg = (n >> 8) & 255, b = n & 255; const m = (c) => clamp(Math.round(f < 0 ? c * (1 + f) : c + (255 - c) * f), 0, 255); return `rgb(${m(r)},${m(gg)},${m(b)})`; }
+  function text(g, s, x, y, size, color = C.white, stroke = 5) {
+    g.font = `bold ${size}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    if (stroke) { g.lineWidth = stroke; g.strokeStyle = C.outline; g.strokeText(s, x, y); }
+    g.fillStyle = color; g.fillText(s, x, y);
+  }
+  function title(g, x, y, size, color = C.gold) {
+    g.font = `bold ${size}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.fillStyle = C.outline; g.fillText('Tiny Kingdoms', x, y + size * .1);
+    g.lineWidth = size * .17; g.strokeStyle = C.outline; g.strokeText('Tiny Kingdoms', x, y);
+    g.fillStyle = color; g.fillText('Tiny Kingdoms', x, y);
+  }
+  function crystal(g, x, y, s) { g.save(); g.translate(x, y); g.beginPath(); g.moveTo(0, -s * .5); g.lineTo(s * .38, -s * .1); g.lineTo(0, s * .5); g.lineTo(-s * .38, -s * .1); g.closePath(); g.fillStyle = '#38bdf8'; g.fill(); g.lineWidth = 2; g.strokeStyle = C.outline; g.stroke(); g.restore(); }
+  function topRow(g, a, W) {
+    g.globalAlpha = a;
+    for (let i = 0; i < 2; i++) {
+      const x = 34 + i * 52, y = 34;
+      g.fillStyle = 'rgba(31,41,55,.35)'; g.beginPath(); g.arc(x, y + 4, 22, 0, TAU); g.fill();
+      g.fillStyle = C.button; g.beginPath(); g.arc(x, y, 22, 0, TAU); g.fill(); g.lineWidth = 3; g.strokeStyle = C.outline; g.stroke();
+      g.fillStyle = C.outline;
+      if (i === 0) { g.beginPath(); g.moveTo(x - 8, y - 4); g.lineTo(x - 3, y - 4); g.lineTo(x + 3, y - 9); g.lineTo(x + 3, y + 9); g.lineTo(x - 3, y + 4); g.lineTo(x - 8, y + 4); g.closePath(); g.fill(); g.lineWidth = 2.2; g.beginPath(); g.arc(x + 3, y, 7, -.8, .8); g.stroke(); }
+      else { g.beginPath(); g.ellipse(x - 3, y + 6, 4, 3, -.4, 0, TAU); g.fill(); g.lineWidth = 2.2; g.beginPath(); g.moveTo(x + 1, y + 6); g.lineTo(x + 1, y - 8); g.lineTo(x + 7, y - 5); g.stroke(); }
+    }
+    g.font = `bold 22px ${FONT}`; g.textAlign = 'right'; g.textBaseline = 'middle'; g.lineWidth = 5; g.strokeStyle = C.outline; g.strokeText('120', W - 14, 34); g.fillStyle = C.white; g.fillText('120', W - 14, 34);
+    crystal(g, W - 66, 34, 22);
+    g.globalAlpha = 1;
+  }
+
+  // ---- Icons inside medallions ----
+  function icon(g, kind, x, y, s) {
+    g.save(); g.translate(x, y); g.lineWidth = 2.5; g.strokeStyle = C.outline; g.lineJoin = 'round';
+    if (kind === 'play') { g.fillStyle = C.white; g.beginPath(); g.moveTo(-s * .28, -s * .42); g.lineTo(s * .44, 0); g.lineTo(-s * .28, s * .42); g.closePath(); g.fill(); g.stroke(); }
+    else if (kind === 'map') { g.fillStyle = C.panel; g.beginPath(); g.moveTo(-s * .5, -s * .32); g.lineTo(-s * .17, -s * .44); g.lineTo(s * .17, -s * .32); g.lineTo(s * .5, -s * .44); g.lineTo(s * .5, s * .32); g.lineTo(s * .17, s * .44); g.lineTo(-s * .17, s * .32); g.lineTo(-s * .5, s * .44); g.closePath(); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-s * .17, -s * .44); g.lineTo(-s * .17, s * .32); g.moveTo(s * .17, -s * .32); g.lineTo(s * .17, s * .44); g.stroke(); g.fillStyle = C.red; g.beginPath(); g.arc(s * .33, -s * .05, s * .09, 0, TAU); g.fill(); }
+    else if (kind === 'hammer') { g.rotate(-.6); g.fillStyle = C.panelEdge; g.fillRect(-s * .07, -s * .2, s * .14, s * .7); g.strokeRect(-s * .07, -s * .2, s * .14, s * .7); g.fillStyle = '#cbd5e1'; rrect(g, -s * .38, -s * .44, s * .76, s * .28, s * .06); g.fill(); g.stroke(); }
+    g.restore();
+  }
+  function medallion(g, kind, x, y, r, trim, glow = 0, flat = false) {
+    if (glow) { g.fillStyle = `rgba(255,230,140,${.5 * glow})`; g.beginPath(); g.arc(x, y, r + 8, 0, TAU); g.fill(); }
+    if (!flat) { g.fillStyle = shade(trim, -.35); g.beginPath(); g.arc(x, y + 2, r, 0, TAU); g.fill(); }
+    g.fillStyle = trim; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.lineWidth = 3; g.strokeStyle = C.outline; g.stroke();
+    if (!flat) { g.setLineDash([3, 4]); g.lineWidth = 1.5; g.strokeStyle = shade(trim, -.45); g.beginPath(); g.arc(x, y, r - 5, 0, TAU); g.stroke(); g.setLineDash([]); }
+    else { g.fillStyle = 'rgba(255,255,255,.3)'; g.beginPath(); g.ellipse(x - r * .32, y - r * .48, r * .36, r * .16, -.35, 0, TAU); g.fill(); }
+    icon(g, kind, x, y, r * 1.1);
+  }
+
+  // ---- Banner: cloth with folds, trim, tip shape, fringe, medallion, labels ----
+  // tip: 'point' | 'swallow' | 'flat'
+  function banner(g, b, y0, t, drop, opt) {
+    const len = b.len * drop, n = 12, wind = opt.wind ? opt.wind(t) : 1;
+    const amp = (3 + 9 * b.imp) * wind;
+    const sway = (k) => Math.sin(t * (1.8 + b.imp * 3) + b.ph - k * 2.3) * amp * k;
+    const tipH = (b.tip === 'flat' ? 0 : 30) * drop;
+    function path(inset = 0) {
+      const l = b.x - b.w / 2 + inset, r = b.x + b.w / 2 - inset, top = y0 + inset * .3, bot = y0 + len - inset;
+      g.beginPath(); g.moveTo(l + sway(0), top);
+      for (let i = 1; i <= n; i++) { const k = i / n; g.lineTo(l + sway(k), lerp(top, bot, k)); }
+      const sb = sway(1);
+      if (b.tip === 'point') g.lineTo(b.x + sb, bot + tipH - inset * .6);
+      else if (b.tip === 'swallow') { g.lineTo(l + sb, bot + tipH * .9); g.lineTo(b.x + sb, bot + inset * .2); g.lineTo(r + sb, bot + tipH * .9); }
+      for (let i = n; i >= 0; i--) { const k = i / n; g.lineTo(r + sway(k), lerp(top, bot, k)); }
+      g.closePath();
+    }
+    // Drop shadow on the background.
+    const flat = !!opt.flat;
+    if (flat) { g.save(); g.translate(3, 3); path(); g.fillStyle = 'rgba(31,41,55,.15)'; g.fill(); g.restore(); }
+    else { g.save(); g.translate(opt.shadowX ?? 4, opt.shadowY ?? 7); path(); g.fillStyle = opt.shadow ?? 'rgba(31,41,55,.3)'; g.fill(); g.restore(); }
+    // Cloth + folds.
+    path(); g.save(); g.clip();
+    g.fillStyle = b.color; g.fillRect(b.x - b.w, y0 - 10, b.w * 2, len + 60);
+    for (let i = 0; i < (flat ? 0 : 4); i++) {
+      const fx = b.x - b.w / 2 + (i + .5) * b.w / 4 + sway(.6) * .6;
+      const gr = g.createLinearGradient(fx - b.w / 8, 0, fx + b.w / 8, 0);
+      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(.5, i % 2 ? 'rgba(0,0,0,.16)' : 'rgba(255,255,255,.13)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(fx - b.w / 8, y0, b.w / 4, len + 40);
+    }
+    // Flat banners: one thin rim of light along the left edge, following the cloth.
+    if (flat) {
+      const l = b.x - b.w / 2 + 5;
+      g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath();
+      for (let i = 0; i <= 10; i++) { const k = lerp(.07, .62, i / 10); const x = l + sway(k), y = y0 + len * k; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+      g.stroke();
+    }
+    // Press flash.
+    if (b.flash > 0) { g.fillStyle = `rgba(255,255,255,${.35 * b.flash})`; g.fillRect(b.x - b.w, y0, b.w * 2, len + 40); }
+    // Sleeve at the top.
+    g.fillStyle = flat ? 'rgba(0,0,0,.12)' : 'rgba(0,0,0,.22)'; g.fillRect(b.x - b.w, y0, b.w * 2, flat ? 10 : 14);
+    g.restore();
+    // Embroidered trim.
+    if (b.trim) { g.save(); path(); g.clip(); g.lineWidth = flat ? 5 : 6; g.strokeStyle = b.trim; path(9); g.stroke(); if (!flat) { g.lineWidth = 1.5; g.strokeStyle = shade(b.trim, -.4); g.setLineDash([4, 3]); path(9); g.stroke(); g.setLineDash([]); } g.restore(); }
+    path(); g.lineWidth = 3; g.strokeStyle = C.outline; g.lineJoin = 'round'; g.stroke();
+    // Fringe and tassels for flat-bottom banners.
+    if (b.tip === 'flat' && drop > .5) {
+      const bot = y0 + len, sb = sway(1), l = b.x - b.w / 2 + sb, r = b.x + b.w / 2 + sb;
+      g.lineWidth = 2; g.strokeStyle = C.gold;
+      for (let x = l + 3; x < r - 2; x += 4) { const sw = Math.sin(t * 4 + x * .3) * 1.5; g.beginPath(); g.moveTo(x, bot); g.lineTo(x + sw, bot + 11); g.stroke(); }
+      g.lineWidth = 1.5; g.strokeStyle = C.outline; g.beginPath(); g.moveTo(l, bot + 1); g.lineTo(r, bot + 1); g.stroke();
+      for (const x of [l, r]) {
+        const sw = Math.sin(t * 3 + x) * 3;
+        g.lineWidth = 2; g.strokeStyle = C.outline; g.beginPath(); g.moveTo(x, bot); g.lineTo(x + sw, bot + 14); g.stroke();
+        g.fillStyle = C.gold; g.beginPath(); g.moveTo(x + sw - 6, bot + 30); g.lineTo(x + sw, bot + 13); g.lineTo(x + sw + 6, bot + 30); g.closePath(); g.fill(); g.stroke();
+        g.beginPath(); g.arc(x + sw, bot + 15, 4, 0, TAU); g.fill(); g.stroke();
+      }
+    }
+    // Content.
+    if (drop > .75) {
+      const a = seg(drop, .75, 1), cx = b.x + sway(.45), cy = y0 + len * .42;
+      g.save(); g.globalAlpha = a;
+      const glow = b.main && opt.pulse ? opt.pulse : 0;
+      const mr = b.w * (b.main ? .23 : .24); medallion(g, b.icon, cx, cy - mr - 6, mr, b.medal || C.gold, glow, flat);
+      const fs = b.main ? b.w * .2 : Math.min(b.w * .165, 20); b.label.forEach((l, j) => text(g, l, cx + sway(.55) - sway(.45), cy + fs * .8 + j * fs * 1.05, j ? fs * .65 : fs, j ? '#fde68a' : C.white, j ? 4 : 5));
+      g.restore();
+    }
+  }
+
+  // ---------------------------------------------------------------- Layout model
+  const STYLE = {
+    tour: { main: { color: '#b91c1c', trim: C.gold, tip: 'swallow' }, side: { color: '#1e40af', trim: C.gold, tip: 'swallow' } },
+    night: { main: { color: '#b91c1c', trim: C.gold, tip: 'point' }, side: { color: '#1e3a8a', trim: '#fcd34d', tip: 'point' } },
+  };
+  const LABELS = { map: ['Карта'], play: ['Играть', 'Уровень 4'], up: ['Прокачка'] };
+  const ICONS = { map: 'map', play: 'play', up: 'hammer' };
+  const NAMES = { title: 'Название', map: 'Знамя «Карта»', play: 'Знамя «Играть»', up: 'Знамя «Прокачка»', moon: 'Луна', lantern: 'Фонарь' };
+  const DEFAULTS = {
+    mobile: { title: { x: 180, y: 120, size: 46 }, banners: [
+      { id: 'map', x: 62, y: 266, w: 92, len: 206 }, { id: 'up', x: 298, y: 266, w: 92, len: 206 }, { id: 'play', x: 180, y: 266, w: 124, len: 268 }] },
+    desktop: { title: { x: 640, y: 150, size: 64 }, moon: { x: 1060, y: 120 }, lanterns: [300, 520, 760, 980], banners: [
+      { id: 'map', x: 400, y: 290, w: 124, len: 236 }, { id: 'up', x: 880, y: 290, w: 124, len: 236 }, { id: 'play', x: 640, y: 290, w: 150, len: 300 }] },
+  };
+  const KEY = 'tk-menu-layout-v1';
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  let layout = clone(DEFAULTS);
+  // Fixed approved layout: no saved edits are loaded in this reference file.
+  const save = () => { updateExport(); };
+
+  const runtime = new Map(); // banner runtime state (sway impulse, flash, phase)
+  function rt(key, ph) { if (!runtime.has(key)) runtime.set(key, { imp: 0, flash: 0, ph }); return runtime.get(key); }
+  function bannerObj(view, b, style) {
+    const r = rt(view + b.id, { map: 1.7, play: 0, up: 3.1 }[b.id]);
+    const main = b.id === 'play';
+    return Object.assign(r, { ...b, main, label: LABELS[b.id], icon: ICONS[b.id], ...(main ? style.main : style.side) });
+  }
+  function stepRuntime(dt) { for (const r of runtime.values()) { r.imp = Math.max(0, r.imp - dt * .9); r.flash = Math.max(0, r.flash - dt * 4); } }
+  function drawBanners(g, view, L, style, t, e, opt) {
+    // Side banners first, the main one on top.
+    const order = ['map', 'up', 'play'];
+    order.forEach((id, i) => {
+      const b = L.banners.find((x) => x.id === id); const d = back(seg(e, .35 + i * .1, .85 + i * .1)); if (d <= 0) return;
+      banner(g, bannerObj(view, b, style), b.y, t, d, { ...opt, pulse: e > 1.4 ? (Math.sin(t * TAU / 1.6) + 1) / 2 : 0 });
+    });
+  }
+  function titleBox(g, T) { g.font = `bold ${T.size}px ${FONT}`; const w = g.measureText('Tiny Kingdoms').width; return { x: T.x - w / 2 - 6, y: T.y - T.size * .65, w: w + 12, h: T.size * 1.35 }; }
+  function bannerBox(b) { return { x: b.x - b.w / 2, y: b.y, w: b.w, h: b.len + 30 }; }
+
+  // ---------------------------------------------------------------- Screens
+  function makeScreen(id, W, H, view) {
+    const cv = document.getElementById(id); const g = cv.getContext('2d');
+    const fit = () => { const dpr = Math.min(2, devicePixelRatio || 1); const w = cv.getBoundingClientRect().width || 300; cv.width = Math.round(w * dpr); cv.height = Math.round(w * H / W * dpr); };
+    fit(); addEventListener('resize', fit);
+    const s = { id, W, H, view, g, sel: null, drag: null, begin: () => g.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0) };
+    const toLocal = (ev) => { const r = cv.getBoundingClientRect(); return { x: (ev.clientX - r.left) / r.width * W, y: (ev.clientY - r.top) / r.height * H }; };
+    function hit(p) {
+      const L = layout[view];
+      if (view === 'desktop') {
+        for (let i = 0; i < L.lanterns.length; i++) { const bY = L.banners[0].y; if (Math.hypot(p.x - L.lanterns[i], p.y - (bY + 26)) < 22) return { kind: 'lantern', i }; }
+        if (Math.hypot(p.x - L.moon.x, p.y - L.moon.y) < 44) return { kind: 'moon' };
+      }
+      const tb = titleBox(g, L.title); if (p.x > tb.x && p.x < tb.x + tb.w && p.y > tb.y && p.y < tb.y + tb.h) return { kind: 'title' };
+      for (const id of ['play', 'map', 'up']) { const b = L.banners.find((x) => x.id === id); const bb = bannerBox(b); if (p.x > bb.x && p.x < bb.x + bb.w && p.y > bb.y && p.y < bb.y + bb.h) return { kind: 'banner', id }; }
+      return null;
+    }
+    cv.addEventListener('pointerdown', (ev) => {
+      const p = toLocal(ev); const h = hit(p);
+      if (!editing) { if (h && h.kind === 'banner') { const r = rt((view === 'desktop' ? 'desktop' : s.id) + h.id, 0); r.imp = 1; r.flash = 1; } return; }
+      s.sel = h; renderPanel(s);
+      if (h) { s.drag = { p, h }; cv.setPointerCapture(ev.pointerId); ev.preventDefault(); }
+    });
+    cv.addEventListener('pointermove', (ev) => {
+      if (!s.drag) return; const p = toLocal(ev); const dx = p.x - s.drag.p.x, dy = p.y - s.drag.p.y; s.drag.p = p;
+      const L = layout[view], h = s.drag.h;
+      if (h.kind === 'title') { L.title.x += dx; L.title.y += dy; }
+      else if (h.kind === 'moon') { L.moon.x += dx; L.moon.y += dy; }
+      else if (h.kind === 'lantern') { L.lanterns[h.i] += dx; for (const b of L.banners) b.y += dy; }
+      else if (h.kind === 'banner') {
+        const b = L.banners.find((x) => x.id === h.id); b.x += dx;
+        // Night: one beam, so vertical drag moves all banners; tournament: every pole is independent.
+        if (view === 'desktop') for (const o of L.banners) o.y += dy; else b.y += dy;
+      }
+    });
+    const up = () => { if (s.drag) { s.drag = null; round(layout[view]); save(); renderPanel(s); } };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cv.addEventListener('wheel', (ev) => {
+      if (!editing || !s.sel) return; ev.preventDefault();
+      const L = layout[view], h = s.sel, k = ev.deltaY < 0 ? 1 : -1;
+      if (h.kind === 'title') L.title.size = clamp(L.title.size + k * 2, 24, 96);
+      if (h.kind === 'banner') { const b = L.banners.find((x) => x.id === h.id); if (ev.shiftKey) b.w = clamp(b.w + k * 4, 60, 220); else b.len = clamp(b.len + k * 6, 100, 420); }
+      round(L); save(); renderPanel(s);
+    }, { passive: false });
+    return s;
+  }
+  function round(L) {
+    const r = (v) => Math.round(v);
+    L.title.x = r(L.title.x); L.title.y = r(L.title.y); for (const b of L.banners) { b.x = r(b.x); b.y = r(b.y); b.w = r(b.w); b.len = r(b.len); }
+    if (L.moon) { L.moon.x = r(L.moon.x); L.moon.y = r(L.moon.y); } if (L.lanterns) L.lanterns = L.lanterns.map(r);
+  }
+  function outline(g, box) { g.save(); g.setLineDash([6, 5]); g.lineWidth = 2; g.strokeStyle = '#ffffff'; g.strokeRect(box.x, box.y, box.w, box.h); g.strokeStyle = '#1f2937'; g.lineDashOffset = 5.5; g.strokeRect(box.x, box.y, box.w, box.h); g.restore(); }
+  function selBox(s) {
+    const L = layout[s.view], h = s.sel; if (!h) return null;
+    if (h.kind === 'title') return titleBox(s.g, L.title);
+    if (h.kind === 'banner') return bannerBox(L.banners.find((x) => x.id === h.id));
+    if (h.kind === 'moon') return { x: L.moon.x - 40, y: L.moon.y - 40, w: 80, h: 80 };
+    if (h.kind === 'lantern') return { x: L.lanterns[h.i] - 14, y: L.banners[0].y + 6, w: 28, h: 34 };
+    return null;
+  }
+
+  // ---------------------------------------------------------------- Mobile: tournament (360×640)
+  const mobile = makeScreen('m', 360, 640, 'mobile');
+  const mobileFlat = makeScreen('m2', 360, 640, 'mobile');
+  const tourScene = (() => {
+    const W = 360, H = 640; const cv = document.createElement('canvas'); cv.width = W * 2; cv.height = H * 2; const k = cv.getContext('2d'); k.scale(2, 2);
+    const sky = k.createLinearGradient(0, 0, 0, 330); sky.addColorStop(0, '#8fd0f5'); sky.addColorStop(1, '#e3f5ff'); k.fillStyle = sky; k.fillRect(0, 0, W, 330);
+    k.fillStyle = C.bg; k.fillRect(0, 320, W, 320);
+    const r = rng(21); k.strokeStyle = C.bgDark; k.lineWidth = 2; k.lineCap = 'round';
+    for (let i = 0; i < 34; i++) { const x = r() * W, y = 340 + r() * 300, s = 4 + r() * 3; k.beginPath(); k.moveTo(x - s, y); k.lineTo(x - s * .4, y - s * 1.2); k.moveTo(x, y); k.lineTo(x, y - s * 1.5); k.moveTo(x + s, y); k.lineTo(x + s * .4, y - s * 1.2); k.stroke(); }
+    const tent = (x, y, w, h, c) => {
+      k.save(); k.lineWidth = 2.5; k.strokeStyle = C.outline; k.lineJoin = 'round';
+      k.beginPath(); k.moveTo(x - w / 2, y); k.lineTo(x - w / 2, y - h * .45); k.lineTo(x, y - h); k.lineTo(x + w / 2, y - h * .45); k.lineTo(x + w / 2, y); k.closePath(); k.fillStyle = '#fff6e0'; k.fill(); k.save(); k.clip();
+      k.fillStyle = c; for (let i = -3; i < 4; i += 2) { k.beginPath(); k.moveTo(x + i * w / 8, y); k.lineTo(x, y - h); k.lineTo(x + (i + 1) * w / 8, y); k.closePath(); k.fill(); }
+      k.restore(); k.stroke();
+      k.fillStyle = '#5b3a1f'; k.beginPath(); k.moveTo(x - 6, y); k.lineTo(x, y - h * .35); k.lineTo(x + 6, y); k.closePath(); k.fill(); k.stroke();
+      k.beginPath(); k.moveTo(x, y - h); k.lineTo(x, y - h - 12); k.stroke(); k.fillStyle = c; k.beginPath(); k.moveTo(x, y - h - 12); k.lineTo(x + 12, y - h - 8); k.lineTo(x, y - h - 4); k.closePath(); k.fill(); k.stroke();
+      k.restore();
+    };
+    tent(20, 330, 88, 98, '#dc2626'); tent(340, 330, 88, 98, '#2563eb'); tent(130, 324, 46, 52, '#2563eb'); tent(236, 324, 46, 52, '#dc2626');
+    k.fillStyle = '#c08a4b'; k.strokeStyle = C.outline; k.lineWidth = 2;
+    k.fillRect(0, 352, W, 6); k.strokeRect(-2, 352, W + 4, 6); for (let x = 8; x < W; x += 30) { k.fillRect(x, 340, 6, 26); k.strokeRect(x, 340, 6, 26); }
+    return cv;
+  })();
+  // Bunting tied to the poles on top of the two big tents: the ends stay put, the rope sags and swings between them.
+  function garland(g, t) {
+    const A = { x: 20, y: 232 }, B = { x: 340, y: 232 }, sag = 30; // tent peaks: where the canvas ends and the flagpole starts
+    const at = (k) => {
+      const bell = Math.sin(k * Math.PI);
+      return { x: lerp(A.x, B.x, k) + bell * Math.sin(t * 1.3) * 3, y: lerp(A.y, B.y, k) + bell * (sag + Math.sin(t * 1.8) * 4 + Math.sin(t * 3.1 + k * 4) * 1.2) };
+    };
+    g.lineWidth = 1.5; g.strokeStyle = C.outline; g.lineCap = 'round'; g.beginPath();
+    for (let i = 0; i <= 40; i++) { const p = at(i / 40); i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y); } g.stroke();
+    const n = 13;
+    for (let i = 1; i <= n; i++) {
+      const k = i / (n + 1), p = at(k), q = at(k + .02), ang = Math.atan2(q.y - p.y, q.x - p.x);
+      g.save(); g.translate(p.x, p.y); g.rotate(ang + Math.sin(t * 2.6 + i) * .08);
+      g.fillStyle = ['#dc2626', C.gold, '#2563eb'][i % 3]; g.beginPath(); g.moveTo(-5.5, 0); g.lineTo(5.5, 0); g.lineTo(0, 12); g.closePath(); g.fill(); g.lineWidth = 1; g.stroke();
+      g.restore();
+    }
+  }
+  function drawMobile(s, t, e, flat) {
+    const g = s.g, L = layout.mobile, W = 360, H = 640; s.begin();
+    g.drawImage(tourScene, 0, 0, W, H);
+    garland(g, t);
+    g.save(); g.globalAlpha = seg(e, 0, .2); title(g, L.title.x, lerp(-40, L.title.y + Math.sin(t * 2.2) * 4 * seg(e, .7, 1), back(seg(e, 0, .55))), L.title.size); g.restore();
+    const pk = outC(seg(e, .1, .45));
+    for (const id of ['map', 'up', 'play']) {
+      const b = L.banners.find((x) => x.id === id), top = b.y - 40 - (id === 'play' ? 14 : 0), bottom = Math.max(620, b.y + b.len + 60);
+      const tp = lerp(H, top, pk);
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(b.x + 10, bottom, 16, 4, 0, 0, TAU); g.fill();
+      g.fillStyle = '#8a5a2b'; g.fillRect(b.x - 3.5, tp, 7, bottom - tp); g.lineWidth = 2.5; g.strokeStyle = C.outline; g.strokeRect(b.x - 3.5, tp, 7, bottom - tp);
+      g.fillStyle = C.gold; g.beginPath(); g.moveTo(b.x, tp - 22); g.lineTo(b.x + 7, tp - 6); g.lineTo(b.x, tp); g.lineTo(b.x - 7, tp - 6); g.closePath(); g.fill(); g.stroke();
+      g.beginPath(); g.arc(b.x, tp + 2, 5, 0, TAU); g.fill(); g.stroke();
+    }
+    drawBanners(g, s.id, L, STYLE.tour, t, e, { shadow: 'rgba(31,41,55,.25)', shadowX: 8, shadowY: 4, flat });
+    if (pk >= 1) for (const b of L.banners) {
+      g.fillStyle = '#8a5a2b'; rrect(g, b.x - b.w / 2 - 4, b.y - 6, b.w + 8, 10, 5); g.fill(); g.lineWidth = 2.5; g.strokeStyle = C.outline; g.stroke();
+      g.fillStyle = C.gold; for (const sd of [-1, 1]) { g.beginPath(); g.arc(b.x + sd * (b.w / 2 + 4), b.y - 1, 5, 0, TAU); g.fill(); g.stroke(); }
+    }
+    topRow(g, seg(e, 0, .3), W);
+    if (editing) { const box = selBox(s); if (box) outline(g, box); }
+  }
+
+  // ---------------------------------------------------------------- Desktop: night castle (1280×720)
+  const desktop = makeScreen('d', 1280, 720, 'desktop');
+  const nightData = (() => {
+    const W = 1280, H = 720; const r0 = rng(77);
+    const stars = Array.from({ length: 170 }, () => ({ x: r0() * W, y: r0() * 470, s: .6 + r0() * 1.7, ph: r0() * TAU }));
+    const towers = [[90, 40, 150], [190, 70, 90], [300, 34, 190], [420, 80, 110], [870, 80, 110], [990, 34, 200], [1100, 70, 95], [1200, 40, 160]];
+    const cv = document.createElement('canvas'); cv.width = W * 2; cv.height = H * 2; const k = cv.getContext('2d'); k.scale(2, 2);
+    const sky = k.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#0f1b3d'); sky.addColorStop(.6, '#22356b'); sky.addColorStop(1, '#2d4a7a'); k.fillStyle = sky; k.fillRect(0, 0, W, H);
+    k.fillStyle = '#16233f';
+    k.beginPath(); k.moveTo(0, 590); k.quadraticCurveTo(320, 530, 640, 575); k.quadraticCurveTo(960, 610, 1280, 545); k.lineTo(1280, 720); k.lineTo(0, 720); k.fill();
+    for (const [x, w, h] of towers) { k.fillRect(x - w / 2, 570 - h, w, h + 60); for (let i = 0; i < w; i += 11) k.fillRect(x - w / 2 + i, 570 - h - 8, 7, 8); }
+    for (const [x, w, h] of towers.filter((tw) => tw[1] < 50)) { k.beginPath(); k.moveTo(x - w / 2 - 6, 570 - h); k.lineTo(x, 570 - h - 40); k.lineTo(x + w / 2 + 6, 570 - h); k.fill(); }
+    k.fillRect(90, 520, 330, 60); k.fillRect(870, 520, 330, 60);
+    k.fillStyle = '#0d1630'; k.fillRect(0, 640, W, 80);
+    const r1 = rng(3); const windows = [];
+    for (const [x, w, h] of towers) for (let y = 570 - h + 24; y < 540; y += 34) if (r1() < .6) windows.push([x + (r1() - .5) * (w - 16), y]);
+    const flies = Array.from({ length: 24 }, () => ({ x: r0() * W, y: 330 + r0() * 360, ph: r0() * TAU, sp: .3 + r0() * .5 }));
+    return { bg: cv, stars, windows, flies };
+  })();
+  function lantern(g, x, y, t) {
+    const f = .9 + .1 * Math.sin(t * 13 + x);
+    const gl = g.createRadialGradient(x, y + 18, 3, x, y + 18, 140 * f); gl.addColorStop(0, 'rgba(255,200,110,.5)'); gl.addColorStop(1, 'rgba(255,170,80,0)');
+    g.fillStyle = gl; g.beginPath(); g.arc(x, y + 18, 140, 0, TAU); g.fill();
+    g.lineWidth = 2; g.strokeStyle = C.outline; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 8); g.stroke();
+    g.fillStyle = '#ffd56b'; rrect(g, x - 8, y + 8, 16, 20, 4); g.fill(); g.stroke();
+    g.fillStyle = '#374151'; g.fillRect(x - 10, y + 6, 20, 4); g.strokeRect(x - 10, y + 6, 20, 4); g.fillRect(x - 10, y + 27, 20, 4); g.strokeRect(x - 10, y + 27, 20, 4);
+  }
+  function drawDesktop(t, e) {
+    const s = desktop, g = s.g, L = layout.desktop, W = 1280, N = nightData; s.begin();
+    g.drawImage(N.bg, 0, 0, W, 720);
+    for (const st of N.stars) { g.globalAlpha = .45 + .55 * (Math.sin(t * 1.7 + st.ph) + 1) / 2; g.fillStyle = '#fff7d6'; g.beginPath(); g.arc(st.x, st.y, st.s, 0, TAU); g.fill(); }
+    g.globalAlpha = 1;
+    const mx = L.moon.x, my = L.moon.y;
+    const mg = g.createRadialGradient(mx, my, 10, mx, my, 110); mg.addColorStop(0, 'rgba(255,248,214,.35)'); mg.addColorStop(1, 'rgba(255,248,214,0)'); g.fillStyle = mg; g.beginPath(); g.arc(mx, my, 110, 0, TAU); g.fill();
+    g.fillStyle = '#fff4cf'; g.beginPath(); g.arc(mx, my, 36, 0, TAU); g.fill(); g.lineWidth = 2.5; g.strokeStyle = C.outline; g.stroke();
+    g.fillStyle = 'rgba(200,190,150,.5)'; for (const [x, y, r] of [[-10, -8, 7], [12, 10, 5], [6, -14, 4]]) { g.beginPath(); g.arc(mx + x, my + y, r, 0, TAU); g.fill(); }
+    for (const [x, y] of N.windows) { const f = .75 + .25 * Math.sin(t * 2 + x); g.fillStyle = `rgba(255,205,110,${f})`; rrect(g, x - 4, y, 8, 13, 4); g.fill(); }
+    g.save(); g.globalAlpha = seg(e, 0, .2); title(g, L.title.x, lerp(-60, L.title.y + Math.sin(t * 2.2) * 4 * seg(e, .7, 1), back(seg(e, 0, .55))), L.title.size); g.restore();
+    drawBanners(g, 'desktop', L, STYLE.night, t, e, { shadow: 'rgba(0,0,0,.35)' });
+    // Beam spans all banners and lanterns.
+    const beamY = L.banners[0].y;
+    const xs = [...L.banners.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]), ...L.lanterns];
+    const x0 = Math.min(...xs) - 50, x1 = Math.max(...xs) + 50, cx = (x0 + x1) / 2;
+    const bk = outC(seg(e, .1, .4));
+    g.save(); g.translate(cx, beamY); g.scale(bk, 1);
+    g.fillStyle = '#5b3a1f'; rrect(g, x0 - cx, -11, x1 - x0, 22, 10); g.fill(); g.lineWidth = 3; g.strokeStyle = C.outline; g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.12)'; rrect(g, x0 - cx + 6, -8, x1 - x0 - 12, 6, 3); g.fill();
+    g.restore();
+    if (bk >= 1) for (const lx of L.lanterns) lantern(g, lx, beamY + 9, t);
+    for (const f of N.flies) {
+      const x = f.x + Math.sin(t * f.sp + f.ph) * 40, y = f.y + Math.cos(t * f.sp * 1.3 + f.ph) * 24, a = .4 + .6 * Math.max(0, Math.sin(t * 2 + f.ph));
+      const fg = g.createRadialGradient(x, y, 0, x, y, 9); fg.addColorStop(0, `rgba(230,255,140,${a})`); fg.addColorStop(1, 'rgba(230,255,140,0)'); g.fillStyle = fg; g.beginPath(); g.arc(x, y, 9, 0, TAU); g.fill();
+    }
+    topRow(g, seg(e, 0, .3), W);
+    if (editing) { const box = selBox(s); if (box) outline(g, box); }
+  }
+
+  // ---------------------------------------------------------------- Panel
+  let editing = false;
+  const $ = (id) => document.getElementById(id);
+  function renderPanel(s) {
+    const box = $({ m: 'selM', m2: 'selM2', d: 'selD' }[s.id]); const L = layout[s.view], h = s.sel;
+    box.replaceChildren();
+    const head = document.createElement('p'); head.className = 'selname';
+    if (!editing) { head.textContent = 'Включи режим правки, чтобы двигать элементы.'; box.append(head); return; }
+    if (!h) { head.textContent = 'Нажми на название, знамя' + (s.view === 'desktop' ? ', фонарь или луну' : '') + ', чтобы выбрать.'; box.append(head); return; }
+    head.textContent = h.kind === 'banner' ? NAMES[h.id] : h.kind === 'lantern' ? `${NAMES.lantern} ${h.i + 1}` : NAMES[h.kind]; box.append(head);
+    const slider = (label, value, min, max, onInput) => {
+      const id = `${s.id}-${label}`;
+      const row = document.createElement('div'); row.className = 'srow';
+      const lab = document.createElement('label'); lab.htmlFor = id; lab.textContent = label;
+      const out = document.createElement('output'); out.textContent = value;
+      const inp = document.createElement('input'); inp.type = 'range'; inp.id = id; inp.min = min; inp.max = max; inp.value = value;
+      inp.addEventListener('input', () => { out.textContent = inp.value; onInput(+inp.value); });
+      inp.addEventListener('change', save);
+      row.append(lab, inp, out); box.append(row);
+    };
+    if (h.kind === 'title') slider('Размер', L.title.size, 24, 96, (v) => { L.title.size = v; });
+    if (h.kind === 'banner') {
+      const b = L.banners.find((x) => x.id === h.id);
+      slider('Ширина', b.w, 60, 220, (v) => { b.w = v; });
+      slider('Длина', b.len, 100, 420, (v) => { b.len = v; });
+    }
+    const hint = document.createElement('p'); hint.className = 'hint';
+    hint.textContent = h.kind === 'banner' && s.view === 'desktop' ? 'Тащи влево-вправо. Вверх-вниз двигается вся перекладина со всеми знамёнами.' : h.kind === 'lantern' ? 'Тащи влево-вправо. Вверх-вниз двигается вся перекладина.' : 'Тащи мышкой или пальцем.';
+    box.append(hint);
+  }
+  function updateExport() {
+    const out = { mobile_tournament_360x640: layout.mobile, desktop_night_1280x720: layout.desktop };
+    $('json').value = JSON.stringify(out, null, 1);
+  }
+  $('edit').addEventListener('click', () => {
+    editing = !editing; $('edit').textContent = editing ? 'Выключить правку' : 'Режим правки'; $('edit').setAttribute('aria-pressed', String(editing));
+    document.body.classList.toggle('editing', editing);
+    if (!editing) { mobile.sel = null; mobileFlat.sel = null; desktop.sel = null; }
+    renderPanel(mobile); renderPanel(mobileFlat); renderPanel(desktop);
+  });
+  $('reset').addEventListener('click', () => { layout = clone(DEFAULTS); mobile.sel = null; mobileFlat.sel = null; desktop.sel = null; save(); renderPanel(mobile); renderPanel(mobileFlat); renderPanel(desktop); });
+  $('copy').addEventListener('click', () => {
+    const ta = $('json'); const done = () => { $('copy').textContent = 'Скопировано'; setTimeout(() => { $('copy').textContent = 'Скопировать координаты'; }, 1500); };
+    const fallback = () => { ta.focus(); ta.select(); $('copy').textContent = 'Выделено — нажми Ctrl+C'; };
+    try { navigator.clipboard.writeText(ta.value).then(done, fallback); } catch (_) { fallback(); }
+  });
+  $('enter').addEventListener('click', () => { enterAt = clock; });
+  renderPanel(mobile); renderPanel(mobileFlat); renderPanel(desktop); updateExport();
+
+  let clock = 0, enterAt = -10, last = performance.now();
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  drawMobile(mobile, 5, 5, false); drawMobile(mobileFlat, 5, 5, true); drawDesktop(5, 5);
+  function loop(now) {
+    const dt = reduced ? 0 : Math.min(.05, (now - last) / 1000); last = now; clock += dt; stepRuntime(dt);
+    drawMobile(mobile, clock, clock - enterAt, false); drawMobile(mobileFlat, clock, clock - enterAt, true); drawDesktop(clock, clock - enterAt);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
