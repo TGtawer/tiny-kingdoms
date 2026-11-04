@@ -453,6 +453,8 @@ export const MENU_BANNER = {
   phase: { map: 1.7, play: 0, up: 3.1 },
   outline: 3,
   trimInset: 9,
+  /** Light highlights on the cloth (flat: rim along the left edge; rich: the light folds). Off: plain cloth. */
+  clothShine: false,
   /** Flat style (portrait). */
   flat: { shadowX: 3, shadowY: 3, shadowAlpha: 0.15, sleeve: 10, sleeveAlpha: 0.12, trim: 5, rimInset: 5, rimWidth: 3, rimAlpha: 0.22, rimFrom: 0.07, rimTo: 0.62 },
   /** Rich style (landscape): folds and a stitched trim. */
@@ -484,8 +486,9 @@ export const MENU_TOURNAMENT = {
   ref: { w: 360, h: 640 },
   title: { x: 180, y: 120, size: 46 },
   banners: [
-    { id: 'map', x: 62, y: 266, w: 92, len: 206 },
-    { id: 'up', x: 298, y: 266, w: 92, len: 206 },
+    // The side banners hang a little lower than Play.
+    { id: 'map', x: 62, y: 280, w: 92, len: 206 },
+    { id: 'up', x: 298, y: 280, w: 92, len: 206 },
     { id: 'play', x: 180, y: 266, w: 124, len: 268 },
   ],
   colors: { main: 0xb91c1c, side: 0x1e40af, trim: 0xffc83d },

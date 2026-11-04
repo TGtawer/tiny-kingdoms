@@ -181,7 +181,7 @@ export class MenuBanner {
     g.fillStyle(color, 1);
     fill(g, cloth);
 
-    if (this.flat) {
+    if (this.flat && B.clothShine) {
       // A thin rim of light along the left edge, following the cloth.
       const F = B.flat;
       const l = x - w / 2 + F.rimInset;
@@ -192,7 +192,7 @@ export class MenuBanner {
       }
       g.lineStyle(F.rimWidth, 0xffffff, F.rimAlpha);
       polyline(g, rim);
-    } else {
+    } else if (!this.flat) {
       this.drawFolds(g, t, len);
     }
 
@@ -236,6 +236,7 @@ export class MenuBanner {
       const fx = x - w / 2 + ((i + 0.5) * w) / R.folds + shift;
       const half = w / R.folds / 2;
       const light = i % 2 === 0;
+      if (light && !B.clothShine) continue;
       const color = light ? 0xffffff : 0x000000;
       const peak = light ? R.foldLight : R.foldDark;
       for (let j = 0; j < n; j++) {
