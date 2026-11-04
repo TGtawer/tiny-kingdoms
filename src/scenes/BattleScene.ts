@@ -14,7 +14,8 @@ import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
 import { canOpenSpell } from '../core/meta/spellbook';
-import { recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
+import { bestStars, recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
+import { isCompleted } from '../core/meta/Progress';
 import { defeatTip } from '../core/meta/tips';
 import { playerSetupFrom } from '../core/meta/upgrades';
 import { FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
@@ -30,6 +31,7 @@ import { audioFiles, canPlayJingle, isMusicEnabled, playJingle, playMusic, setMu
 import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
 import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
+import type { ChapterMapData, MapReveal } from './ChapterMapScene';
 import { getPlatform, getStore } from './registry';
 
 /** Delay before the result panel, so the final capture is visible. */
@@ -76,6 +78,8 @@ export class BattleScene extends Phaser.Scene {
   private inPortal = new Set<string>();
   /** Battle facts for the star rating and the defeat tip. */
   private stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
+  /** After a win: what the chapter map animates when the player goes there from the result panel (V-3). */
+  private mapReveal: MapReveal | null = null;
   /** "How many will leave" badge for a swipe or a selected node; one reused Text. */
   private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
@@ -124,6 +128,7 @@ export class BattleScene extends Phaser.Scene {
     this.infoLabel = null;
     this.inPortal = new Set();
     this.stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
+    this.mapReveal = null;
 
     this.platform = getPlatform(this);
     // Seed per level: the AI's timing jitter is reproducible for a given level.
@@ -381,11 +386,15 @@ export class BattleScene extends Phaser.Scene {
 
     // Rewards are applied and saved right away, so leaving the result screen can't lose them.
     const store = getStore(this);
+    // Read before the result is applied: the map shows the change from this state.
+    const firstWin = !isCompleted(store.progress, this.level.id);
+    const previousStars = bestStars(store.progress, this.level.id);
     const reward = applyBattleResult(store.progress, this.level, winner === 'player' ? 'victory' : 'defeat');
     const stars = starChecks({ won: winner === 'player', timeMs: this.world.tick * TICK_MS, lostOwnNode: this.stats.lostOwnNode }, this.level);
     const starCount = stars.filter(Boolean).length;
     recordStars(store.progress, this.level.id, starCount);
     store.commit();
+    this.mapReveal = winner === 'player' ? { levelId: this.level.id, stars: starCount, previousStars, unlocked: firstWin } : null;
 
     // The music fades out; the jingle comes with the result panel. Without a jingle the synth effect plays now.
     const won = winner === 'player';
@@ -438,8 +447,10 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /** To the chapter map; after a win the map plays the level-open animation (not from the pause panel). */
   private toMap(): void {
-    this.scene.start('ChapterMapScene', { chapter: this.level.chapter });
+    const data: ChapterMapData = { chapter: this.level.chapter, ...(this.ended && this.mapReveal ? { reveal: this.mapReveal } : {}) };
+    this.scene.start('ChapterMapScene', data);
   }
 
   // ---- Rendering --------------------------------------------------------------------------------

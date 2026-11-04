@@ -46,36 +46,97 @@ interface Cloud {
  * The living chapter map around the level nodes (docs/VISUALS.md V-2): road walked and ahead with running
  * dashes, decor with small motion, the player token over the current level, a squad walking the completed
  * path and parallax clouds. Built once per layout; `update` only moves sprites and redraws the dash lines.
+ * The level-open animation (V-3) drives it through setDone / revealRoad / moveToken / setQuiet.
  */
 export class MapScenery {
   private readonly swaying: Swaying[] = [];
   private readonly sails: Swaying[] = [];
   private readonly smoke: Smoke[] = [];
   private readonly clouds: Cloud[] = [];
-  private readonly dashes: Phaser.GameObjects.Graphics | null = null;
+  private readonly walked: Phaser.GameObjects.Graphics;
+  private readonly ahead: Phaser.GameObjects.Graphics;
+  /** The segment being drawn by the level-open animation, over the dimmed road. */
+  private readonly reveal: Phaser.GameObjects.Graphics;
+  private dashes: Phaser.GameObjects.Graphics | null = null;
   private readonly token: { sprite: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; at: Point } | null = null;
-  private readonly walker: Phaser.GameObjects.Image | null = null;
+  /** While set, the token is here instead of hopping in place (on its way to a new level). */
+  private tokenOverride: { x: number; y: number; hop: number } | null = null;
+  private walker: Phaser.GameObjects.Image | null = null;
+  private quiet = false;
+  private done: number;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly o: SceneryOptions,
   ) {
-    this.drawRoad();
+    this.done = o.done;
+    this.walked = scene.add.graphics().setDepth(MAP_DEPTH.road);
+    this.ahead = scene.add.graphics().setDepth(MAP_DEPTH.road);
+    this.reveal = scene.add.graphics().setDepth(MAP_DEPTH.road + 0.1);
+    if (MAP_FX.showRoadProgress) this.ahead.setAlpha(MAP_FX.road.futureAlpha);
     if (MAP_FX.showDecor) this.placeDecor();
-    if (MAP_FX.showRoadProgress && o.done >= 1 && o.done < o.points.length) {
-      this.dashes = scene.add.graphics().setDepth(MAP_DEPTH.dashes);
-    }
     if (MAP_FX.showToken && o.points.length > 0) {
       const T = MAP_FX.token;
-      const at = o.points[Math.min(o.done, o.points.length - 1)]!;
-      const shadow = this.image(shadowTexture(scene), at.x, at.y).setTint(0x000000).setAlpha(T.shadowAlpha).setDepth(MAP_DEPTH.token);
-      const sprite = this.image(squadTexture(scene, T.radius, 'player'), at.x, at.y).setDepth(MAP_DEPTH.token);
-      this.token = { sprite, shadow, at };
+      const shadow = this.image(shadowTexture(scene), 0, 0).setTint(0x000000).setAlpha(T.shadowAlpha).setDepth(MAP_DEPTH.token);
+      const sprite = this.image(squadTexture(scene, T.radius, 'player'), 0, 0).setDepth(MAP_DEPTH.token);
+      this.token = { sprite, shadow, at: { x: 0, y: 0 } };
     }
-    if (MAP_FX.showWalker && o.done >= 2) {
-      this.walker = this.image(squadTexture(scene, MAP_FX.walker.radius, 'player'), 0, 0).setDepth(MAP_DEPTH.walker);
-    }
+    this.setDone(o.done);
     if (MAP_FX.showClouds) this.placeClouds();
+  }
+
+  /** Completed levels changed (end of the level-open animation): road, dashes, token and walker follow. */
+  setDone(done: number): void {
+    this.done = done;
+    const { points } = this.o;
+    this.drawRoad();
+    this.reveal.clear();
+    const dashed = MAP_FX.showRoadProgress && done >= 1 && done < points.length;
+    if (dashed && !this.dashes) this.dashes = this.scene.add.graphics().setDepth(MAP_DEPTH.dashes);
+    if (!dashed && this.dashes) {
+      this.dashes.destroy();
+      this.dashes = null;
+    }
+    if (this.token) this.token.at = points[Math.min(done, points.length - 1)]!;
+    this.tokenOverride = null;
+    if (MAP_FX.showWalker && done >= 2 && !this.walker) {
+      this.walker = this.image(squadTexture(this.scene, MAP_FX.walker.radius, 'player'), 0, 0).setDepth(MAP_DEPTH.walker);
+    }
+    this.setQuiet(this.quiet);
+  }
+
+  /** Draws the road from level `index` toward the next one, share `k` of the way (opaque, over the dimmed part). */
+  revealRoad(index: number, k: number): void {
+    const a = this.o.points[index];
+    const b = this.o.points[index + 1];
+    const g = this.reveal;
+    g.clear();
+    if (!a || !b || k <= 0) return;
+    const x = a.x + (b.x - a.x) * k;
+    const y = a.y + (b.y - a.y) * k;
+    const R = MAP_FX.road;
+    for (const [width, color] of [
+      [px(R.edgeWidth), COLORS.roadEdge],
+      [px(R.width), COLORS.road],
+    ] as const) {
+      g.lineStyle(width, color, 1).lineBetween(a.x, a.y, x, y);
+      g.fillStyle(color, 1).fillCircle(a.x, a.y, width / 2).fillCircle(x, y, width / 2);
+    }
+  }
+
+  /** The token on its way from level `from` to `to`: share `k` of the way, `hops` hops of `height` CSS px. */
+  moveToken(from: number, to: number, k: number, hops: number, height: number): void {
+    const a = this.o.points[from];
+    const b = this.o.points[to];
+    if (!a || !b) return;
+    this.tokenOverride = { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, hop: Math.abs(Math.sin(k * Math.PI * hops)) * height };
+  }
+
+  /** Hides the dashes and the walker while the level-open animation plays. */
+  setQuiet(quiet: boolean): void {
+    this.quiet = quiet;
+    this.dashes?.setVisible(!quiet);
+    this.walker?.setVisible(!quiet);
   }
 
   update(time: number, delta: number): void {
@@ -105,11 +166,10 @@ export class MapScenery {
 
   /** Walked segments solid, the rest dimmed (V-2.2). Round joints are discs at the level points. */
   private drawRoad(): void {
-    const { points, done } = this.o;
+    const { points } = this.o;
     const R = MAP_FX.road;
-    const walked = this.scene.add.graphics().setDepth(MAP_DEPTH.road);
-    const ahead = this.scene.add.graphics().setDepth(MAP_DEPTH.road);
-    if (MAP_FX.showRoadProgress) ahead.setAlpha(R.futureAlpha);
+    this.walked.clear();
+    this.ahead.clear();
     for (const [width, color] of [
       [px(R.edgeWidth), COLORS.roadEdge],
       [px(R.width), COLORS.road],
@@ -118,7 +178,7 @@ export class MapScenery {
         const a = points[i]!;
         const b = points[i + 1]!;
         // Segment i leads to level i + 1: walked once that level is completed.
-        const g = !MAP_FX.showRoadProgress || i + 1 < done ? walked : ahead;
+        const g = !MAP_FX.showRoadProgress || i + 1 < this.done ? this.walked : this.ahead;
         g.lineStyle(width, color, 1).lineBetween(a.x, a.y, b.x, b.y);
         g.fillStyle(color, 1).fillCircle(a.x, a.y, width / 2).fillCircle(b.x, b.y, width / 2);
       }
@@ -128,10 +188,10 @@ export class MapScenery {
   /** White dashes running from the last completed level toward the current one. */
   private updateDashes(sec: number): void {
     const g = this.dashes;
-    if (!g) return;
+    if (!g || !g.visible) return;
     const R = MAP_FX.road;
-    const a = this.o.points[this.o.done - 1]!;
-    const b = this.o.points[this.o.done]!;
+    const a = this.o.points[this.done - 1]!;
+    const b = this.o.points[this.done]!;
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     const ux = (b.x - a.x) / len;
     const uy = (b.y - a.y) / len;
@@ -161,21 +221,24 @@ export class MapScenery {
     const t = this.token;
     if (!t) return;
     const T = MAP_FX.token;
-    const hop = Math.abs(Math.sin(sec * T.hopSpeed)) * T.hop;
+    const o = this.tokenOverride;
+    const x = o ? o.x : t.at.x;
+    const y = o ? o.y : t.at.y;
+    const hop = o ? o.hop : Math.abs(Math.sin(sec * T.hopSpeed)) * T.hop;
     const r = this.o.nodeRadius;
-    t.sprite.setPosition(t.at.x, t.at.y - r - px(T.lift + hop));
+    t.sprite.setPosition(x, y - r - px(T.lift + hop));
     // The shadow shrinks while the token is in the air.
-    const squash = 1 - hop / 60;
-    t.shadow.setPosition(t.at.x, t.at.y - r - px(T.shadowLift));
+    const squash = Math.max(0.3, 1 - hop / 60);
+    t.shadow.setPosition(x, y - r - px(T.shadowLift));
     t.shadow.setScale((T.shadowW * squash) / 16, (T.shadowH * squash) / 16);
   }
 
   /** Back and forth between the first and the last completed level, one segment per segmentMs. */
   private updateWalker(time: number, sec: number): void {
     const w = this.walker;
-    if (!w) return;
+    if (!w || !w.visible) return;
     const W = MAP_FX.walker;
-    const span = this.o.done - 1;
+    const span = this.done - 1;
     const period = span * W.segmentMs;
     const u = (time % (period * 2)) / period;
     const pos = u <= 1 ? u * span : (2 - u) * span;

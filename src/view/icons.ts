@@ -372,3 +372,14 @@ function fillPolygon(g: Phaser.GameObjects.Graphics, points: ReadonlyArray<reado
   points.forEach(([px, py], i) => (i === 0 ? g.moveTo(px, py) : g.lineTo(px, py)));
   g.closePath().fillPath();
 }
+
+/** One half of drawLock (-1 = left, 1 = right), centered like the whole lock: the pieces of a broken lock. */
+export function drawLockHalf(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number, side: -1 | 1): void {
+  const s = size / 2;
+  g.lineStyle(Math.max(2, size * 0.12), COLORS.textDark, 1);
+  const from = side < 0 ? Math.PI : Math.PI * 1.5;
+  g.beginPath().arc(x, y - s * 0.15, s * 0.4, from, from + Math.PI / 2).strokePath();
+  const r = s * 0.15;
+  const radius = side < 0 ? { tl: r, tr: 0, bl: r, br: 0 } : { tl: 0, tr: r, bl: 0, br: r };
+  g.fillStyle(COLORS.textDark, 1).fillRoundedRect(side < 0 ? x - s * 0.6 : x, y - s * 0.15, s * 0.6, s * 0.95, radius);
+}

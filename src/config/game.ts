@@ -183,6 +183,45 @@ export const MAP_FX = {
       sails: 0xe9e1cc,
     },
   },
+  /**
+   * Level-open animation after a first win (V-3), ms from entering the map. A replay that improved the
+   * stars plays only the pop and the new stars.
+   */
+  reveal: {
+    popScale: 1.16,
+    popMs: 250,
+    checkDelayMs: 150,
+    checkMs: 300,
+    starDelaysMs: [350, 600, 850],
+    starMs: 300,
+    /** Sparks per earned star: count, distance CSS px, duration, dot radius CSS px. */
+    starSparks: { count: 8, distance: 25, ms: 500, size: 2.5 },
+    cameraStartMs: 900,
+    cameraMs: 1400,
+    roadStartMs: 1100,
+    roadMs: 800,
+    /** The lock shakes ±shakePx along x, ramping up over shakeRampMs; shakeSpeed rad/s. */
+    shakeStartMs: 1900,
+    shakeRampMs: 200,
+    shakePx: 3,
+    shakeSpeed: 60,
+    /** The lock breaks: halves fly ±halfDx, arc up halfUp and drop halfDrop, spin halfSpin rad, fade over breakMs. */
+    breakAtMs: 2400,
+    breakMs: 700,
+    halfDx: 34,
+    halfUp: 26,
+    halfDrop: 46,
+    halfSpin: 1.6,
+    /** The opened level grows from 0. */
+    growMs: 350,
+    openSparks: 12,
+    /** The token hops to the opened level. */
+    hopStartMs: 2600,
+    hopMs: 800,
+    hops: 3,
+    hopHeight: 22,
+    endMs: 3500,
+  },
   clouds: {
     count: 7,
     alpha: 0.92,
