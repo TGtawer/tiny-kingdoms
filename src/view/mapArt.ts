@@ -157,16 +157,27 @@ export function puffTexture(scene: Phaser.Scene): Baked {
   });
 }
 
-/** Cloud with its own shadow below-right; the sprite's alpha is MAP_FX.clouds.alpha. */
+/** Both cloud pictures share this box, so the cloud and its shadow sprites sit at the same position. */
+const CLOUD_BOX: Box = [-42, -24, 66, 46];
+
+/** Cloud body, opaque white: the sprite's alpha (MAP_FX.clouds.alpha) applies to it as a whole. */
 export function cloudTexture(scene: Phaser.Scene): Baked {
+  return bake(scene, 'cloud', CLOUD_BOX, (g) => {
+    g.fillStyle(0xffffff, 1);
+    for (const [dx, dy, r] of MAP_FX.clouds.blobs) g.fillEllipse(dx, dy, r * 2, r * 1.4);
+  });
+}
+
+/**
+ * Cloud shadow below-right, opaque: the blobs merge into one flat shape and the sprite's alpha
+ * (MAP_FX.clouds.shadowAlpha) makes it see-through evenly, with no darker overlaps.
+ */
+export function cloudShadowTexture(scene: Phaser.Scene): Baked {
   const c = MAP_FX.clouds;
   const [sx, sy] = c.shadowOffset;
-  return bake(scene, 'cloud', [-42, -24, 66, 46], (g) => {
-    // Pre-divided by the sprite alpha, so the shadow ends up at shadowAlpha.
-    g.fillStyle(c.shadowColor, c.shadowAlpha / c.alpha);
+  return bake(scene, 'cloud-shadow', CLOUD_BOX, (g) => {
+    g.fillStyle(c.shadowColor, 1);
     for (const [dx, dy, r] of c.shadowBlobs) g.fillEllipse(dx + sx, dy + sy, r * 2, r * 1.2);
-    g.fillStyle(0xffffff, 1);
-    for (const [dx, dy, r] of c.blobs) g.fillEllipse(dx, dy, r * 2, r * 1.4);
   });
 }
 

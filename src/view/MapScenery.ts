@@ -1,11 +1,11 @@
 import type * as Phaser from 'phaser';
 import { COLORS, MAP_FX } from '../config/game';
 import { placeDecor } from '../core/map/decor';
-import { cloudTexture, decorTexture, puffTexture, sailsTexture, shadowTexture, squadTexture, type Baked, type DecorKind } from './mapArt';
+import { cloudShadowTexture, cloudTexture, decorTexture, puffTexture, sailsTexture, shadowTexture, squadTexture, type Baked, type DecorKind } from './mapArt';
 import { px, type Point } from './layout';
 
 /** Draw order of the map layers (level nodes are at 0, the fixed UI at 100). */
-export const MAP_DEPTH = { meadow: -10, ponds: -6, road: -5, dashes: -4.5, shadows: -4, decor: -3, walker: 1, token: 2, clouds: 50 } as const;
+export const MAP_DEPTH = { meadow: -10, ponds: -6, road: -5, dashes: -4.5, shadows: -4, decor: -3, walker: 1, token: 2, cloudShadows: 49, clouds: 50 } as const;
 
 export interface SceneryOptions {
   chapter: number;
@@ -35,6 +35,7 @@ interface Smoke {
 
 interface Cloud {
   sprite: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Image;
   /** Position along the drift (x) and the scroll axis, before parallax. */
   x: number;
   y: number;
@@ -239,20 +240,20 @@ export class MapScenery {
 
   private placeClouds(): void {
     const C = MAP_FX.clouds;
-    const b = cloudTexture(this.scene);
+    const body = cloudTexture(this.scene);
+    const shade = cloudShadowTexture(this.scene);
     const { world, portrait, band } = this.o;
     for (let i = 0; i < C.count; i++) {
-      const sprite = this.scene.add
-        .image(0, 0, b.key)
-        .setOrigin(b.originX, b.originY)
-        .setScrollFactor(0)
-        .setAlpha(C.alpha)
-        .setScale(0.8 + (i % 3) * 0.3)
-        .setDepth(MAP_DEPTH.clouds);
+      const scale = 0.8 + (i % 3) * 0.3;
+      const make = (b: Baked, alpha: number, depth: number): Phaser.GameObjects.Image =>
+        this.scene.add.image(0, 0, b.key).setOrigin(b.originX, b.originY).setScrollFactor(0).setAlpha(alpha).setScale(scale).setDepth(depth);
+      // The shadow lies under every cloud, so one cloud never darkens another.
+      const shadow = make(shade, C.shadowAlpha, MAP_DEPTH.cloudShadows);
+      const sprite = make(body, C.alpha, MAP_DEPTH.clouds);
       // Portrait: spread along the world height (the scroll axis), drift across. Landscape: rows in the band.
       const x = portrait ? px((i * 137) % 360) : (i / C.count) * world.width * C.parallax;
       const y = portrait ? (i * world.height) / C.count + px(40) : band.top + ((i % 3) + 0.5) * ((band.bottom - band.top) / 3);
-      this.clouds.push({ sprite, x, y, speed: C.speedMin + (i % 4) * C.speedStep });
+      this.clouds.push({ sprite, shadow, x, y, speed: C.speedMin + (i % 4) * C.speedStep });
     }
   }
 
@@ -273,6 +274,7 @@ export class MapScenery {
         const span = world.width * C.parallax + pad * 2;
         c.sprite.setPosition(wrap(c.x - cam.scrollX * C.parallax, span) - pad, c.y);
       }
+      c.shadow.setPosition(c.sprite.x, c.sprite.y);
     }
   }
 }
