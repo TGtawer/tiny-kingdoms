@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { COLORS, cssColor, FONT_FAMILY, MENU_BANNER, MENU_FX, type MenuBannerId } from '../config/game';
+import { COLORS, cssColor, FONT_FAMILY, MENU_BANNER, MENU_FX, NODE_LIP, type MenuBannerId } from '../config/game';
 import { drawLock, drawMenuIcon, shade, type MenuIcon } from './icons';
 
 const B = MENU_BANNER;
@@ -57,6 +57,11 @@ export class MenuBanner {
   private readonly medalR: number;
   private readonly fontSize: number;
   private imp = 0;
+  /**
+   * Sway clock, radians: advanced by speed × dt every frame. The press speeds the swing up through this clock;
+   * multiplying the scene time by a changing speed would jump the phase by tens of radians as the impulse decays.
+   */
+  private clock = 0;
   private flash = 0;
   private labelAlpha = 1;
 
@@ -116,18 +121,19 @@ export class MenuBanner {
     const P = MENU_FX.press;
     this.imp = Math.max(0, this.imp - dt * P.impulseDecay);
     this.flash = Math.max(0, this.flash - dt * P.flashDecay);
+    this.clock += dt * (B.sway.speed + B.sway.impSpeed * this.imp);
     const E = MENU_FX.entrance;
     const drop = backOut(seg(e * 1000, this.spec.dropDelayMs, this.spec.dropDelayMs + E.bannerMs));
-    this.drawCloth(t, drop);
+    this.drawCloth(drop);
 
     const content = drop <= E.contentFrom ? 0 : seg(drop, E.contentFrom, 1);
     const { x, y } = this.spec;
     const len = this.spec.len * drop;
     const cy = y + len * B.medalAt;
-    this.medal.setPosition(x + this.sway(t, B.medalSway), cy - this.medalR - B.medalGap).setAlpha(content);
+    this.medal.setPosition(x + this.sway(B.medalSway), cy - this.medalR - B.medalGap).setAlpha(content);
     const pulseOn = this.main && e * 1000 >= E.pulseFromMs;
     this.glow.setAlpha(pulseOn ? B.pulse.alpha * ((Math.sin((t * 1000 * Math.PI * 2) / B.pulse.periodMs) + 1) / 2) : 0);
-    const lx = frameX(this.frame, x + this.sway(t, B.labelAt));
+    const lx = frameX(this.frame, x + this.sway(B.labelAt));
     this.labels.forEach((label, j) => {
       const ly = cy + this.fontSize * 0.8 + j * this.fontSize * 1.05;
       label.setPosition(lx, frameY(this.frame, ly)).setAlpha(content * this.labelAlpha);
@@ -141,13 +147,13 @@ export class MenuBanner {
     this.zone.destroy();
   }
 
-  private sway(t: number, k: number): number {
+  private sway(k: number): number {
     const S = B.sway;
-    return Math.sin(t * (S.speed + S.impSpeed * this.imp) + this.phase - S.lag * k) * (S.amp + S.impAmp * this.imp) * k;
+    return Math.sin(this.clock + this.phase - S.lag * k) * (S.amp + S.impAmp * this.imp) * k;
   }
 
   /** Cloth outline, `inset` px inside, moved by (dx, dy). */
-  private path(t: number, len: number, tipH: number, inset = 0, dx = 0, dy = 0): Pt[] {
+  private path(len: number, tipH: number, inset = 0, dx = 0, dy = 0): Pt[] {
     const { x, y, w } = this.spec;
     const n = B.segments;
     const l = x - w / 2 + inset + dx;
@@ -157,19 +163,19 @@ export class MenuBanner {
     const pts: Pt[] = [];
     for (let i = 0; i <= n; i++) {
       const k = i / n;
-      pts.push([l + this.sway(t, k), top + (bot - top) * k]);
+      pts.push([l + this.sway(k), top + (bot - top) * k]);
     }
-    const sb = this.sway(t, 1);
+    const sb = this.sway(1);
     if (this.spec.tip === 'point') pts.push([x + dx + sb, bot + tipH - inset * 0.6]);
     else pts.push([l + sb, bot + tipH * 0.9], [x + dx + sb, bot + inset * 0.2], [r + sb, bot + tipH * 0.9]);
     for (let i = n; i >= 0; i--) {
       const k = i / n;
-      pts.push([r + this.sway(t, k), top + (bot - top) * k]);
+      pts.push([r + this.sway(k), top + (bot - top) * k]);
     }
     return pts;
   }
 
-  private drawCloth(t: number, drop: number): void {
+  private drawCloth(drop: number): void {
     const g = this.cloth;
     g.clear();
     if (drop <= 0) return;
@@ -183,8 +189,8 @@ export class MenuBanner {
 
     // Drop shadow on the background, then the cloth.
     g.fillStyle(COLORS.outline, st.shadowAlpha);
-    fill(g, this.path(t, len, tipH, 0, st.shadowX, st.shadowY));
-    const cloth = this.path(t, len, tipH);
+    fill(g, this.path(len, tipH, 0, st.shadowX, st.shadowY));
+    const cloth = this.path(len, tipH);
     g.fillStyle(color, 1);
     fill(g, cloth);
 
@@ -195,12 +201,12 @@ export class MenuBanner {
       const rim: Pt[] = [];
       for (let i = 0; i <= 10; i++) {
         const k = F.rimFrom + ((F.rimTo - F.rimFrom) * i) / 10;
-        rim.push([l + this.sway(t, k), y + len * k]);
+        rim.push([l + this.sway(k), y + len * k]);
       }
       g.lineStyle(F.rimWidth, 0xffffff, F.rimAlpha);
       polyline(g, rim);
     } else if (!this.flat) {
-      this.drawFolds(g, t, len);
+      this.drawFolds(g, len);
     }
 
     if (this.flash > 0) {
@@ -213,14 +219,14 @@ export class MenuBanner {
     const ks = sleeveH / Math.max(1, len);
     g.fillStyle(0x000000, st.sleeveAlpha);
     fill(g, [
-      [x - w / 2 + this.sway(t, 0), y],
-      [x + w / 2 + this.sway(t, 0), y],
-      [x + w / 2 + this.sway(t, ks), y + sleeveH],
-      [x - w / 2 + this.sway(t, ks), y + sleeveH],
+      [x - w / 2 + this.sway(0), y],
+      [x + w / 2 + this.sway(0), y],
+      [x + w / 2 + this.sway(ks), y + sleeveH],
+      [x - w / 2 + this.sway(ks), y + sleeveH],
     ]);
 
     // Embroidered trim inside the edge (and a stitch line on the rich style).
-    const trimPath = this.path(t, len, tipH, B.trimInset);
+    const trimPath = this.path(len, tipH, B.trimInset);
     g.lineStyle(st.trim, trim, 1);
     stroke(g, trimPath);
     if (!this.flat) {
@@ -234,11 +240,11 @@ export class MenuBanner {
   }
 
   /** Rich style: soft vertical folds, light and dark in turn, kept inside the cloth edges. */
-  private drawFolds(g: Phaser.GameObjects.Graphics, t: number, len: number): void {
+  private drawFolds(g: Phaser.GameObjects.Graphics, len: number): void {
     const R = B.rich;
     const { x, y, w } = this.spec;
     const n = B.segments;
-    const shift = this.sway(t, 0.6) * R.foldShift;
+    const shift = this.sway(0.6) * R.foldShift;
     for (let i = 0; i < R.folds; i++) {
       const fx = x - w / 2 + ((i + 0.5) * w) / R.folds + shift;
       const half = w / R.folds / 2;
@@ -248,8 +254,8 @@ export class MenuBanner {
       const peak = light ? R.foldLight : R.foldDark;
       for (let j = 0; j < n; j++) {
         const km = (j + 0.5) / n;
-        const left = x - w / 2 + this.sway(t, km);
-        const right = x + w / 2 + this.sway(t, km);
+        const left = x - w / 2 + this.sway(km);
+        const right = x + w / 2 + this.sway(km);
         const y0 = y + (len * j) / n;
         const y1 = y + (len * (j + 1)) / n;
         // Each fold: alpha 0 → peak → 0 across its width, clipped to the cloth of this slice.
@@ -271,11 +277,13 @@ export class MenuBanner {
   private drawMedal(g: Phaser.GameObjects.Graphics): void {
     const r = this.medalR;
     const gold = COLORS.gold;
-    if (!this.flat) {
-      const M = B.medalRing;
-      g.fillStyle(shade(gold, M.shadowShade), 1).fillCircle(0, M.shadowY, r);
+    if (this.flat) {
+      g.fillStyle(gold, 1).fillCircle(0, 0, r);
+    } else {
+      // Darker rim exactly under the outline, the face a bit higher inside it (as on the level nodes).
+      g.fillStyle(shade(gold, B.medalRing.rimShade), 1).fillCircle(0, 0, r);
+      g.fillStyle(gold, 1).fillCircle(0, -r * NODE_LIP, r * (1 - NODE_LIP));
     }
-    g.fillStyle(gold, 1).fillCircle(0, 0, r);
     g.lineStyle(B.outline, COLORS.outline, 1).strokeCircle(0, 0, r);
     if (this.flat) {
       // Crescent highlight, as on the level nodes.
@@ -299,13 +307,15 @@ export class MenuBanner {
       g.lineStyle(M.width, shade(gold, M.shade), 1);
       dashed(g, ring, M.dash, M.gap);
     }
-    drawMenuIcon(g, this.spec.icon, 0, 0, r * B.iconScale);
     if (this.spec.locked) {
-      // Dim the medallion and put a lock in the middle.
+      // The lock takes the icon's place: dim the medallion (outline drawn again on top) and put a lock in the middle.
       g.fillStyle(COLORS.outline, B.locked.medalDim).fillCircle(0, 0, r);
+      g.lineStyle(B.outline, COLORS.outline, 1).strokeCircle(0, 0, r);
       g.fillStyle(COLORS.panel, 1).fillCircle(0, 0, r * B.locked.lockDisc);
       g.lineStyle(B.outline, COLORS.outline, 1).strokeCircle(0, 0, r * B.locked.lockDisc);
       drawLock(g, 0, 0, r * B.locked.lockSize);
+    } else {
+      drawMenuIcon(g, this.spec.icon, 0, 0, r * B.iconScale);
     }
   }
 }
