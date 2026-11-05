@@ -23,8 +23,8 @@ describe('fireball', () => {
   });
 
   it('kills at least minKill, but not more than present', () => {
-    expect(fireballKill(8, defaultModifiers())).toBe(SPELLS.fireball.minKill);
-    expect(fireballKill(3, defaultModifiers())).toBe(3);
+    expect(fireballKill(5, defaultModifiers())).toBe(SPELLS.fireball.minKill);
+    expect(fireballKill(2, defaultModifiers())).toBe(2);
   });
 
   it('only targets enemy nodes', () => {

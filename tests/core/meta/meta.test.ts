@@ -194,7 +194,7 @@ describe('permanent bonuses', () => {
 
     const world = createWorld(L[0]!, { player: playerSetupFrom(p) });
     const start = L[0]!.nodes.find((n) => n.owner === 'player')!;
-    expect(world.nodes[start.id]!.troops).toBe(start.troops + 6);
+    expect(world.nodes[start.id]!.troops).toBe(start.troops + 3 * BONUSES.perLevel.startArmy);
   });
 });
 
@@ -233,11 +233,11 @@ describe('spell upgrades', () => {
     expect(spellCooldownMs('fireball', m)).toBe((SPELLS.fireball.cooldownSec - 2) * 1000);
   });
 
-  it('reinforcement: +3 troops and −1 s cooldown per level', () => {
+  it('reinforcement: +2 troops and −1 s cooldown per level', () => {
     const p = defaultProgress();
     p.spellUpgrades.reinforcement = 3;
     const m = modifiersFrom(p);
-    expect(m.spells.reinforcement.extraTroops).toBe(9);
+    expect(m.spells.reinforcement.extraTroops).toBe(3 * SPELL_UPGRADES.perLevel.reinforcement.troops);
     expect(spellCooldownMs('reinforcement', m)).toBe((SPELLS.reinforcement.cooldownSec - 3) * 1000);
   });
 });

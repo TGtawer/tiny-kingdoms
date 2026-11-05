@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
 import { validateLevel, type LevelData } from '../src/core/level/schema';
+import { previewAttack } from '../src/core/sim/preview';
 import { step } from '../src/core/sim/tick';
 import { createWorld } from '../src/core/sim/World';
 import { CHAPTERS, DEV_LEVELS, getLevel, nextLevel } from '../src/levels';
@@ -42,6 +43,21 @@ describe('chapter 1', () => {
     expect(nextLevel('c01_l03')?.id).toBe('c01_l04');
     expect(nextLevel('c01_l10')).toBeNull();
     expect(getLevel('nope')).toBeUndefined();
+  });
+});
+
+describe('lesson 1 (TUTORIAL.md T-5)', () => {
+  it('n2 is not taken by one node, but is by a swipe through both (1–6 s after n1 falls)', () => {
+    const world = createWorld(getLevel('c01_l01')!, { seed: 1 });
+    step(world, [{ type: 'send', side: 'player', from: 'player', to: 'n1' }]);
+    for (let i = 0; i < 300 && world.nodes.n1!.owner !== 'player'; i++) step(world);
+    expect(world.nodes.n1!.owner).toBe('player');
+    for (let sec = 1; sec <= 6; sec++) {
+      for (let i = 0; i < 10; i++) step(world);
+      expect(previewAttack(world, 'player', ['player'], 'swipe', 'n2').wins, `${sec} s`).toBe(false);
+      expect(previewAttack(world, 'player', ['n1'], 'swipe', 'n2').wins, `${sec} s`).toBe(false);
+      expect(previewAttack(world, 'player', ['player', 'n1'], 'swipe', 'n2').wins, `${sec} s`).toBe(true);
+    }
   });
 });
 
@@ -89,17 +105,10 @@ function wins(level: LevelData): number {
   return won;
 }
 
-/**
- * TODO(P-4): stream armies (ROADMAP.md, stage 9) changed the battle; the corridors are re-tuned in P-4 after the ×0.5
- * balance pass. Until then only "every battle ends within 10 minutes" is checked.
- */
-const CORRIDORS_TUNED = false;
-
 describe('chapter 1 difficulty curve', () => {
   it.each(CHAPTERS[0]!.map((l) => [l.id, l] as const))('%s', (_id, level) => {
     const [min, max] = WIN_CORRIDOR[level.index]!;
     const won = wins(level);
-    if (!CORRIDORS_TUNED) return;
     expect(won, `${level.id}: ${won}/10`).toBeGreaterThanOrEqual(min);
     expect(won, `${level.id}: ${won}/10`).toBeLessThanOrEqual(max);
   });

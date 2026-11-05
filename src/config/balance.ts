@@ -34,9 +34,10 @@ export const FEATURE_UNLOCKS = {
 export const TICK_MS = 100;
 
 export const NODES: Record<NodeSize, { capacity: number; troopsPerSec: number; goldPerSec: number }> = {
-  small: { capacity: 20, troopsPerSec: 0.5, goldPerSec: 0.3 },
-  medium: { capacity: 35, troopsPerSec: 0.8, goldPerSec: 0.4 },
-  large: { capacity: 50, troopsPerSec: 1.2, goldPerSec: 0.5 },
+  // Troop numbers halved for stream armies (BALANCE.md, stage 9); gold unchanged.
+  small: { capacity: 10, troopsPerSec: 0.25, goldPerSec: 0.3 },
+  medium: { capacity: 18, troopsPerSec: 0.4, goldPerSec: 0.4 },
+  large: { capacity: 25, troopsPerSec: 0.6, goldPerSec: 0.5 },
 };
 
 /** Index 0 = level 1, index 1 = level 2, index 2 = level 3. */
@@ -50,7 +51,7 @@ export const BUILDINGS = {
   },
   barracks: {
     productionMult: [1.5, 2.0, 2.6] as PerLevel<number>,
-    extraCapacity: [15, 30, 50] as PerLevel<number>,
+    extraCapacity: [8, 15, 25] as PerLevel<number>,
   },
   tower: {
     /**
@@ -164,14 +165,14 @@ export const MAGE = {
   everyMs: 20000,
   warnMs: 3000,
   damageShare: 0.4,
-  damageMin: 5,
+  damageMin: 3,
 } as const;
 
 /** Boss of chapter 2 level 10 (CONTENT.md C-4.2). */
 export const CITADEL = {
   waveEveryMs: 15000,
   /** Extra troops per wave, on top of the garrison. */
-  waveSize: 20,
+  waveSize: 10,
 } as const;
 
 /** Battle speed-up button (GDD 3.11): offered while the player owns more than `unlockShare` of all nodes. */
@@ -205,8 +206,8 @@ export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
   reinforcement: { troops: number };
   shield: { durationSec: number };
 } = {
-  fireball: { cost: 40, cooldownSec: 20, killShare: 0.4, minKill: 5 },
-  reinforcement: { cost: 30, cooldownSec: 25, troops: 10 },
+  fireball: { cost: 40, cooldownSec: 20, killShare: 0.4, minKill: 3 },
+  reinforcement: { cost: 30, cooldownSec: 25, troops: 5 },
   /** Own node can't be attacked for durationSec: hostile units that arrive break on it. */
   shield: { cost: 30, cooldownSec: 30, durationSec: 8 },
 };
@@ -247,7 +248,7 @@ export const AI = {
   weakenedWindowSec: 6,
   /** A node counts as weakened after losing this share of its recent maximum (and at least weakenedMinDrop troops). */
   weakenedShare: 0.4,
-  weakenedMinDrop: 4,
+  weakenedMinDrop: 2,
   /** Extra target value of goal nodes: the node to hold (deny it) and the player's capital. */
   goalTargetValue: 3,
   /** Extra target value of special nodes. */
@@ -277,7 +278,7 @@ export const BONUSES = {
   costBase: 50,
   costGrowth: 1.35,
   perLevel: {
-    startArmy: 2,
+    startArmy: 1,
     troopProduction: 0.04,
     goldIncome: 0.05,
     unitStrength: 0.03,
@@ -295,7 +296,7 @@ export const SPELL_UPGRADES = {
   starCosts: [2, 3, 4, 5, 6],
   perLevel: {
     fireball: { damageShare: 0.05, cooldownSec: -1 },
-    reinforcement: { troops: 3, cooldownSec: -1 },
+    reinforcement: { troops: 2, cooldownSec: -1 },
     shield: { durationSec: 1, cooldownSec: -1 },
   },
 } as const;

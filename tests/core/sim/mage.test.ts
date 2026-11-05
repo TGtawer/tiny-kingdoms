@@ -68,8 +68,8 @@ describe('evil mage (TUTORIAL.md T-7)', () => {
 
   it('destroys MAGE.damageShare of the garrison, at least MAGE.damageMin, never more than there is', () => {
     expect(mageDamage(30)).toBeCloseTo(30 * MAGE.damageShare);
-    expect(mageDamage(8)).toBe(MAGE.damageMin);
-    expect(mageDamage(3)).toBe(3);
+    expect(mageDamage(5)).toBe(MAGE.damageMin);
+    expect(mageDamage(2)).toBe(2);
   });
 
   it('a shield takes the hit; a node lost before the strike is spared', () => {
