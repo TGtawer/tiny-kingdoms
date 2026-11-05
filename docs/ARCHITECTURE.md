@@ -105,7 +105,8 @@ tests/
 1. Команды (свайп создаёт `StreamState`, повторный свайп из того же узла отменяет старый поток).
 2. Касания на дорогах (`clash.ts`) — **до** движения, с учётом пути за тик (swept): за тик встречные юниты сближаются на `2 × speed × dt` = 0.024 поля, это больше `contactDist`, поэтому проверка «пересекутся ли за тик», а не «стоят ли рядом».
 3. Движение юнитов (`units.ts`). Дошедший до конца отрезка юнит либо переходит на следующий (через свой узел), либо приходит в цель → `combat.ts`: башня → 1:1 → захват; узлу ставится `attackedUntilMs = now + attackWindowMs`.
-4. Выпуск (`stream.ts`): если источник атакован (`now < attackedUntilMs`) — поток отменяется; иначе `releaseAcc += releasePerSec × dt`, на каждую целую единицу выпускается юнит (`troops -= 1`, `left -= 1`). Если за тик выпускается больше одного юнита (будущая ширина или ускорение), каждому даётся сдвиг `progress` по доле тика, чтобы шаг в колонне был ровным.
+4. Выпуск (`stream.ts`): если источник атакован (`now < attackedUntilMs`) — все его потоки отменяются. Иначе работает **въезд на дорогу**: полоса (дорога + направление) открыта, если её хвостовой юнит отошёл от точки выхода (`lane.startP`) хотя бы на шаг `speed / releasePerSec`. Новый юнит ставится ровно на шаг позади хвоста (если полоса пуста или хвост далеко — в точку выхода), так шаг на дороге никогда не меньше эталонного, кто бы ни выпускал. Если на одну полосу претендуют несколько потоков узла, выходит тот, кто дольше не выпускал (`lastReleaseTick`) — по очереди. Не больше одного юнита на полосу за тик.
+   Юнит ходит только по одной дороге: дошёл до конца полосы (`lane.endP`) — либо цель, либо свой промежуточный узел. Во втором случае он входит в гарнизон (`troops += 1`), а узел добавляет его в свой поток с тем же оставшимся маршрутом (`left += 1`) или создаёт такой поток. Если узел атакован — юнит просто остаётся в гарнизоне.
 5. Экономика: производство стоит у атакованных узлов (и у источников, если `pauseSourceProduction`).
 6. ИИ, особые механики, победа.
 
@@ -155,22 +156,24 @@ interface StreamState {
   owner: Owner;                  // 'neutral' for bandit raids
   path: string[];                // node ids from source to target
   left: number;                  // units still to release (still counted in source troops)
-  releaseAcc: number;            // fractional units accumulated at STREAM.releasePerSec
+  lastReleaseTick: number;       // for taking turns on a shared lane
 }
 
 // One unit on a road. Plain object, pooled by index; no per-unit classes.
 interface UnitState {
   id: number;
   owner: Owner;
-  path: string[];                // shared array from its stream (not copied per unit)
-  segment: number;               // path[segment] -> path[segment + 1]
-  progress: number;              // 0..1 along the current segment
+  path: string[];                // remaining route from the node it left; shared with its stream (not copied per unit)
+  lanes: number[];               // lanes of that route; a unit walks only lanes[0], then enters path[1]
+  progress: number;              // 0..1 along its road (between lane.startP and lane.endP)
 }
 
 // NodeState additions:
-//   attackedUntilMs: number;     // battle time until which the node counts as attacked
+//   attackedUntilMs: number;     // battle time until which the node counts as attacked (any damage)
 //   towerReadyAtMs: number;      // next tower shot (one shot may be held in reserve)
-//   streamId: number | null;     // at most one active stream per node
+//   streams: number;             // active streams of the node (own order + transit forwarding)
+// Lane: startP / endP — progress where units appear / arrive (STREAM.edgeDist of the end nodes).
+// The renderer maps [startP, endP] to the visible part of the road between the drawn circles.
 
 interface SideState {
   gold: number;
