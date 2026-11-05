@@ -1,4 +1,5 @@
 import { MAGE, TICK_MS } from '../../../config/balance';
+import { markAttacked } from '../combat';
 import { random, type NodeState, type World } from '../World';
 import { biggestGarrison, stepStrikeTimer, type StrikeTimer } from './strikeTimer';
 
@@ -54,6 +55,8 @@ export function stepMage(world: World, mage: MageState): MageEvent[] {
     const hits = struck.owner === 'player' && struck.shieldTicks <= 0;
     const killed = hits ? mageDamage(struck.troops) : 0;
     struck.troops -= killed;
+    // A hit on the garrison is an attack (GDD 3.6, 3.8); a shield takes it without one.
+    if (hits) markAttacked(world, struck);
     events.push({ type: 'mageStrike', nodeId: struck.id, killed, from: mage.towerId });
   }
   return events;

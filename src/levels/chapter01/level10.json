@@ -7,7 +7,7 @@
     "productionMult": 0.7,
     "aiThinkMs": 1000,
     "aggression": 0.5,
-    "startGold": 20
+    "startGold": 40
   },
   "tutorial": "c01_l10",
   "goal": {
@@ -31,7 +31,7 @@
       "y": 0.482,
       "size": "large",
       "owner": "enemy",
-      "troops": 18,
+      "troops": 21,
       "hasGoldVein": false,
       "building": null,
       "capital": true

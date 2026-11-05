@@ -1,6 +1,6 @@
 import { STREAM } from '../../config/balance';
 import { compactLane, dropUnit } from './units';
-import type { Lane, Owner, UnitState, World } from './World';
+import type { Owner, UnitState, World } from './World';
 
 /** Below this, a gap counts as zero (float noise). */
 const EPSILON = 1e-9;
@@ -12,40 +12,23 @@ export interface ClashResult {
   /** Meeting point in level coordinates. */
   x: number;
   y: number;
+  /** The same point as the road (its a -> b lane) and progress along it, for views that draw roads between circles. */
+  lane: number;
+  progress: number;
 }
 
 /**
- * One side of a road for the clash pass: the units of a lane plus the units about to enter it from its start node
- * this tick (they pass through an own node; their position is before the road start). `pos` is the distance from
- * the road's `a` end; entries are ordered from the lane head (front of the column) to its tail.
+ * One side of a road for the clash pass: the units of a lane with `pos` = distance from the road's `a` end, ordered
+ * from the lane head (front of the column) to its tail.
  */
 interface Column {
   units: UnitState[];
   pos: number[];
-  /** Lane each unit is in (differs from the road's lane for units about to enter). */
-  lane: number[];
   count: number;
 }
 
 function column(): Column {
-  return { units: [], pos: [], lane: [], count: 0 };
-}
-
-/**
- * Appends a unit, keeping the column front first: positions descending (`desc`, a -> b) or ascending (b -> a).
- * Lane units arrive already ordered; only units entering from the fork may need a step or two back.
- */
-function push(c: Column, unit: UnitState, pos: number, lane: number, desc: boolean): void {
-  let i = c.count++;
-  while (i > 0 && (desc ? c.pos[i - 1]! < pos : c.pos[i - 1]! > pos)) {
-    c.units[i] = c.units[i - 1]!;
-    c.pos[i] = c.pos[i - 1]!;
-    c.lane[i] = c.lane[i - 1]!;
-    i--;
-  }
-  c.units[i] = unit;
-  c.pos[i] = pos;
-  c.lane[i] = lane;
+  return { units: [], pos: [], count: 0 };
 }
 
 // Scratch columns and the list of lanes with dead units, reused between ticks.
@@ -53,35 +36,16 @@ const forward = column();
 const backward = column();
 const dirty: number[] = [];
 
-/**
- * Fills `c` with the units of lane `laneIdx` (head first), then the units that enter it from its start node this
- * tick: heads of lanes into that node within `reach` of it, whose next segment is this lane.
- */
-function fill(world: World, c: Column, laneIdx: number, fromA: boolean, reach: number): void {
-  c.count = 0;
+function fill(world: World, c: Column, laneIdx: number, fromA: boolean): void {
   const lane = world.lanes[laneIdx]!;
   const len = lane.length;
   const units = lane.units;
   for (let i = 0; i < units.length; i++) {
-    const u = units[i]!;
-    const along = u.progress * len;
-    push(c, u, fromA ? along : len - along, laneIdx, fromA);
+    const along = units[i]!.progress * len;
+    c.units[i] = units[i]!;
+    c.pos[i] = fromA ? along : len - along;
   }
-  const into = world.lanesInto[lane.from]!;
-  const node = world.nodes[lane.from]!;
-  for (let k = 0; k < into.length; k++) {
-    const other = world.lanes[into[k]!]!;
-    if (other.portal || into[k] === lane.reverse) continue;
-    const list = other.units;
-    for (let i = 0; i < list.length; i++) {
-      const u = list[i]!;
-      const remaining = (1 - u.progress) * other.length;
-      if (remaining > reach) break;
-      // Passing through an own node onto this road (not ending its march there).
-      if (u.segment + 2 >= u.path.length || u.lanes[u.segment + 1] !== laneIdx || node.owner !== u.owner) continue;
-      push(c, u, fromA ? -remaining : len + remaining, into[k]!, fromA);
-    }
-  }
+  c.count = units.length;
 }
 
 function markDirty(lane: number): void {
@@ -91,7 +55,7 @@ function markDirty(lane: number): void {
 
 /**
  * Units of different sides moving towards each other on one road destroy each other 1:1 when they touch
- * (GDD 3.6): on the road and at the fork by a node. Called before movement, swept: a pair touches this tick if
+ * (GDD 3.6). Called before movement, swept: a pair touches this tick if
  * its gap is at most 2 × stepDistance + STREAM.contactDist. Same-side units pass through each other;
  * units moving the same way never meet (one speed).
  *
@@ -104,14 +68,10 @@ export function resolveClashes(world: World, stepDistance: number, out: ClashRes
   for (let l = 0; l < lanes.length; l += 2) {
     const ab = lanes[l]!;
     const ba = lanes[l + 1]!;
-    if (ab.portal) continue;
-    // Somebody must move each way (lanes or units about to enter them).
-    if (ab.units.length === 0 && ba.units.length === 0) continue;
-    fill(world, forward, l, true, reach);
-    if (forward.count === 0) continue;
-    fill(world, backward, l + 1, false, reach);
-    if (backward.count === 0) continue;
-    clashRoad(world, ab, reach, out);
+    if (ab.portal || ab.units.length === 0 || ba.units.length === 0) continue;
+    fill(world, forward, l, true);
+    fill(world, backward, l + 1, false);
+    clashRoad(world, l, reach, out);
   }
   for (let i = 0; i < dirty.length; i++) compactLane(lanes[dirty[i]!]!);
 }
@@ -121,7 +81,8 @@ export function resolveClashes(world: World, stepDistance: number, out: ClashRes
  * ascending from their front. For each forward unit (front first) the candidates are the backward units with
  * position in [pos - ε, pos + reach]; that window only moves towards the backward front, so a pointer walks it once.
  */
-function clashRoad(world: World, ab: Lane, window: number, out: ClashResult[]): void {
+function clashRoad(world: World, abIdx: number, window: number, out: ClashResult[]): void {
+  const ab = world.lanes[abIdx]!;
   const a = world.nodes[ab.from]!;
   const b = world.nodes[ab.to]!;
   const len = ab.length;
@@ -142,10 +103,10 @@ function clashRoad(world: World, ab: Lane, window: number, out: ClashResult[]): 
     if (pick < 0) continue;
     const v = backward.units[pick]!;
     const t = len > 0 ? Math.min(1, Math.max(0, (x + backward.pos[pick]!) / 2 / len)) : 0;
-    out.push({ owners: [u.owner, v.owner], x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    out.push({ owners: [u.owner, v.owner], x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, lane: abIdx, progress: t });
     dropUnit(world, u);
     dropUnit(world, v);
-    markDirty(forward.lane[i]!);
-    markDirty(backward.lane[pick]!);
+    markDirty(abIdx);
+    markDirty(ab.reverse);
   }
 }

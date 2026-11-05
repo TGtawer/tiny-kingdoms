@@ -1,7 +1,7 @@
 import type { LevelData, LevelNode } from '../../src/core/level/schema';
 import { step, type TickEvent } from '../../src/core/sim/tick';
 import type { Command } from '../../src/core/sim/commands';
-import { pathLanes, spawnUnit } from '../../src/core/sim/units';
+import { buildRoute, spawnUnit } from '../../src/core/sim/units';
 import { createWorld, type Owner, type UnitState, type World, type WorldOptions } from '../../src/core/sim/World';
 
 export function node(id: string, x: number, y: number, extra: Partial<LevelNode> = {}): LevelNode {
@@ -87,7 +87,7 @@ export function drain(world: World, maxTicks = 600): TickEvent[] {
 
 /** Puts a unit on the road directly (tests of clashes and arrivals): `progress` along the first segment. */
 export function placeUnit(world: World, owner: Owner, path: string[], progress: number): UnitState {
-  return spawnUnit(world, owner, path, pathLanes(world, path), progress);
+  return spawnUnit(world, owner, buildRoute(world, path), progress);
 }
 
 /** Events of one type. */

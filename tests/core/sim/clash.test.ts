@@ -132,15 +132,18 @@ describe('clash at the fork by a node', () => {
     );
   }
 
-  it('a unit passing through its node meets a hostile unit coming to that node on the next road', () => {
+  it('at the fork the meeting resolves in the node: the passing unit joins the garrison, the attacker trades with it', () => {
     const world = fork();
-    // Player unit 0.004 before N on its way to E; enemy unit 0.004 before N coming from E.
+    // Player unit at the edge of N on its way to E; enemy unit at the edge of N coming from E.
     placeUnit(world, 'player', ['P', 'N', 'E'], 0.99);
     placeUnit(world, 'enemy', ['E', 'N'], 0.99);
     const events = step(world);
-    expect(eventsOf(events, 'clash')).toHaveLength(1);
-    expect(eventsOf(events, 'arrived')).toHaveLength(0);
+    expect(eventsOf(events, 'clash')).toHaveLength(0);
+    expect(eventsOf(events, 'transit')).toHaveLength(1);
+    expect(eventsOf(events, 'arrived')).toMatchObject([{ owner: 'enemy', nodeId: 'N', outcome: 'repelled' }]);
+    // 3 + 1 in transit − 1 traded; the attacked node keeps the transit unit.
     expect(world.nodes.N!.troops).toBe(3);
+    expect(world.streams).toHaveLength(0);
   });
 
   it('a long column through a node against a column coming at it: all pairs clash, none swap', () => {

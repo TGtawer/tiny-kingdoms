@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARMY } from '../../../src/config/balance';
+import { ARMY, STREAM } from '../../../src/config/balance';
 import { sendAmount, validate, type SendArmy } from '../../../src/core/sim/commands';
 import { step } from '../../../src/core/sim/tick';
 import { createWorld } from '../../../src/core/sim/World';
@@ -62,7 +62,7 @@ describe('send (a stream order)', () => {
   it('an AI pull sends half of the node troops and leaves the rest', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 11 } }));
     step(world, [send('P', 'N')]);
-    expect(world.streams[0]).toMatchObject({ owner: 'player', path: ['P', 'N'], left: 4 });
+    expect(world.streams[0]).toMatchObject({ owner: 'player', route: { path: ['P', 'N'] }, left: 4 });
     drain(world);
     expect(world.nodes.P!.troops).toBe(6);
   });
@@ -94,18 +94,19 @@ describe('send (a stream order)', () => {
     expect(world.units).toHaveLength(0);
   });
 
-  it('routes through own nodes; the first unit arrives after distance / speed', () => {
+  it('routes through own nodes; the first unit walks the visible part of each road at ARMY.speed', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 40 }, N: { owner: 'player', troops: 0 }, E: { troops: 1 } }));
-    // P -> E: path P, N, E with length 0.8; the first unit leaves on the order's tick.
-    const ticksNeeded = Math.ceil(0.8 / ARMY.speed / 0.1);
+    // P -> E: path P, N, E. A unit walks from the edge of one circle to the edge of the next (STREAM.edgeDist).
+    const walk = (2 * (0.4 - 2 * STREAM.edgeDist.small)) / ARMY.speed;
+    const ticksNeeded = Math.ceil(walk / 0.1);
     step(world, [send('P', 'E')]);
-    expect(world.streams[0]!.path).toEqual(['P', 'N', 'E']);
+    expect(world.streams[0]!.route.path).toEqual(['P', 'N', 'E']);
     const arrivals = [];
-    for (let i = 1; i < ticksNeeded - 1; i++) arrivals.push(...eventsOf(step(world), 'arrived'));
+    for (let i = 0; i < ticksNeeded - 1; i++) arrivals.push(...eventsOf(step(world), 'arrived'));
     expect(arrivals).toHaveLength(0);
-    // Passing through own node N does not reinforce it.
+    // Passing through own node N leaves nothing there (transit goes through the garrison and out again).
     expect(world.nodes.N!.troops).toBe(0);
-    arrivals.push(...eventsOf(step(world), 'arrived'));
+    for (let i = 0; i < 2; i++) arrivals.push(...eventsOf(step(world), 'arrived'));
     expect(arrivals).toMatchObject([{ nodeId: 'E', outcome: 'repelled' }]);
     drain(world);
     // The second unit captures E, the enemy's last node: the battle is over.

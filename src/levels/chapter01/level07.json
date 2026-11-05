@@ -7,7 +7,7 @@
     "productionMult": 0.7,
     "aiThinkMs": 1000,
     "aggression": 0.75,
-    "startGold": 95
+    "startGold": 60
   },
   "tutorial": "c01_l07",
   "nodes": [
@@ -28,7 +28,7 @@
       "y": 0.476,
       "size": "large",
       "owner": "enemy",
-      "troops": 17,
+      "troops": 15,
       "hasGoldVein": false,
       "building": null,
       "capital": true

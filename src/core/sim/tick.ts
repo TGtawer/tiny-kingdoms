@@ -7,10 +7,10 @@ import { stepBandits, type BanditRaid } from './bandits';
 import { stepCitadel, type CitadelWave } from './specials/citadel';
 import { stepDragon, type DragonEvent } from './specials/dragon';
 import { stepMage, type MageEvent } from './specials/mage';
-import { releaseStreams } from './stream';
+import { enterTransit, releaseStreams } from './stream';
 import { dropUnit, moveUnits } from './units';
 import { checkOutcome, updateGoal, type OutcomeReason } from './victory';
-import type { Side, World } from './World';
+import type { Owner, Side, World } from './World';
 
 export const TICK_SEC = TICK_MS / 1000;
 
@@ -18,6 +18,8 @@ export type TickEvent =
   | { type: 'rejected'; command: Command; reason: RejectReason }
   | { type: 'applied'; command: Command; streamId?: number }
   | ({ type: 'arrived' } & ArrivalResult)
+  /** A unit entered an own node on its way and will leave it again (GDD 3.6, transit). */
+  | { type: 'transit'; unitId: number; owner: Owner; nodeId: string }
   | ({ type: 'clash' } & ClashResult)
   | ({ type: 'raid' } & BanditRaid)
   | DragonEvent
@@ -30,7 +32,7 @@ const clashes: ClashResult[] = [];
 
 /**
  * One fixed simulation step. Mutates `world`. Order (ARCHITECTURE.md «Порядок тика»):
- * commands → road clashes (swept, before moving) → unit movement and arrivals → stream release →
+ * commands → road clashes (swept, before moving) → unit movement, arrivals and transit → stream release →
  * production → bandits and bosses → shields and cooldowns → goal and victory check.
  */
 export function step(world: World, commands: readonly Command[] = []): TickEvent[] {
@@ -54,10 +56,18 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
 
   moveUnits(world, stepDistance, (unit, nodeId) => {
     dropUnit(world, unit);
-    const fromId = unit.path[unit.segment]!;
-    events.push({ type: 'arrived', ...arriveUnit(world, unit.id, unit.owner, world.nodes[nodeId]!, fromId) });
+    const node = world.nodes[nodeId]!;
+    const rest = unit.route.next;
+    // Transit through an own node (GDD 3.6): into its garrison, then out again with the rest of the route.
+    if (rest && node.owner === unit.owner) {
+      enterTransit(world, unit.owner, nodeId, rest);
+      events.push({ type: 'transit', unitId: unit.id, owner: unit.owner, nodeId });
+      return;
+    }
+    // The target, or a stop on the way that is no longer own: the unit attacks it (or reinforces its target).
+    events.push({ type: 'arrived', ...arriveUnit(world, unit.id, unit.owner, node, unit.route.path[0]!) });
   });
-  releaseStreams(world, TICK_SEC);
+  releaseStreams(world);
 
   produce(world, TICK_SEC);
   for (const raid of stepBandits(world)) events.push({ type: 'raid', ...raid });

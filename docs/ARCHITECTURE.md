@@ -149,22 +149,31 @@ interface NodeState {
   building: { type: BuildingType; level: 1 | 2 | 3 } | null;
 }
 
-// A node's order "send N troops to target" (GDD 3.6). Units leave one by one.
+// The rest of a route from one node: path[0] is the node a unit leaves, the last node is the target.
+// Suffixes are built once per order (next = route from path[1]) and shared by its units and transit streams.
+interface Route {
+  path: string[];
+  lanes: number[];               // lanes[i] = path[i] -> path[i + 1]; a unit walks only lanes[0]
+  next: Route | null;
+}
+
+// Units waiting in a node to leave along a route (GDD 3.6): a swipe, transit forwarding or a raid.
 interface StreamState {
   id: number;
   sourceId: string;
   owner: Owner;                  // 'neutral' for bandit raids
-  path: string[];                // node ids from source to target
+  route: Route;
   left: number;                  // units still to release (still counted in source troops)
-  lastReleaseTick: number;       // for taking turns on a shared lane
+  lastReleaseTick: number;       // for taking turns on a shared lane (-1: none yet)
+  transit: boolean;              // forwarding: may leave the last troop (it was only passing)
+  extra: boolean;                // citadel wave: on top of the garrison, a re-swipe does not cancel it
 }
 
-// One unit on a road. Plain object, pooled by index; no per-unit classes.
+// One unit on a road. Plain object; its route is shared with its stream (not copied per unit).
 interface UnitState {
   id: number;
   owner: Owner;
-  path: string[];                // remaining route from the node it left; shared with its stream (not copied per unit)
-  lanes: number[];               // lanes of that route; a unit walks only lanes[0], then enters path[1]
+  route: Route;                  // walks route.lanes[0], then arrives at or goes into transit in route.path[1]
   progress: number;              // 0..1 along its road (between lane.startP and lane.endP)
 }
 

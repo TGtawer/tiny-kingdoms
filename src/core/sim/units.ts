@@ -1,8 +1,9 @@
-import type { Lane, Owner, UnitState, World } from './World';
+import type { Lane, Owner, Route, UnitState, World } from './World';
 
 /**
  * Units on roads (GDD 3.6, ARCHITECTURE.md «Производительность»). Every unit lives in `world.units` (swap-remove)
- * and in the lane of its current segment, ordered head first. Nothing here allocates per tick except new units.
+ * and in the lane of its road, ordered head first. A unit walks one road only: at its end it arrives at the target
+ * or goes into transit in an own node (stream.ts). Nothing here allocates per tick except new units.
  */
 
 /** Lane of the road (or portal link) from `from` to `to`; -1 if there is none. */
@@ -10,16 +11,30 @@ export function laneOf(world: World, from: string, to: string): number {
   return world.laneIndex[`${from}>${to}`] ?? -1;
 }
 
-/** Lane index of every segment of `path` (computed once per stream). */
-export function pathLanes(world: World, path: readonly string[]): number[] {
-  const lanes: number[] = [];
-  for (let i = 0; i + 1 < path.length; i++) lanes.push(laneOf(world, path[i]!, path[i + 1]!));
-  return lanes;
+/** The route of an order along `path`, with every suffix built once (shared by all units and transit streams). */
+export function buildRoute(world: World, path: readonly string[]): Route {
+  let next: Route | null = null;
+  for (let i = path.length - 2; i >= 0; i--) {
+    const rest = path.slice(i);
+    const lanes: number[] = [];
+    for (let k = 0; k + 1 < rest.length; k++) lanes.push(laneOf(world, rest[k]!, rest[k + 1]!));
+    next = { path: rest, lanes, next };
+  }
+  return next!;
 }
 
-/** The node a unit is heading to: the last node of its path. */
+/** The node a unit (or a stream) is finally heading to. */
+export function routeTarget(route: Route): string {
+  return route.path[route.path.length - 1]!;
+}
+
 export function unitTarget(unit: UnitState): string {
-  return unit.path[unit.path.length - 1]!;
+  return routeTarget(unit.route);
+}
+
+/** The unit's road. */
+export function unitLane(world: World, unit: UnitState): Lane {
+  return world.lanes[unit.route.lanes[0]!]!;
 }
 
 /** Puts a unit into a lane, keeping the head-first order (new units almost always go to the tail). */
@@ -34,18 +49,13 @@ export function insertIntoLane(lane: Lane, unit: UnitState): void {
   units[i] = unit;
 }
 
-/** Creates a unit at `progress` of the first segment of `path`. */
-export function spawnUnit(
-  world: World,
-  owner: Owner,
-  path: readonly string[],
-  lanes: readonly number[],
-  progress: number,
-): UnitState {
-  const unit: UnitState = { id: world.nextUnitId++, owner, path, lanes, segment: 0, progress, slot: world.units.length };
+/** Creates a unit on the first road of `route` at `progress` (by default where units appear on it). */
+export function spawnUnit(world: World, owner: Owner, route: Route, progress?: number): UnitState {
+  const lane = world.lanes[route.lanes[0]!]!;
+  const unit: UnitState = { id: world.nextUnitId++, owner, route, progress: progress ?? lane.startP, slot: world.units.length };
   world.units.push(unit);
-  insertIntoLane(world.lanes[lanes[0]!]!, unit);
-  world.incoming[unitTarget(unit)]![owner] += 1;
+  insertIntoLane(lane, unit);
+  world.incoming[routeTarget(route)]![owner] += 1;
   return unit;
 }
 
@@ -76,9 +86,9 @@ export function compactLane(lane: Lane): void {
   units.length = w;
 }
 
-/** Position of a unit in level coordinates. */
+/** Position of a unit in level coordinates (on the straight line between the node centers). */
 export function unitPosition(world: World, unit: UnitState, out: { x: number; y: number }): { x: number; y: number } {
-  const lane = world.lanes[unit.lanes[unit.segment]!]!;
+  const lane = unitLane(world, unit);
   const a = world.nodes[lane.from]!;
   const b = world.nodes[lane.to]!;
   out.x = a.x + (b.x - a.x) * unit.progress;
@@ -86,23 +96,16 @@ export function unitPosition(world: World, unit: UnitState, out: { x: number; y:
   return out;
 }
 
-/** Reached a node this tick: the unit and how far past the node it would have gone. */
-export interface Reached {
-  unit: UnitState;
-  leftover: number;
-}
-
 // Scratch list reused between ticks.
-const reached: Reached[] = [];
-let reachedCount = 0;
+const reached: UnitState[] = [];
 
 /**
- * Moves every unit `distance` along its route. A unit that reaches its target, or a stop that is no longer
- * its own (captured meanwhile), calls `arrive` there and leaves the field; otherwise it goes on to the next segment.
- * Arrivals resolve lane by lane, head first, so the order is deterministic.
+ * Moves every unit `distance` along its road. A unit that reaches the far end (lane.endP: the edge of the node's
+ * circle) is taken off the road and handed to `arrive` with the node it reached. Arrivals resolve lane by lane,
+ * head first, so the order is deterministic.
  */
 export function moveUnits(world: World, distance: number, arrive: (unit: UnitState, nodeId: string) => void): void {
-  reachedCount = 0;
+  reached.length = 0;
   const lanes = world.lanes;
   for (let l = 0; l < lanes.length; l++) {
     const lane = lanes[l]!;
@@ -113,12 +116,10 @@ export function moveUnits(world: World, distance: number, arrive: (unit: UnitSta
     for (let i = 0; i < units.length; i++) {
       const u = units[i]!;
       u.progress += dp;
-      if (u.progress >= 1) {
-        // Head-first order: everyone who reached the end is at the front of the lane.
-        const slot = reached[reachedCount] ?? (reached[reachedCount] = { unit: u, leftover: 0 });
-        slot.unit = u;
-        slot.leftover = (u.progress - 1) * lane.length;
-        reachedCount++;
+      // Head-first order: everyone who reached the end is at the front of the lane. The epsilon absorbs float sums
+      // (ten steps of 0.1 are 0.9999999999999999).
+      if (u.progress >= lane.endP - 1e-9) {
+        reached.push(u);
         done++;
       }
     }
@@ -127,31 +128,8 @@ export function moveUnits(world: World, distance: number, arrive: (unit: UnitSta
       units.length -= done;
     }
   }
-
-  for (let i = 0; i < reachedCount; i++) {
-    const r = reached[i]!;
-    advance(world, r.unit, r.leftover, arrive);
-  }
-}
-
-/** Takes a unit that reached the end of its segment to the next one, or ends its march at that node. */
-function advance(world: World, unit: UnitState, leftover: number, arrive: (unit: UnitState, nodeId: string) => void): void {
-  let left = leftover;
-  for (;;) {
-    const at = unit.path[unit.segment + 1]!;
-    // Only own nodes are stops on the way (GDD 3.5): if this one was captured, the unit attacks it.
-    if (unit.segment + 1 === unit.path.length - 1 || world.nodes[at]!.owner !== unit.owner) {
-      arrive(unit, at);
-      return;
-    }
-    unit.segment += 1;
-    const lane = world.lanes[unit.lanes[unit.segment]!]!;
-    if (left < lane.length) {
-      unit.progress = left / lane.length;
-      insertIntoLane(lane, unit);
-      return;
-    }
-    // A segment shorter than one step: pass it whole in this tick.
-    left -= lane.length;
+  for (let i = 0; i < reached.length; i++) {
+    const u = reached[i]!;
+    arrive(u, u.route.path[1]!);
   }
 }

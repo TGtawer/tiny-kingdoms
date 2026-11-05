@@ -347,7 +347,7 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'clash': {
         // Many pairs meet at one point: one flash per spot every UNITS_FX.flashEverySpotMs, a rate-limited sound.
-        const p = this.layoutField.toScreen(event.x, event.y);
+        const p = this.units.screenAt(this.world, this.layoutField, event.lane, event.progress, { x: 0, y: 0 });
         this.flashes.flash(p.x, p.y, COLORS.select, this.time.now);
         if (this.time.now - this.lastClashSoundAt >= UNITS_FX.clashSoundEveryMs) {
           this.lastClashSoundAt = this.time.now;
@@ -355,6 +355,9 @@ export class BattleScene extends Phaser.Scene {
         }
         break;
       }
+      case 'transit':
+        // A unit passing an own node joins its garrison for a moment: nothing to show.
+        break;
       case 'raid': {
         // Bandits leave their camp.
         const view = this.nodeViews.get(event.from)!;

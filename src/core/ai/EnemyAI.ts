@@ -5,7 +5,7 @@ import { nodeCapacity, troopRate } from '../sim/economy';
 import { armyPath, routeLength } from '../sim/pathfinding';
 import { towerKillsEstimate } from '../sim/preview';
 import { pendingTo } from '../sim/stream';
-import { unitTarget } from '../sim/units';
+import { routeTarget, unitTarget } from '../sim/units';
 import { defenseMult, isAttacked, isRival, random, type NodeState, type Owner, type Side, type World } from '../sim/World';
 import type { EnemyParams } from '../level/schema';
 import type { Goal } from '../sim/victory';
@@ -176,7 +176,7 @@ function own(world: World, side: Side): NodeState[] {
  * (a new swipe would cancel the stream; an attacked node can't send, GDD 3.6).
  */
 function available(world: World, node: NodeState, plan: Plan, mode: SendMode = 'swipe'): number {
-  if (plan.sent.has(node.id) || node.streamId !== null || isAttacked(world, node)) return 0;
+  if (plan.sent.has(node.id) || node.streams > 0 || isAttacked(world, node)) return 0;
   return sendAmount(node.troops, mode);
 }
 
@@ -240,15 +240,23 @@ function threats(world: World, side: Side): Map<string, Threat> {
       out.set(nodeId, { units, soonestSec: eta });
     }
   };
+  // Walking distance to the target: the rest of this road, then the visible part of every next road.
+  const walk = (lanes: readonly number[], from: number, progress: number): number => {
+    let d = 0;
+    for (let i = from; i < lanes.length; i++) {
+      const lane = world.lanes[lanes[i]!]!;
+      d += (lane.endP - (i === from ? progress : lane.startP)) * lane.length;
+    }
+    return d;
+  };
   for (const unit of world.units) {
     if (unit.owner === side) continue;
-    let remaining = (1 - unit.progress) * world.lanes[unit.lanes[unit.segment]!]!.length;
-    for (let i = unit.segment + 1; i < unit.lanes.length; i++) remaining += world.lanes[unit.lanes[i]!]!.length;
-    add(unitTarget(unit), 1, etaSec(remaining));
+    add(unitTarget(unit), 1, etaSec(walk(unit.route.lanes, 0, unit.progress)));
   }
   for (const stream of world.streams) {
     if (stream.owner === side) continue;
-    add(stream.path[stream.path.length - 1]!, stream.left, etaSec(routeLength(world, stream.path)));
+    const first = world.lanes[stream.route.lanes[0]!]!;
+    add(routeTarget(stream.route), stream.left, etaSec(walk(stream.route.lanes, 0, first.startP)));
   }
   return out;
 }

@@ -15,8 +15,8 @@ describe('stream release (GDD 3.6)', () => {
     step(world, [swipe('P', 'N')]);
     expect(world.units).toHaveLength(1);
     run(world, ticksPerSec - 1);
-    // One second: the first unit plus releasePerSec more.
-    expect(world.units).toHaveLength(1 + STREAM.releasePerSec);
+    // One second: releasePerSec units (the road's entry frees every column step).
+    expect(world.units).toHaveLength(STREAM.releasePerSec);
   });
 
   it('the column has an even step of speed / releasePerSec', () => {
@@ -37,7 +37,7 @@ describe('stream release (GDD 3.6)', () => {
     drain(world);
     expect(world.nodes.P!.troops).toBe(5);
     expect(world.streams).toHaveLength(0);
-    expect(world.nodes.P!.streamId).toBeNull();
+    expect(world.nodes.P!.streams).toBe(0);
   });
 
   it('a re-swipe cancels the rest of the old stream and sends 75% of the current garrison', () => {

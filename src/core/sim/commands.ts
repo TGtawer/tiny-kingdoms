@@ -1,6 +1,7 @@
 import { ARMY, BUILDINGS, type BuildingType, type SpellId } from '../../config/balance';
 import { armyPath } from './pathfinding';
 import { fireballKill, reinforcementTroops, shieldTicks, spellCooldownMs, spellCost } from './spells';
+import { markAttacked } from './combat';
 import { startStream } from './stream';
 import { visibleTroops } from './troops';
 import { isAttacked, isRival, type BuildingLevel, type Side, type StreamState, type World } from './World';
@@ -162,6 +163,8 @@ export function apply(world: World, cmd: Command): StreamState | null {
       side.spellCooldowns[cmd.spell] = spellCooldownMs(cmd.spell, side.modifiers);
       if (cmd.spell === 'fireball') {
         node.troops -= fireballKill(node.troops, side.modifiers);
+        // Damage to the garrison is an attack (GDD 3.6, 3.8): the node's streams stop, its production waits.
+        markAttacked(world, node);
       } else if (cmd.spell === 'reinforcement') {
         node.troops += reinforcementTroops(side.modifiers);
       } else {

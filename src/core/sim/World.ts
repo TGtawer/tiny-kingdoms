@@ -1,4 +1,4 @@
-import { ARMY, SPECIAL_NODES, SPELL_IDS, TICK_MS, type BuildingType, type NodeKind, type NodeSize, type SpellId } from '../../config/balance';
+import { ARMY, SPECIAL_NODES, SPELL_IDS, STREAM, TICK_MS, type BuildingType, type NodeKind, type NodeSize, type SpellId } from '../../config/balance';
 import type { LevelData } from '../level/schema';
 import type { Goal } from './victory';
 import { createCitadel, type CitadelState } from './specials/citadel';
@@ -48,43 +48,54 @@ export interface NodeState {
   attackedUntilMs: number;
   /** Battle time (ms) of the next tower shot; a shot is ready when it has passed (one held in reserve). */
   towerReadyAtMs: number;
-  /** The node's active stream (at most one), or null. */
-  streamId: number | null;
+  /** Active streams leaving the node (its own order and transit forwarding; citadel waves not counted). */
+  streams: number;
 }
 
 /**
- * A node's order "send N troops along `path`" (GDD 3.6). Units leave one by one at STREAM.releasePerSec;
- * until a unit leaves it stays in the garrison (counted in the source's troops).
+ * What is left of a route from one node (GDD 3.6): `path[0]` is the node a unit leaves, the last node is the target.
+ * A unit walks only `lanes[0]` (path[0] -> path[1]); at path[1] it either arrives or goes into transit there and
+ * leaves again with `next`. Suffixes are built once per order and shared by every unit and stream of it.
+ */
+export interface Route {
+  path: readonly string[];
+  /** lanes[i] = lane of path[i] -> path[i + 1]. */
+  lanes: readonly number[];
+  /** The route from path[1] on; null when path[1] is the target. */
+  next: Route | null;
+}
+
+/**
+ * Units waiting in a node to leave along `route` (GDD 3.6): a swipe, transit forwarding or a raid. Until a unit
+ * leaves it stays in the garrison (counted in the node's troops). Units leave when the road's entry is free
+ * (lane density), taking turns with other streams of the node on the same road.
  */
 export interface StreamState {
   id: number;
   sourceId: string;
   /** 'neutral' for bandit raids. */
   owner: Owner;
-  /** Node ids from the source to the target; shared by every unit of the stream. */
-  path: readonly string[];
-  /** Lane index of every path segment (lanes[i] = path[i] -> path[i + 1]); shared like `path`. */
-  lanes: readonly number[];
+  route: Route;
   /** Units still to release. */
   left: number;
-  /** Fractional units accumulated at STREAM.releasePerSec. */
-  releaseAcc: number;
+  /** Tick of the last release (-1: none yet); the stream that waited longest goes first on a shared road. */
+  lastReleaseTick: number;
+  /** Forwarding units in transit: they may leave even the last troop (they were only passing through). */
+  transit: boolean;
   /**
    * Extra units on top of the garrison (citadel waves): releasing doesn't take troops from the source,
-   * and the stream doesn't occupy the node's stream slot.
+   * a re-swipe doesn't cancel it and it is not in the node's `streams` count.
    */
   extra: boolean;
 }
 
-/** One unit on a road. Plain object; path and lanes are shared with its stream. */
+/** One unit on a road. Plain object; its route is shared with its stream. */
 export interface UnitState {
   id: number;
   owner: Owner;
-  path: readonly string[];
-  lanes: readonly number[];
-  /** Current segment: path[segment] -> path[segment + 1]. */
-  segment: number;
-  /** 0..1 along the current segment. */
+  /** Remaining route from the node it left; the unit walks route.lanes[0]. */
+  route: Route;
+  /** 0..1 along its road, between lane.startP and lane.endP. */
   progress: number;
   /** Index in world.units (swap-remove). -1 once the unit is gone. */
   slot: number;
@@ -98,6 +109,12 @@ export interface Lane {
   from: string;
   to: string;
   length: number;
+  /**
+   * Progress where units appear (STREAM.edgeDist of `from`) and arrive (edgeDist of `to`): just inside the drawn
+   * circles. Portal links: 0 and 1.
+   */
+  startP: number;
+  endP: number;
   /** Portal links have no clashes inside. */
   portal: boolean;
   /** Lane of the same road in the opposite direction. */
@@ -206,7 +223,7 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
       shieldTicks: 0,
       attackedUntilMs: 0,
       towerReadyAtMs: 0,
-      streamId: null,
+      streams: 0,
     };
   }
   const pairs = new Map<string, string[]>();
@@ -281,8 +298,10 @@ function buildLanes(
   const add = (a: string, b: string, portal: boolean): void => {
     const length = portal ? PORTAL_LENGTH : Math.hypot(nodes[a]!.x - nodes[b]!.x, nodes[a]!.y - nodes[b]!.y);
     const i = lanes.length;
-    lanes.push({ from: a, to: b, length, portal, reverse: i + 1, units: [] });
-    lanes.push({ from: b, to: a, length, portal, reverse: i, units: [] });
+    lanes.push({ from: a, to: b, length, startP: 0, endP: 1, portal, reverse: i + 1, units: [] });
+    lanes.push({ from: b, to: a, length, startP: 0, endP: 1, portal, reverse: i, units: [] });
+    setLaneEnds(lanes[i]!, nodes);
+    setLaneEnds(lanes[i + 1]!, nodes);
     laneIndex[`${a}>${b}`] = i;
     laneIndex[`${b}>${a}`] = i + 1;
     lanesInto[b]!.push(i);
@@ -291,6 +310,31 @@ function buildLanes(
   for (const [a, b] of roads) add(a, b, false);
   for (const [a, b] of portals) add(a, b, true);
   return { lanes, laneIndex, lanesInto };
+}
+
+/**
+ * Where units appear and arrive on a lane (GDD 3.6): STREAM.edgeDist from each node center, by node size.
+ * A road too short for both edges gets them at its middle.
+ */
+export function setLaneEnds(lane: Lane, nodes: Record<string, NodeState>): void {
+  if (lane.portal || lane.length <= 0) {
+    lane.startP = 0;
+    lane.endP = 1;
+    return;
+  }
+  const start = STREAM.edgeDist[nodes[lane.from]!.size] / lane.length;
+  const end = 1 - STREAM.edgeDist[nodes[lane.to]!.size] / lane.length;
+  if (start < end) {
+    lane.startP = start;
+    lane.endP = end;
+  } else {
+    lane.startP = lane.endP = (start + end) / 2;
+  }
+}
+
+/** A node changed size (a captured chest): moves the ends of the lanes touching it. */
+export function refreshLaneEnds(world: World, nodeId: string): void {
+  for (const lane of world.lanes) if (lane.from === nodeId || lane.to === nodeId) setLaneEnds(lane, world.nodes);
 }
 
 /**

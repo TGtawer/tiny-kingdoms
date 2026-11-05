@@ -1,6 +1,7 @@
 import { BUILDINGS, SPECIAL_NODES, STREAM } from '../../config/balance';
 import { captureNode } from './capture';
-import { defenseMult, nowMs, type NodeState, type Owner, type World } from './World';
+import { dropForeignStreams } from './stream';
+import { defenseMult, nowMs, refreshLaneEnds, type NodeState, type Owner, type World } from './World';
 
 /** Below this, a remainder counts as zero (guards against float noise). */
 const EPSILON = 1e-9;
@@ -49,6 +50,11 @@ export function defenseHits(node: NodeState): number {
   return Math.floor(node.troops * defenseMult(node) + EPSILON);
 }
 
+/** Marks the node attacked (GDD 3.6): its garrison took damage — a hostile unit, a fireball, the mage, the dragon. */
+export function markAttacked(world: World, node: NodeState): void {
+  node.attackedUntilMs = nowMs(world) + STREAM.attackWindowMs;
+}
+
 /**
  * One unit of `owner` reaches `node` (GDD 3.6). Own node: it joins the garrison (over capacity is fine).
  * Foreign node: a shield breaks it; else a ready tower shot kills it; else it trades 1:1 with a defender
@@ -65,7 +71,7 @@ export function arriveUnit(world: World, unitId: number, owner: Owner, node: Nod
   // TODO(design): GDD 3.8 — how the shield works with streams is TBD; for now a shielded node is not attacked.
   if (node.shieldTicks > 0) return { ...base, outcome: 'shielded' };
 
-  node.attackedUntilMs = nowMs(world) + STREAM.attackWindowMs;
+  markAttacked(world, node);
   if (towerShoots(world, node)) return { ...base, outcome: 'destroyedByTower' };
 
   const perAttacker = 1 / defenseMult(node);
@@ -75,7 +81,11 @@ export function arriveUnit(world: World, unitId: number, owner: Owner, node: Nod
   }
 
   const chest = node.kind === 'chest' && owner !== 'neutral' ? SPECIAL_NODES.chest.gold : 0;
+  const size = node.size;
   captureNode(node, owner, 1);
+  dropForeignStreams(world, node.id);
+  // A chest becomes a small node: units now appear and arrive closer to its center.
+  if (node.size !== size) refreshLaneEnds(world, node.id);
   // The capturer's node is not under its own attack.
   node.attackedUntilMs = 0;
   if (chest > 0 && owner !== 'neutral') world.sides[owner].gold += chest;

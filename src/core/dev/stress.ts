@@ -31,7 +31,7 @@ export function stressStep(world: World, state: StressState, targetUnits: number
   for (const node of nodes) {
     if (node.owner === 'neutral') continue;
     node.troops = Math.max(node.troops, minTroops);
-    if (node.streamId !== null || isAttacked(world, node)) continue;
+    if (node.streams > 0 || isAttacked(world, node)) continue;
     const side = node.owner as Side;
     // A random foreign node with a route (a few tries; idle nodes try again next tick).
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -46,7 +46,7 @@ export function stressStep(world: World, state: StressState, targetUnits: number
     const lane = world.lanes[laneIdx]!;
     const owner = world.nodes[lane.from]!.owner;
     if (lane.portal || world.nodes[lane.to]!.owner !== owner) continue;
-    spawnUnit(world, owner, [lane.from, lane.to], [laneIdx], rand(state) * 0.9);
+    spawnUnit(world, owner, { path: [lane.from, lane.to], lanes: [laneIdx], next: null }, lane.startP + rand(state) * (lane.endP - lane.startP) * 0.9);
   }
   return commands;
 }

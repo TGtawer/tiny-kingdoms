@@ -160,9 +160,9 @@ describe('portal', () => {
     world.nodes.A!.troops = 20;
     const events = [...step(world, [{ type: 'send', side: 'player', from: 'A', to: 'B', mode: 'swipe' }])];
     const travelTicks = ticksFor(SPECIAL_NODES.portal.delayMs);
-    for (let i = 1; i < travelTicks - 1; i++) events.push(...step(world));
+    for (let i = 0; i < travelTicks - 1; i++) events.push(...step(world));
     expect(eventsOf(events, 'arrived')).toHaveLength(0);
-    events.push(...step(world), ...step(world));
+    events.push(...step(world));
     expect(eventsOf(events, 'arrived')).toHaveLength(1);
     drain(world);
     expect(world.nodes.B!.owner).toBe('player');
@@ -233,7 +233,7 @@ describe('bandit camp', () => {
     expect(raids).toHaveLength(1);
     expect(raids[0]).toMatchObject({ from: 'C', to: 'P' });
     // The raid leaves as a stream, like a swipe.
-    expect(world.streams.find((s) => s.owner === 'neutral')?.path).toEqual(['C', 'P']);
+    expect(world.streams.find((s) => s.owner === 'neutral')?.route.path).toEqual(['C', 'P']);
   });
 
   it('breaks distance ties by the weaker node, then deterministically', () => {

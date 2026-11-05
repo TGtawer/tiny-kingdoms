@@ -53,7 +53,7 @@ export function sideGoldRate(world: World, side: Side): number {
  * STREAM.pauseSourceProduction balance lever — while it releases a stream. Gold is not affected.
  */
 export function productionPaused(world: World, node: NodeState): boolean {
-  return isAttacked(world, node) || (STREAM.pauseSourceProduction && node.streamId !== null);
+  return isAttacked(world, node) || (STREAM.pauseSourceProduction && node.streams > 0);
 }
 
 /** Produces troops (stopping at capacity, never reducing an overfilled node, not while paused) and gold. */

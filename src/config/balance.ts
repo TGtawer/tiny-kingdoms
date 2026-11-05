@@ -90,6 +90,11 @@ export const STREAM = {
   pauseSourceProduction: false,
   /** Units of different sides closer than this touch and destroy each other, field widths. */
   contactDist: 0.01,
+  /**
+   * Distance from a node center where units appear and arrive, field widths, by node size: a bit less than the
+   * drawn radius (NODE_RADIUS in game.ts: 0.055 / 0.068 / 0.084), so a unit appears still under the circle.
+   */
+  edgeDist: { small: 0.04, medium: 0.05, large: 0.062 } as Record<NodeSize, number>,
 } as const;
 
 /** Enemy leaders (GDD 3.10, CONTENT.md C-2). */

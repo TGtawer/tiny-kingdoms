@@ -12,7 +12,7 @@ function jerks(world: World, commands: readonly Command[]): number {
   for (const c of commands) {
     if (c.type !== 'send') continue;
     const from = world.nodes[c.from]!;
-    if (from.streamId !== null || isAttacked(world, from)) n++;
+    if (from.streams > 0 || isAttacked(world, from)) n++;
   }
   return n;
 }
