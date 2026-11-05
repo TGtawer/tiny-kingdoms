@@ -192,6 +192,13 @@ function etaSec(distance: number): number {
   return distance / ARMY.speed;
 }
 
+/** Units of a stream of `count` that reach a node `distance` away within `withinSec` (the first leaves at once). */
+function unitsInTime(count: number, distance: number, withinSec: number): number {
+  const spare = withinSec - etaSec(distance);
+  if (spare < 0) return 0;
+  return Math.min(count, 1 + Math.floor(spare * STREAM.releasePerSec * STREAM.width));
+}
+
 
 // ---- Dragon -------------------------------------------------------------------------------------
 
@@ -269,9 +276,10 @@ function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<stri
       .map((n) => ({ n, d: dist.get(n.id, node.id) }))
       .filter((h): h is { n: NodeState; d: number } => h.d !== null && etaSec(h.d) <= threat.soonestSec)
       .sort((a, b) => a.d - b.d);
-    for (const { n } of helpers) {
+    // A helper's stream takes time to leave: only the units that get there before the attack count.
+    for (const { n, d } of helpers) {
       if (deficit <= 0) break;
-      deficit -= send(world, plan, side, n, node.id);
+      deficit -= unitsInTime(send(world, plan, side, n, node.id), d, threat.soonestSec);
     }
   }
   return threatened;
@@ -384,6 +392,7 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
         picks.push(n);
         force += available(world, n, plan);
         farthest = Math.max(farthest, d);
+        // The target produces only until the first unit reaches it (then it is attacked, GDD 3.6).
         required = requiredForce(world, target, etaSec(farthest), margin);
         if (force >= required) break;
       }

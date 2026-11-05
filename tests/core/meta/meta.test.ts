@@ -21,6 +21,7 @@ import {
   bonusCost,
   buyBonus,
   buySpellUpgrade,
+  OFFERED_BONUS_IDS,
   modifiersFrom,
   playerSetupFrom,
   spellUpgradeCost,
@@ -171,6 +172,15 @@ describe('permanent bonuses', () => {
     p.crystals = 1e6;
     p.bonuses.goldIncome = BONUSES.maxLevel;
     expect(buyBonus(p, 'goldIncome')).toBe('maxLevel');
+  });
+
+  it('unit strength is not sold any more (1 unit = 1 unit), its level stays in the save', () => {
+    const p = defaultProgress();
+    p.crystals = 1e6;
+    p.bonuses.unitStrength = 3;
+    expect(OFFERED_BONUS_IDS).not.toContain('unitStrength');
+    expect(buyBonus(p, 'unitStrength')).toBe('locked');
+    expect(p.bonuses.unitStrength).toBe(3);
   });
 
   it('bonuses turn into battle modifiers', () => {

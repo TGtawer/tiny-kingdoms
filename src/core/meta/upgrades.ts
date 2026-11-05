@@ -1,6 +1,6 @@
 import { BONUSES, SPELL_UPGRADES, type SpellId } from '../../config/balance';
 import { defaultModifiers, type PlayerSetup, type SideModifiers } from '../sim/World';
-import type { BonusId, Progress } from './Progress';
+import { BONUS_IDS, type BonusId, type Progress } from './Progress';
 import { activeSpell } from './spellbook';
 import { freeStars } from './stars';
 
@@ -24,7 +24,11 @@ export function spellUpgradeCost(currentLevel: number): number | null {
 
 export type BuyResult = 'ok' | 'maxLevel' | 'notEnoughCrystals' | 'notEnoughStars' | 'locked';
 
+/** Permanent bonuses offered in Upgrades (BONUSES.hidden are kept in the save but not sold). */
+export const OFFERED_BONUS_IDS: readonly BonusId[] = BONUS_IDS.filter((id) => !BONUSES.hidden.includes(id));
+
 export function buyBonus(progress: Progress, bonus: BonusId): BuyResult {
+  if (!OFFERED_BONUS_IDS.includes(bonus)) return 'locked';
   const cost = bonusCost(progress.bonuses[bonus]);
   if (cost === null) return 'maxLevel';
   if (progress.crystals < cost) return 'notEnoughCrystals';

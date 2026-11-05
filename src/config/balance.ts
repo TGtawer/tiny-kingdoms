@@ -282,6 +282,11 @@ export const BONUSES = {
     goldIncome: 0.05,
     unitStrength: 0.03,
   },
+  /**
+   * Bonuses not offered in Upgrades. Unit strength: 1 unit = 1 unit with stream armies (GDD 3.6, 4.3); the level
+   * stays in the save. TODO(design): what replaces it (maybe the column width).
+   */
+  hidden: ['unitStrength'] as readonly string[],
 } as const;
 
 export const SPELL_UPGRADES = {

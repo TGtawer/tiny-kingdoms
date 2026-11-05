@@ -1,11 +1,11 @@
 import * as Phaser from 'phaser';
 import { BONUSES, SPELLS, SPELL_UPGRADES, SPELL_IDS, type SpellId } from '../config/balance';
 import { COLORS, HUD } from '../config/game';
-import { BONUS_IDS, type BonusId } from '../core/meta/Progress';
+import type { BonusId } from '../core/meta/Progress';
 import { activeSpell, claimableSpell, setActiveSpell, spellUnlockLevel, unlockSpell } from '../core/meta/spellbook';
 import { advanceTour, claimTourSpell, tourStep } from '../core/meta/onboarding';
 import { freeStars } from '../core/meta/stars';
-import { bonusCost, buyBonus, buySpellUpgrade, spellUpgradeCost } from '../core/meta/upgrades';
+import { bonusCost, buyBonus, buySpellUpgrade, OFFERED_BONUS_IDS, spellUpgradeCost } from '../core/meta/upgrades';
 import { t } from '../i18n/i18n';
 import { Button } from '../view/Button';
 import { drawCrystal, drawLock, drawStar } from '../view/icons';
@@ -112,7 +112,8 @@ export class UpgradesScene extends Phaser.Scene {
       goldIncome: Math.round(per.goldIncome * 100),
       unitStrength: Math.round(per.unitStrength * 100),
     };
-    const bonusRows: Row[] = BONUS_IDS.map((id) => ({
+    // Unit strength is hidden: 1 unit = 1 unit with stream armies (GDD 4.3).
+    const bonusRows: Row[] = OFFERED_BONUS_IDS.map((id) => ({
       title: t(`bonus.${id}`),
       desc: t(`bonus.${id}.desc`, { value: bonusValue[id] }),
       level: progress.bonuses[id],
