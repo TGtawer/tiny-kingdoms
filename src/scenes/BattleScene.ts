@@ -1,12 +1,12 @@
 import * as Phaser from 'phaser';
 import { DRAGON, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { ARMY_RADIUS_PX, COLORS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
+import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
 import { sendAmount, type Command } from '../core/sim/commands';
 import { armyPath, blockingNode } from '../core/sim/pathfinding';
-import { unitPosition } from '../core/sim/units';
+import { createStress, stressStep, type StressState } from '../core/dev/stress';
 import { battleSpeed, runClock } from '../core/sim/clock';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
@@ -30,14 +30,15 @@ import { isCompleted } from '../core/meta/Progress';
 import { defeatTip } from '../core/meta/tips';
 import { featureLevel, isFeatureAvailable, isGoldVisible } from '../core/meta/unlocks';
 import { playerSetupFrom } from '../core/meta/upgrades';
-import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
+import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, STRESS_LEVEL, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
 import { explosion, floatText, pop, ringBurst } from '../view/effects';
-import { FieldLayout, fieldArea, px, textStyle, type Point } from '../view/layout';
+import { FieldLayout, fieldArea, px, textStyle } from '../view/layout';
 import { NodeView, type Highlight } from '../view/NodeView';
 import { RoadView } from '../view/RoadView';
+import { FlashPool, UnitsView } from '../view/UnitsView';
 import { audioFiles, canPlayJingle, isMusicEnabled, playJingle, playMusic, setMusicDucked, setMusicEnabled, stopMusic } from '../view/music';
 import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
 import { hintLabel } from '../view/hintPlaque';
@@ -45,6 +46,9 @@ import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
 import type { ChapterMapData, MapReveal } from './ChapterMapScene';
 import { getPlatform, getStore } from './registry';
+
+/** Units the stress driver keeps on the field on dev_stress (ARCHITECTURE.md «Производительность»). */
+const STRESS_UNITS = 600;
 
 /** Delay before the result panel, so the final capture is visible. */
 const RESULT_DELAY_MS = 700;
@@ -77,11 +81,17 @@ export class BattleScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
   private roads!: RoadView;
   private dragLines!: Phaser.GameObjects.Graphics;
-  /**
-   * All units on the field.
-   * TODO(P-2): temporary single Graphics redrawn every frame; replaced by the pooled UnitsView.
-   */
-  private unitsLayer!: Phaser.GameObjects.Graphics;
+  /** All units on the field, one batch (under the nodes, so a unit leaves and enters a node from its rim). */
+  private units!: UnitsView;
+  /** Capped flashes of clashes, tower shots and trades at nodes. */
+  private flashes!: FlashPool;
+  /** Last time the clash sound played (rate-limited). */
+  private lastClashSoundAt = -Infinity;
+  /** Dev only: FPS and unit counter. */
+  private fpsText: Phaser.GameObjects.Text | null = null;
+  private fpsShownAt = 0;
+  /** Dev only: the stress driver on dev_stress (instead of the AIs). */
+  private stress: StressState | null = null;
   /** Hold goal: timer ring around the node to hold. */
   private goalRing!: Phaser.GameObjects.Graphics;
   /** Node owners before the current tick, to tell "captured" from "lost" in arrival events. */
@@ -99,8 +109,6 @@ export class BattleScene extends Phaser.Scene {
   private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
   private nodeViews = new Map<string, NodeView>();
-  /** Unit positions (level coords) at the previous tick, for interpolation. */
-  private prevUnitPos = new Map<number, Point>();
 
   private queue: Command[] = [];
   private accumulator = 0;
@@ -128,7 +136,8 @@ export class BattleScene extends Phaser.Scene {
   create(): void {
     // The scene instance is reused on restart: reset all state.
     this.nodeViews = new Map();
-    this.prevUnitPos = new Map();
+    this.lastClashSoundAt = -Infinity;
+    this.fpsText = null;
     this.queue = [];
     this.accumulator = 0;
     this.paused = false;
@@ -161,12 +170,17 @@ export class BattleScene extends Phaser.Scene {
 
     this.background = this.add.graphics();
     this.roads = new RoadView(this);
+    this.units = new UnitsView(this);
     this.capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
     for (const node of Object.values(this.world.nodes)) {
       const mageTower = this.world.boss?.type === 'mage' && this.world.boss.towerId === node.id;
       this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id), mageTower));
     }
-    this.unitsLayer = this.add.graphics().setDepth(40);
+    this.flashes = new FlashPool(this, 45);
+    if (import.meta.env.DEV) {
+      if (DEV_TOOLS.showFps) this.fpsText = this.add.text(0, 0, '', textStyle(13)).setStroke('#1f2937', px(3)).setDepth(400);
+      this.stress = this.level.id === STRESS_LEVEL.id ? createStress() : null;
+    }
     this.goalRing = this.add.graphics().setDepth(38);
     this.dragLines = this.add.graphics().setDepth(50);
     this.sendBadge = this.add.text(0, 0, '', textStyle(20)).setOrigin(0.5).setStroke('#1f2937', px(5)).setDepth(60);
@@ -240,12 +254,12 @@ export class BattleScene extends Phaser.Scene {
   // ---- Simulation -------------------------------------------------------------------------------
 
   private tickOnce(): void {
-    this.prevUnitPos.clear();
     for (const node of Object.values(this.world.nodes)) this.ownersBefore.set(node.id, node.owner);
-    for (const unit of this.world.units) this.prevUnitPos.set(unit.id, unitPosition(this.world, unit, { x: 0, y: 0 }));
 
     // Player input and the enemy AI go through the same command queue and rules.
-    const commands = [...this.queue, ...aiStep(this.world, this.ai), ...(this.ai2 ? aiStep(this.world, this.ai2) : [])];
+    const commands = this.stress
+      ? stressStep(this.world, this.stress, STRESS_UNITS)
+      : [...this.queue, ...aiStep(this.world, this.ai), ...(this.ai2 ? aiStep(this.world, this.ai2) : [])];
     this.queue = [];
     const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
@@ -320,13 +334,27 @@ export class BattleScene extends Phaser.Scene {
           }
           // Later arrivals in the same tick compare against the new owner.
           this.ownersBefore.set(event.nodeId, owner);
+        } else if (event.outcome === 'destroyedByTower' || event.outcome === 'repelled') {
+          // A tower shot or a 1:1 trade: a capped flash on the rim, on the side the unit came from.
+          const from = this.nodeViews.get(event.fromId)!;
+          const dx = from.x - view.x;
+          const dy = from.y - view.y;
+          const len = Math.hypot(dx, dy) || 1;
+          const color = event.outcome === 'destroyedByTower' ? COLORS.fireball : COLORS.faction[event.owner];
+          this.flashes.flash(view.x + (dx / len) * view.radius, view.y + (dy / len) * view.radius, color, this.time.now);
         }
-        // TODO(P-2): capped flashes for tower shots and 1:1 trades at the node.
         break;
       }
-      case 'clash':
-        // TODO(P-2): one capped flash per meeting point at most every 100 ms.
+      case 'clash': {
+        // Many pairs meet at one point: one flash per spot every UNITS_FX.flashEverySpotMs, a rate-limited sound.
+        const p = this.layoutField.toScreen(event.x, event.y);
+        this.flashes.flash(p.x, p.y, COLORS.select, this.time.now);
+        if (this.time.now - this.lastClashSoundAt >= UNITS_FX.clashSoundEveryMs) {
+          this.lastClashSoundAt = this.time.now;
+          playSfx('clash');
+        }
         break;
+      }
       case 'raid': {
         // Bandits leave their camp.
         const view = this.nodeViews.get(event.from)!;
@@ -542,7 +570,10 @@ export class BattleScene extends Phaser.Scene {
     this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom, top));
     drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
+    this.units.layout(this.layoutField);
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
+    // Bottom-left, above the bottom bar: clear of the top bar and the goal plaque.
+    this.fpsText?.setPosition(px(8), h - px(HUD.bottomBar + 22));
     this.hud.layout();
     this.tutorialView?.layout();
   }
@@ -556,20 +587,9 @@ export class BattleScene extends Phaser.Scene {
       view.setHighlight(this.highlightFor(node));
     }
 
-    // Units: one dot each, interpolated between ticks; hidden inside portals.
-    const g = this.unitsLayer;
-    g.clear();
-    const r = px(ARMY_RADIUS_PX * 0.45);
-    const cur = { x: 0, y: 0 };
-    for (const unit of world.units) {
-      const lane = world.lanes[unit.lanes[unit.segment]!]!;
-      if (lane.portal) continue;
-      unitPosition(world, unit, cur);
-      const prev = this.prevUnitPos.get(unit.id) ?? world.nodes[unit.path[0]!]!;
-      const p = this.layoutField.toScreen(prev.x + (cur.x - prev.x) * alpha, prev.y + (cur.y - prev.y) * alpha);
-      g.fillStyle(COLORS.factionDark[unit.owner], 1).fillCircle(p.x, p.y, r);
-      g.fillStyle(COLORS.faction[unit.owner], 1).fillCircle(p.x, p.y - r * 0.15, r * 0.8);
-    }
+    this.units.render(world, this.layoutField, alpha);
+    this.flashes.update(this.time.now);
+    this.updateFps();
 
     this.drawDragLines();
     this.drawSendBadge();
@@ -580,6 +600,13 @@ export class BattleScene extends Phaser.Scene {
       if (world.nodes[this.menu.nodeId]!.owner !== 'player') this.deselect();
       else this.menu.refresh(world.sides.player.gold);
     }
+  }
+
+  /** Dev counter, refreshed twice a second (a Text redraw per frame would cost more than the units). */
+  private updateFps(): void {
+    if (!this.fpsText || this.time.now - this.fpsShownAt < 500) return;
+    this.fpsShownAt = this.time.now;
+    this.fpsText.setText(`FPS ${Math.round(this.game.loop.actualFps)} · units ${this.world.units.length}`);
   }
 
   private highlightFor(node: NodeState): Highlight {

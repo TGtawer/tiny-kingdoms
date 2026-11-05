@@ -16,78 +16,24 @@ const TICKS = Number(values.ticks);
 const TARGET_UNITS = Number(values.units);
 const BUDGET_MS = 0.5;
 
-/** 5 × 4 grid of large nodes with level 3 barracks, roads between grid neighbours; columns alternate sides. */
-function stressLevel() {
-  const cols = 5;
-  const rows = 4;
-  const nodes = [];
-  const roads = [];
-  const id = (c, r) => `n${r}_${c}`;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      nodes.push({
-        id: id(c, r),
-        x: 0.08 + (0.84 * c) / (cols - 1),
-        y: 0.1 + (0.8 * r) / (rows - 1),
-        size: 'large',
-        owner: (c + r) % 2 === 0 ? 'player' : 'enemy',
-        troops: 60,
-        hasGoldVein: false,
-        building: { type: 'barracks', level: 3 },
-      });
-      if (c > 0) roads.push([id(c - 1, r), id(c, r)]);
-      if (r > 0) roads.push([id(c, r - 1), id(c, r)]);
-    }
-  }
-  return {
-    id: 'bench',
-    chapter: 0,
-    index: 0,
-    nodes,
-    roads,
-    enemy: { productionMult: 1, aiThinkMs: 1000, aggression: 0.5, startGold: 0 },
-    playerStartGold: 0,
-  };
-}
-
 const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'error' });
 try {
   const { createWorld } = await server.ssrLoadModule('/src/core/sim/World.ts');
   const { step } = await server.ssrLoadModule('/src/core/sim/tick.ts');
-  const { spawnUnit } = await server.ssrLoadModule('/src/core/sim/units.ts');
+  const { createStress, stressStep } = await server.ssrLoadModule('/src/core/dev/stress.ts');
+  const { STRESS_LEVEL } = await server.ssrLoadModule('/src/levels/index.ts');
 
-  const world = createWorld(stressLevel(), { seed: 1 });
-  const nodes = Object.values(world.nodes);
-  // Every node streams to each neighbour of the other side in turn; garrisons are topped up so no node ever falls
-  // and the streams never stop. Extra units fill the field up to TARGET_UNITS (on random roads, both ways).
-  const neighbours = new Map(nodes.map((n) => [n.id, []]));
-  for (const [a, b] of world.roads) {
-    neighbours.get(a).push(b);
-    neighbours.get(b).push(a);
-  }
-  let rng = 12345;
-  const rand = () => ((rng = (rng * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  // The dev_stress level with the stress driver: garrisons kept full, every idle node streams to a neighbour,
+  // extra units fill the field up to TARGET_UNITS (core/dev/stress.ts).
+  const world = createWorld(STRESS_LEVEL, { seed: 1 });
+  const stress = createStress();
 
   const times = new Float64Array(TICKS);
   let unitSum = 0;
   let maxUnits = 0;
   let events = 0;
   for (let t = 0; t < TICKS; t++) {
-    const commands = [];
-    for (const n of nodes) {
-      n.troops = Math.max(n.troops, 60);
-      if (n.streamId === null) {
-        const list = neighbours.get(n.id);
-        const to = list[Math.floor(rand() * list.length)];
-        commands.push({ type: 'send', side: n.owner, from: n.id, to });
-      }
-    }
-    while (world.units.length < TARGET_UNITS) {
-      const lane = Math.floor(rand() * world.lanes.length);
-      const l = world.lanes[lane];
-      spawnUnit(world, world.nodes[l.from].owner, [l.from, l.to], [lane], rand() * 0.9);
-    }
-    world.winner = null;
+    const commands = stressStep(world, stress, TARGET_UNITS);
     unitSum += world.units.length;
     maxUnits = Math.max(maxUnits, world.units.length);
 

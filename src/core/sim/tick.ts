@@ -54,7 +54,8 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
 
   moveUnits(world, stepDistance, (unit, nodeId) => {
     dropUnit(world, unit);
-    events.push({ type: 'arrived', ...arriveUnit(world, unit.id, unit.owner, world.nodes[nodeId]!) });
+    const fromId = unit.path[unit.segment]!;
+    events.push({ type: 'arrived', ...arriveUnit(world, unit.id, unit.owner, world.nodes[nodeId]!, fromId) });
   });
   releaseStreams(world, TICK_SEC);
 

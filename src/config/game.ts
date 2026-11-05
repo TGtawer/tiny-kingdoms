@@ -83,14 +83,30 @@ export const NODE_RADIUS_MAX_PX = 58;
 /** Extra touch slop around a node, CSS px; hit radius is never below MIN_TOUCH_PX / 2. */
 export const NODE_HIT_SLOP_PX = 8;
 
-export const ARMY_RADIUS_PX = 13;
+/**
+ * Units on the field (GDD 3.6, ARCHITECTURE.md «Производительность»): one small figure each, drawn in one batch.
+ * Sizes in CSS px.
+ */
+export const UNITS_FX = {
+  /** Unit radius as a share of the column step on screen (keeps a gap between figures), clamped below. */
+  radiusOfStep: 0.36,
+  minRadiusPx: 2.5,
+  maxRadiusPx: 6,
+  /** Flashes of clashes, tower shots and trades at a node: at most this many at once. */
+  flashPool: 40,
+  flashMs: 280,
+  /** One flash per spot (a square of this size) at most every flashEverySpotMs. */
+  flashSpotPx: 24,
+  flashEverySpotMs: 100,
+  flashRadiusPx: 9,
+  /** The clash sound plays at most this often. */
+  clashSoundEveryMs: 80,
+} as const;
 
-/** Marching army look: scale bob and trail dots behind it (CSS px, ms). */
-export const ARMY_FX = {
-  bob: 0.07,
-  bobPeriodMs: 110,
-  trailDots: 3,
-  trailSpacing: 10,
+/** Dev-only helpers (never in a production build). */
+export const DEV_TOOLS = {
+  /** FPS and unit counter in the battle (dev server only). */
+  showFps: true,
 } as const;
 
 export const HUD = {

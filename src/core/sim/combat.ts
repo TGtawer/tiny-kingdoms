@@ -11,6 +11,8 @@ export interface ArrivalResult {
   unitId: number;
   owner: Owner;
   nodeId: string;
+  /** The node the unit came from (the start of its last road), for effects. */
+  fromId: string;
   outcome: ArrivalOutcome;
   /** Gold the capturer got from a chest (0 otherwise). */
   chestGold: number;
@@ -53,8 +55,8 @@ export function defenseHits(node: NodeState): number {
  * (a fortress defender withstands two); with less than one defender left the node is captured and the unit is its
  * garrison. Every hostile arrival except on a shield marks the node attacked for STREAM.attackWindowMs.
  */
-export function arriveUnit(world: World, unitId: number, owner: Owner, node: NodeState): ArrivalResult {
-  const base = { unitId, owner, nodeId: node.id, chestGold: 0 };
+export function arriveUnit(world: World, unitId: number, owner: Owner, node: NodeState, fromId = node.id): ArrivalResult {
+  const base = { unitId, owner, nodeId: node.id, fromId, chestGold: 0 };
 
   if (node.owner === owner) {
     node.troops += 1;

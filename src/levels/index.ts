@@ -19,6 +19,7 @@ import devHold from './dev/dev_hold.json';
 import devSpecials from './dev/dev_specials.json';
 import devSurvive from './dev/dev_survive.json';
 import devThree from './dev/dev_three.json';
+import devStress from './dev/dev_stress.json';
 
 // Levels are validated on load: a broken JSON fails fast in dev and in tests.
 export const CHAPTERS: readonly (readonly LevelData[])[] = [
@@ -36,10 +37,17 @@ export const FIRST_LEVEL: LevelData = ALL_LEVELS[0]!;
  */
 export const DEV_LEVELS: readonly LevelData[] = [devSpecials, devHold, devSurvive, devCitadel, devThree, devDragon, devPass].map(loadLevel);
 
+/**
+ * Performance stress level (ARCHITECTURE.md «Производительность»): 20 large nodes with level 3 barracks. In dev,
+ * ?level=dev_stress runs the stress driver (core/dev/stress.ts) instead of the AI: ~600 units on the field.
+ * Not a playable level, so it is not in DEV_LEVELS (their AI-vs-AI test).
+ */
+export const STRESS_LEVEL: LevelData = loadLevel(devStress);
+
 export const TUTORIALS: Readonly<Record<string, TutorialScript>> = tutorials as Record<string, TutorialScript>;
 
 export function getLevel(id: string): LevelData | undefined {
-  return ALL_LEVELS.find((l) => l.id === id) ?? DEV_LEVELS.find((l) => l.id === id);
+  return ALL_LEVELS.find((l) => l.id === id) ?? DEV_LEVELS.find((l) => l.id === id) ?? (id === STRESS_LEVEL.id ? STRESS_LEVEL : undefined);
 }
 
 /** The level after `id` in play order, or null after the last one. */

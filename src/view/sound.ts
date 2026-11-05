@@ -5,7 +5,7 @@
 import { SFX } from '../config/game';
 import { audioContext, audioUrl, isAudioSuspended, loadBuffer, resumeAudio, setAudioSuspended } from './audioContext';
 
-export type SfxId = 'send' | 'capture' | 'lost' | 'build' | 'fireball' | 'victory' | 'defeat' | 'click';
+export type SfxId = 'send' | 'capture' | 'lost' | 'build' | 'fireball' | 'victory' | 'defeat' | 'click' | 'clash';
 
 type Wave = OscillatorType;
 
@@ -23,6 +23,8 @@ interface Note {
 /** Each effect is a few short notes; `noise` adds a filtered noise burst (impacts). */
 const EFFECTS: Record<SfxId, { notes: Note[]; noise?: { dur: number; gain: number; cutoff: number } }> = {
   click: { notes: [{ at: 0, freq: 880, to: 660, dur: 0.05, wave: 'square', gain: 0.12 }] },
+  // Two units touching on a road (rate-limited by the battle view).
+  clash: { notes: [{ at: 0, freq: 260, to: 150, dur: 0.05, wave: 'square', gain: 0.06 }], noise: { dur: 0.04, gain: 0.12, cutoff: 2400 } },
   send: { notes: [{ at: 0, freq: 320, to: 520, dur: 0.12, wave: 'triangle', gain: 0.35 }] },
   build: {
     notes: [
