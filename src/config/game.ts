@@ -515,8 +515,11 @@ export const MENU_BANNER = {
   /** Edges are polylines of this many segments; the tip hangs this far below the cloth. */
   segments: 12,
   tipH: 30,
-  /** sway(k) = sin(t * (speed + impSpeed * imp) + phase - lag * k) * (amp + impAmp * imp) * k */
-  sway: { speed: 1.8, impSpeed: 3, lag: 2.3, amp: 3, impAmp: 9 },
+  /**
+   * sway(k) = sin(clock + phase - lag * k) * (amp + impAmp * imp) * k, where the clock runs at speed + impSpeed * imp
+   * radians per second (a press swings the banner a bit harder and faster, then it calms down).
+   */
+  sway: { speed: 1.8, impSpeed: 2, lag: 2.3, amp: 3, impAmp: 6 },
   phase: { map: 1.7, play: 0, up: 3.1 },
   outline: 3,
   trimInset: 9,
@@ -534,7 +537,7 @@ export const MENU_BANNER = {
   /** The medallion and the labels follow the cloth at these shares of its length. */
   medalSway: 0.45,
   medalShine: { x: -0.32, y: -0.48, rx: 0.36, ry: 0.16, angle: -0.35, alpha: 0.3 },
-  medalRing: { inset: 5, width: 1.5, dash: 3, gap: 4, shade: -0.45, shadowY: 2, shadowShade: -0.35 },
+  medalRing: { inset: 5, width: 1.5, dash: 3, gap: 4, shade: -0.45, rimShade: -0.35 },
   iconScale: 1.1,
   /** Locked banner (TUTORIAL.md T-3): cloth and trim darkened, medallion dimmed with a lock on a light disc. */
   locked: { shade: -0.55, medalDim: 0.55, lockDisc: 0.55, lockSize: 0.62, labelAlpha: 0.7 },
