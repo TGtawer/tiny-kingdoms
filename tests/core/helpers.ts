@@ -1,7 +1,8 @@
 import type { LevelData, LevelNode } from '../../src/core/level/schema';
-import { step } from '../../src/core/sim/tick';
+import { step, type TickEvent } from '../../src/core/sim/tick';
 import type { Command } from '../../src/core/sim/commands';
-import { createWorld, type World, type WorldOptions } from '../../src/core/sim/World';
+import { buildRoute, spawnUnit } from '../../src/core/sim/units';
+import { createWorld, type Owner, type UnitState, type World, type WorldOptions } from '../../src/core/sim/World';
 
 export function node(id: string, x: number, y: number, extra: Partial<LevelNode> = {}): LevelNode {
   return {
@@ -68,4 +69,28 @@ export function freezeEconomy(world: World): World {
     side.modifiers.goldIncomeMult = 0;
   }
   return world;
+}
+
+/** Units of `owner` on the field. */
+export function unitsOf(world: World, owner: Owner): UnitState[] {
+  return world.units.filter((u) => u.owner === owner);
+}
+
+/** Steps until nothing is on the field or in a stream (or `maxTicks`); returns all events. */
+export function drain(world: World, maxTicks = 600): TickEvent[] {
+  const events: TickEvent[] = [];
+  for (let i = 0; i < maxTicks && !world.winner && (world.units.length > 0 || world.streams.length > 0); i++) {
+    events.push(...step(world));
+  }
+  return events;
+}
+
+/** Puts a unit on the road directly (tests of clashes and arrivals): `progress` along the first segment. */
+export function placeUnit(world: World, owner: Owner, path: string[], progress: number): UnitState {
+  return spawnUnit(world, owner, buildRoute(world, path), progress);
+}
+
+/** Events of one type. */
+export function eventsOf<T extends TickEvent['type']>(events: readonly TickEvent[], type: T): Extract<TickEvent, { type: T }>[] {
+  return events.filter((e): e is Extract<TickEvent, { type: T }> => e.type === type);
 }

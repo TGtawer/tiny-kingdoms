@@ -4,7 +4,7 @@ import { blockingNode } from '../../../src/core/sim/pathfinding';
 import { previewAttack } from '../../../src/core/sim/preview';
 import { step } from '../../../src/core/sim/tick';
 import { createWorld, ownedShare } from '../../../src/core/sim/World';
-import { freezeEconomy, level, lineWorld, node, run } from '../helpers';
+import { drain, freezeEconomy, level, lineWorld, node } from '../helpers';
 
 describe('previewAttack', () => {
   it('sums swipe amounts and predicts a win against a weaker garrison', () => {
@@ -28,7 +28,7 @@ describe('previewAttack', () => {
     expect(previewAttack(world, 'player', ['P'], 'swipe', 'E')).toEqual({ sent: 0, defenders: 10, wins: false });
   });
 
-  it('applies tower damage to each arriving army', () => {
+  it('counts tower shots roughly: the shot in reserve plus rate × release time of the longest stream', () => {
     const world = createWorld(
       level(
         [
@@ -42,17 +42,19 @@ describe('previewAttack', () => {
         ],
       ),
     );
-    // Each army of 7 loses 4 to the tower: 3 + 3 = 6 > 4.
+    // 14 units, streams of 7 leave in 1.4 s: the tower takes 1 + 1 = 2; 12 > 4 defenders.
     expect(previewAttack(world, 'player', ['A', 'B'], 'swipe', 'T')).toEqual({ sent: 14, defenders: 4, wins: true });
-    // A single army: 7 - 4 = 3 < 4.
+    // A single stream of 7: 7 - 2 = 5 > 4 still wins; with 5 defenders it does not.
+    expect(previewAttack(world, 'player', ['A'], 'swipe', 'T').wins).toBe(true);
+    world.nodes.T!.troops = 5;
     expect(previewAttack(world, 'player', ['A'], 'swipe', 'T').wins).toBe(false);
   });
 
-  it('takes unit strength into account', () => {
-    const world = lineWorld({ P: { troops: 10 }, N: { troops: 6 } });
-    expect(previewAttack(world, 'player', ['P'], 'pull', 'N').wins).toBe(false);
-    world.sides.player.modifiers.unitStrengthMult = 1.5;
-    expect(previewAttack(world, 'player', ['P'], 'pull', 'N').wins).toBe(true);
+  it('1 unit = 1 unit: the capture takes one more unit than the visible garrison', () => {
+    const world = lineWorld({ P: { troops: 10 }, N: { troops: 6.9 } });
+    expect(previewAttack(world, 'player', ['P'], 'swipe', 'N').wins).toBe(true);
+    world.nodes.N!.troops = 7;
+    expect(previewAttack(world, 'player', ['P'], 'swipe', 'N').wins).toBe(false);
   });
 
   it('an own target is a reinforcement', () => {
@@ -60,11 +62,11 @@ describe('previewAttack', () => {
     expect(previewAttack(world, 'player', ['P'], 'swipe', 'N')).toEqual({ sent: 7, defenders: 0, wins: true });
   });
 
-  it('matches the size of the army that actually leaves', () => {
+  it('matches the size of the stream that actually leaves', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 17 } }));
     const preview = previewAttack(world, 'player', ['P'], 'swipe', 'N');
     step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N', mode: 'swipe' }]);
-    expect(world.armies[0]!.count).toBe(preview.sent);
+    expect(world.streams[0]!.left + world.units.length).toBe(preview.sent);
     expect(preview.sent).toBe(sendAmount(17, 'swipe'));
   });
 
@@ -72,8 +74,9 @@ describe('previewAttack', () => {
     for (const garrison of [3, 6, 7, 8, 12]) {
       const world = freezeEconomy(lineWorld({ P: { troops: 10 }, N: { troops: garrison } }));
       const preview = previewAttack(world, 'player', ['P'], 'swipe', 'N');
-      run(world, 60, [{ type: 'send', side: 'player', from: 'P', to: 'N', mode: 'swipe' }]);
-      expect(world.nodes.N!.owner === 'player').toBe(preview.wins);
+      step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N', mode: 'swipe' }]);
+      drain(world);
+      expect(world.nodes.N!.owner === 'player', `garrison ${garrison}`).toBe(preview.wins);
     }
   });
 });

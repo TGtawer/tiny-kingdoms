@@ -1,5 +1,5 @@
-import { BONUS_IDS, type Progress } from './Progress';
-import { bonusCost } from './upgrades';
+import type { Progress } from './Progress';
+import { bonusCost, OFFERED_BONUS_IDS } from './upgrades';
 
 /** What the defeat tip needs to know about the lost battle. */
 export interface DefeatSummary {
@@ -21,7 +21,7 @@ export type DefeatTip = 'barracks' | 'mine' | 'upgrades';
 
 /** Whether any permanent bonus can be bought with the crystals the player has. */
 export function canBuyUpgrade(progress: Progress): boolean {
-  return BONUS_IDS.some((id) => {
+  return OFFERED_BONUS_IDS.some((id) => {
     const cost = bonusCost(progress.bonuses[id]);
     return cost !== null && progress.crystals >= cost;
   });

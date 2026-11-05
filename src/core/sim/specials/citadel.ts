@@ -1,5 +1,6 @@
 import { CITADEL, TICK_MS } from '../../../config/balance';
 import { armyPath, routeLength } from '../pathfinding';
+import { startStream } from '../stream';
 import type { World } from '../World';
 
 /** Citadel boss state (chapter 2, level 10): the enemy's fortress capital that sends extra squads. */
@@ -13,7 +14,7 @@ export interface CitadelWave {
   type: 'citadelWave';
   from: string;
   to: string;
-  armyId: string;
+  streamId: number;
   count: number;
 }
 
@@ -24,7 +25,7 @@ export function createCitadel(nodeId: string): CitadelState {
 }
 
 /**
- * Every CITADEL.waveEveryMs, while the citadel belongs to the enemy, a squad of CITADEL.waveSize troops
+ * Every CITADEL.waveEveryMs, while the citadel belongs to the enemy, a stream of CITADEL.waveSize units
  * (on top of the garrison) marches to the nearest player node it has a route to.
  */
 export function stepCitadel(world: World, citadel: CitadelState): CitadelWave[] {
@@ -43,7 +44,6 @@ export function stepCitadel(world: World, citadel: CitadelState): CitadelWave[] 
   }
   if (!best) return [];
 
-  const armyId = `a${world.nextArmyId++}`;
-  world.armies.push({ id: armyId, owner: 'enemy', count: CITADEL.waveSize, path: best.path, segment: 0, progress: 0, targetId: best.id });
-  return [{ type: 'citadelWave', from: node.id, to: best.id, armyId, count: CITADEL.waveSize }];
+  const stream = startStream(world, 'enemy', node.id, best.path, CITADEL.waveSize, true);
+  return [{ type: 'citadelWave', from: node.id, to: best.id, streamId: stream.id, count: CITADEL.waveSize }];
 }

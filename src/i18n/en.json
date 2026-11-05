@@ -59,7 +59,7 @@
   "building.tower.desc": "Hits attackers",
   "build.next.mine": "+{gold} gold/s",
   "build.next.barracks": "×{mult} troops, +{cap} room",
-  "build.next.tower": "Damage {damage}",
+  "build.next.tower": "{shots} shots/s",
   "build.needMore": "{n} more",
   "hud.goldRate": "+{rate}/s",
   "pause.soundOn": "Sound: on",
@@ -121,7 +121,7 @@
   "tut.mage": "An evil mage! Take his tower",
   "tut.mageFireball": "Fireball! Move your troops out",
   "boss.mage": "Take the mage tower · fire in {sec} s",
-  "tut.tower": "The tower hits every enemy army",
+  "tut.tower": "The tower shoots at enemies",
   "spell.fireball.about": "Burns {share}% of the troops in an enemy node",
   "spell.reinforcement.about": "Instantly adds {troops} troops to your node",
   "spell.shield.about": "Your node is safe from the enemy for {sec} s"

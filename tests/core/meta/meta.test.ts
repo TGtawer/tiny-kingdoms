@@ -21,6 +21,7 @@ import {
   bonusCost,
   buyBonus,
   buySpellUpgrade,
+  OFFERED_BONUS_IDS,
   modifiersFrom,
   playerSetupFrom,
   spellUpgradeCost,
@@ -173,17 +174,27 @@ describe('permanent bonuses', () => {
     expect(buyBonus(p, 'goldIncome')).toBe('maxLevel');
   });
 
+  it('unit strength is not sold any more (1 unit = 1 unit), its level stays in the save', () => {
+    const p = defaultProgress();
+    p.crystals = 1e6;
+    p.bonuses.unitStrength = 3;
+    expect(OFFERED_BONUS_IDS).not.toContain('unitStrength');
+    expect(buyBonus(p, 'unitStrength')).toBe('locked');
+    expect(p.bonuses.unitStrength).toBe(3);
+  });
+
   it('bonuses turn into battle modifiers', () => {
     const p = defaultProgress();
     p.bonuses = { startArmy: 3, troopProduction: 5, goldIncome: 2, unitStrength: 4 };
     const m = modifiersFrom(p);
     expect(m.troopProductionMult).toBeCloseTo(1.2);
     expect(m.goldIncomeMult).toBeCloseTo(1.1);
-    expect(m.unitStrengthMult).toBeCloseTo(1.12);
+    // Unit strength is kept in the save but has no battle effect (GDD 4.3).
+    expect(m).not.toHaveProperty('unitStrengthMult');
 
     const world = createWorld(L[0]!, { player: playerSetupFrom(p) });
     const start = L[0]!.nodes.find((n) => n.owner === 'player')!;
-    expect(world.nodes[start.id]!.troops).toBe(start.troops + 6);
+    expect(world.nodes[start.id]!.troops).toBe(start.troops + 3 * BONUSES.perLevel.startArmy);
   });
 });
 
@@ -222,11 +233,11 @@ describe('spell upgrades', () => {
     expect(spellCooldownMs('fireball', m)).toBe((SPELLS.fireball.cooldownSec - 2) * 1000);
   });
 
-  it('reinforcement: +3 troops and −1 s cooldown per level', () => {
+  it('reinforcement: +2 troops and −1 s cooldown per level', () => {
     const p = defaultProgress();
     p.spellUpgrades.reinforcement = 3;
     const m = modifiersFrom(p);
-    expect(m.spells.reinforcement.extraTroops).toBe(9);
+    expect(m.spells.reinforcement.extraTroops).toBe(3 * SPELL_UPGRADES.perLevel.reinforcement.troops);
     expect(spellCooldownMs('reinforcement', m)).toBe((SPELLS.reinforcement.cooldownSec - 3) * 1000);
   });
 });

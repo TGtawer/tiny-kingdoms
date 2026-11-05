@@ -1,7 +1,12 @@
 import { ARMY, BUILDINGS, type BuildingType, type SpellId } from '../../config/balance';
 import { armyPath } from './pathfinding';
 import { fireballKill, reinforcementTroops, shieldTicks, spellCooldownMs, spellCost } from './spells';
-import { isRival, type ArmyState, type BuildingLevel, type Side, type World } from './World';
+import { markAttacked } from './combat';
+import { startStream } from './stream';
+import { visibleTroops } from './troops';
+import { isAttacked, isRival, type BuildingLevel, type Side, type StreamState, type World } from './World';
+
+export { visibleTroops };
 
 /**
  * How many troops an order takes (GDD 3.5): `swipe` sends 75% (the only player gesture);
@@ -47,6 +52,7 @@ export type RejectReason =
   | 'notOwner'
   | 'sameNode'
   | 'notEnoughTroops'
+  | 'underAttack'
   | 'noPath'
   | 'occupied'
   | 'noGoldVein'
@@ -57,11 +63,6 @@ export type RejectReason =
   | 'spellLocked'
   | 'cooldown'
   | 'invalidTarget';
-
-/** Whole troops in a node (what the player sees). The epsilon absorbs float noise from production. */
-export function visibleTroops(troops: number): number {
-  return Math.floor(troops + 1e-9);
-}
 
 /**
  * Troops an order takes from a node: 75% (swipe) or 50% (AI pull) of the visible troops, rounded down,
@@ -90,6 +91,8 @@ export function validate(world: World, cmd: Command): RejectReason | null {
       if (!from || !world.nodes[cmd.to]) return 'unknownNode';
       if (from.owner !== cmd.side) return 'notOwner';
       if (cmd.from === cmd.to) return 'sameNode';
+      // GDD 3.5, 3.6: no sending out of a node that is being attacked.
+      if (isAttacked(world, from)) return 'underAttack';
       if (sendAmount(from.troops, cmd.mode) === 0) return 'notEnoughTroops';
       if (!armyPath(world, cmd.side, cmd.from, cmd.to)) return 'noPath';
       return null;
@@ -129,26 +132,19 @@ export function validate(world: World, cmd: Command): RejectReason | null {
   }
 }
 
-/** Applies a command that already passed `validate`. Returns the created army for sends. */
-export function apply(world: World, cmd: Command): ArmyState | null {
+/**
+ * Applies a command that already passed `validate`. Returns the created stream for sends: 75% (or 50% for the AI
+ * pull) of the garrison now, leaving one by one (GDD 3.6); a node's unfinished stream is replaced.
+ */
+export function apply(world: World, cmd: Command): StreamState | null {
   const side = world.sides[cmd.side];
 
   switch (cmd.type) {
     case 'send': {
       const from = world.nodes[cmd.from]!;
+      // The count is fixed now; troops leave the garrison as the units go.
       const count = sendAmount(from.troops, cmd.mode);
-      from.troops -= count;
-      const army: ArmyState = {
-        id: `a${world.nextArmyId++}`,
-        owner: cmd.side,
-        count,
-        path: armyPath(world, cmd.side, cmd.from, cmd.to)!,
-        segment: 0,
-        progress: 0,
-        targetId: cmd.to,
-      };
-      world.armies.push(army);
-      return army;
+      return startStream(world, cmd.side, cmd.from, armyPath(world, cmd.side, cmd.from, cmd.to)!, count);
     }
     case 'build': {
       side.gold -= buildCost(0)!;
@@ -167,6 +163,8 @@ export function apply(world: World, cmd: Command): ArmyState | null {
       side.spellCooldowns[cmd.spell] = spellCooldownMs(cmd.spell, side.modifiers);
       if (cmd.spell === 'fireball') {
         node.troops -= fireballKill(node.troops, side.modifiers);
+        // Damage to the garrison is an attack (GDD 3.6, 3.8): the node's streams stop, its production waits.
+        markAttacked(world, node);
       } else if (cmd.spell === 'reinforcement') {
         node.troops += reinforcementTroops(side.modifiers);
       } else {

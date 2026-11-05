@@ -1,6 +1,7 @@
-import { BUILDINGS, SPECIAL_NODES } from '../../config/balance';
+import { BUILDINGS, SPECIAL_NODES, STREAM } from '../../config/balance';
 import { captureNode } from './capture';
-import { defenseStrength, strengthOf, type ArmyState, type NodeState, type World } from './World';
+import { dropForeignStreams } from './stream';
+import { defenseMult, nowMs, refreshLaneEnds, type NodeState, type Owner, type World } from './World';
 
 /** Below this, a remainder counts as zero (guards against float noise). */
 const EPSILON = 1e-9;
@@ -8,66 +9,85 @@ const EPSILON = 1e-9;
 export type ArrivalOutcome = 'reinforced' | 'destroyedByTower' | 'repelled' | 'captured' | 'shielded';
 
 export interface ArrivalResult {
-  armyId: string;
+  unitId: number;
+  owner: Owner;
   nodeId: string;
+  /** The node the unit came from (the start of its last road), for effects. */
+  fromId: string;
   outcome: ArrivalOutcome;
-  towerDamage: number;
   /** Gold the capturer got from a chest (0 otherwise). */
   chestGold: number;
 }
 
-export function towerDamage(node: NodeState): number {
+/** Tower shots per second of the node (0 without a tower). */
+export function towerRate(node: NodeState): number {
   if (node.building?.type !== 'tower') return 0;
-  return BUILDINGS.tower.damage[node.building.level - 1]!;
+  return BUILDINGS.tower.shotsPerSec[node.building.level - 1]!;
 }
 
 /**
- * Mutual 1:1 destruction scaled by unit strength.
- * Attackers win only if some of them survive; a tie leaves the defenders at zero.
+ * Fires the tower at an arriving hostile unit if a shot is ready (GDD 3.6). One shot is held in reserve: a tower that
+ * waited fires at once, then reloads for 1 / rate s. A shot that became ready less than one reload ago keeps its
+ * phase, so a steady stream loses `rate` units per second even though units arrive on whole ticks; never two shots
+ * in one moment.
  */
-export function resolveBattle(
-  attackers: number,
-  attackerStrength: number,
-  defenders: number,
-  defenderStrength: number,
-): { attackersLeft: number; defendersLeft: number } {
-  const attackPower = attackers * attackerStrength;
-  const defensePower = defenders * defenderStrength;
-  if (attackPower - defensePower > EPSILON) {
-    return { attackersLeft: (attackPower - defensePower) / attackerStrength, defendersLeft: 0 };
-  }
-  return { attackersLeft: 0, defendersLeft: Math.max(0, (defensePower - attackPower) / defenderStrength) };
+function towerShoots(world: World, node: NodeState): boolean {
+  const rate = towerRate(node);
+  if (rate <= 0) return false;
+  const now = nowMs(world);
+  if (node.towerReadyAtMs > now) return false;
+  const reload = 1000 / rate;
+  const base = node.towerReadyAtMs > now - reload ? node.towerReadyAtMs : now;
+  node.towerReadyAtMs = Math.max(base + reload, now + 1);
+  return true;
 }
 
-/** Applies an army arriving at its target node. Uses the node's owner at the moment of arrival. */
-export function arrive(world: World, army: ArmyState): ArrivalResult {
-  const node = world.nodes[army.targetId]!;
-  const base = { armyId: army.id, nodeId: node.id, chestGold: 0 };
+/**
+ * How many attackers in a row the garrison stops by 1:1 trades (fortress defenders take two each), after which the
+ * next attacker captures. Tower shots are not included.
+ */
+export function defenseHits(node: NodeState): number {
+  return Math.floor(node.troops * defenseMult(node) + EPSILON);
+}
 
-  if (node.owner === army.owner) {
-    // Reinforcing may exceed capacity; production just stops.
-    node.troops += army.count;
-    return { ...base, outcome: 'reinforced', towerDamage: 0 };
+/** Marks the node attacked (GDD 3.6): its garrison took damage — a hostile unit, a fireball, the mage, the dragon. */
+export function markAttacked(world: World, node: NodeState): void {
+  node.attackedUntilMs = nowMs(world) + STREAM.attackWindowMs;
+}
+
+/**
+ * One unit of `owner` reaches `node` (GDD 3.6). Own node: it joins the garrison (over capacity is fine).
+ * Foreign node: a shield breaks it; else a ready tower shot kills it; else it trades 1:1 with a defender
+ * (a fortress defender withstands two); with less than one defender left the node is captured and the unit is its
+ * garrison. Every hostile arrival except on a shield marks the node attacked for STREAM.attackWindowMs.
+ */
+export function arriveUnit(world: World, unitId: number, owner: Owner, node: NodeState, fromId = node.id): ArrivalResult {
+  const base = { unitId, owner, nodeId: node.id, fromId, chestGold: 0 };
+
+  if (node.owner === owner) {
+    node.troops += 1;
+    return { ...base, outcome: 'reinforced' };
+  }
+  // TODO(design): GDD 3.8 — how the shield works with streams is TBD; for now a shielded node is not attacked.
+  if (node.shieldTicks > 0) return { ...base, outcome: 'shielded' };
+
+  markAttacked(world, node);
+  if (towerShoots(world, node)) return { ...base, outcome: 'destroyedByTower' };
+
+  const perAttacker = 1 / defenseMult(node);
+  if (node.troops + EPSILON >= perAttacker) {
+    node.troops = Math.max(0, node.troops - perAttacker);
+    return { ...base, outcome: 'repelled' };
   }
 
-  // A shielded node takes no harm: the hostile army breaks on the shield.
-  if (node.shieldTicks > 0) return { ...base, outcome: 'shielded', towerDamage: 0 };
-
-  const damage = Math.min(army.count, towerDamage(node));
-  const attackers = army.count - damage;
-  if (attackers <= EPSILON) {
-    return { ...base, outcome: 'destroyedByTower', towerDamage: damage };
-  }
-
-  const attackerStrength = strengthOf(world, army.owner);
-  const { attackersLeft, defendersLeft } = resolveBattle(attackers, attackerStrength, node.troops, defenseStrength(world, node));
-
-  if (attackersLeft > 0) {
-    const chest = node.kind === 'chest' && army.owner !== 'neutral' ? SPECIAL_NODES.chest.gold : 0;
-    captureNode(node, army.owner, attackersLeft);
-    if (chest > 0 && army.owner !== 'neutral') world.sides[army.owner].gold += chest;
-    return { ...base, outcome: 'captured', towerDamage: damage, chestGold: chest };
-  }
-  node.troops = defendersLeft;
-  return { ...base, outcome: 'repelled', towerDamage: damage };
+  const chest = node.kind === 'chest' && owner !== 'neutral' ? SPECIAL_NODES.chest.gold : 0;
+  const size = node.size;
+  captureNode(node, owner, 1);
+  dropForeignStreams(world, node.id);
+  // A chest becomes a small node: units now appear and arrive closer to its center.
+  if (node.size !== size) refreshLaneEnds(world, node.id);
+  // The capturer's node is not under its own attack.
+  node.attackedUntilMs = 0;
+  if (chest > 0 && owner !== 'neutral') world.sides[owner].gold += chest;
+  return { ...base, outcome: 'captured', chestGold: chest };
 }

@@ -4,8 +4,8 @@ import { aiParamsFromLevel, aiStep, createAi, recentDrop, type AiState } from '.
 import { validateLevel } from '../../../src/core/level/schema';
 import type { Command } from '../../../src/core/sim/commands';
 import { step } from '../../../src/core/sim/tick';
-import { createWorld, type World } from '../../../src/core/sim/World';
-import { level, lineWorld, node } from '../helpers';
+import { createWorld, reindexRoads, type World } from '../../../src/core/sim/World';
+import { level, lineWorld, node, placeUnit } from '../helpers';
 
 const leaderAi = (leader: LeaderId): AiState => createAi('enemy', aiParamsFromLevel({ productionMult: 1, startGold: 0, leader }));
 
@@ -110,6 +110,7 @@ describe('king (defender)', () => {
     // F: an empty enemy node on the border (next to the neutral N).
     world.nodes.F = { ...world.nodes.R!, id: 'F', x: 0.55, y: 0.8, troops: 5 };
     world.roads.push(['N', 'F'], ['F', 'E']);
+    reindexRoads(world);
     world.tick = 10;
     world.nodes.E!.building = { type: 'mine', level: 1 };
     world.sides.enemy.gold = BUILDINGS.cost[0];
@@ -123,8 +124,8 @@ describe('king (defender)', () => {
     world.tick = 10;
     const ai = leaderAi('king');
     expect(decide(structuredClone(world), ai).some((c) => c.type === 'send' && c.to === 'N')).toBe(false);
-    // A player army heads for E: the king answers without the extra margin.
-    world.armies.push({ id: 'a', owner: 'player', count: 1, path: ['N', 'E'], segment: 0, progress: 0.1, targetId: 'E' });
+    // A player unit heads for E: the king answers without the extra margin.
+    placeUnit(world, 'player', ['N', 'E'], 0.1);
     expect(decide(world, ai).some((c) => c.type === 'send' && c.to === 'N')).toBe(true);
   });
 });

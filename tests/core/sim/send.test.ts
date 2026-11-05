@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ARMY } from '../../../src/config/balance';
+import { ARMY, STREAM } from '../../../src/config/balance';
 import { sendAmount, validate, type SendArmy } from '../../../src/core/sim/commands';
 import { step } from '../../../src/core/sim/tick';
 import { createWorld } from '../../../src/core/sim/World';
-import { freezeEconomy, level, lineWorld, node, run } from '../helpers';
+import { drain, eventsOf, freezeEconomy, level, lineWorld, node, run } from '../helpers';
 
 /** Most mechanics tests use the AI's `pull` mode (50%) so the numbers stay small and easy to follow. */
 const send = (from: string, to: string, side: 'player' | 'enemy' = 'player'): SendArmy => ({
@@ -49,20 +49,22 @@ describe('sendAmount for a swipe (75%)', () => {
   });
 });
 
-describe('send army', () => {
+describe('send (a stream order)', () => {
   it('a swipe order takes 75% of the troops', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 20 } }));
-    step(world, [{ ...send('P', 'N'), mode: 'swipe' }]);
-    expect(world.armies[0]!.count).toBe(15);
+    const events = step(world, [{ ...send('P', 'N'), mode: 'swipe' }]);
+    expect(events[0]).toMatchObject({ type: 'applied', streamId: 1 });
+    drain(world);
     expect(world.nodes.P!.troops).toBe(5);
+    expect(world.nodes.N).toMatchObject({ owner: 'player', troops: 15 - 5 });
   });
 
   it('an AI pull sends half of the node troops and leaves the rest', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 11 } }));
-    const events = step(world, [send('P', 'N')]);
-    expect(events[0]).toMatchObject({ type: 'applied', armyId: 'a1' });
+    step(world, [send('P', 'N')]);
+    expect(world.streams[0]).toMatchObject({ owner: 'player', route: { path: ['P', 'N'] }, left: 4 });
+    drain(world);
     expect(world.nodes.P!.troops).toBe(6);
-    expect(world.armies[0]).toMatchObject({ owner: 'player', count: 5, path: ['P', 'N'], targetId: 'N' });
   });
 
   it('cannot send from a node with 1 troop', () => {
@@ -88,23 +90,28 @@ describe('send army', () => {
     const world = lineWorld({ P: { troops: 1 } });
     const events = step(world, [send('P', 'N')]);
     expect(events[0]).toMatchObject({ type: 'rejected', reason: 'notEnoughTroops' });
-    expect(world.armies).toHaveLength(0);
+    expect(world.streams).toHaveLength(0);
+    expect(world.units).toHaveLength(0);
   });
 
-  it('routes through intermediate nodes and arrives after distance / speed', () => {
+  it('routes through own nodes; the first unit walks the visible part of each road at ARMY.speed', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 40 }, N: { owner: 'player', troops: 0 }, E: { troops: 1 } }));
-    // P -> E: path P, N, E with length 0.8. Make E reachable but keep it enemy-owned.
-    const ticksNeeded = Math.ceil(0.8 / ARMY.speed / 0.1);
+    // P -> E: path P, N, E. A unit walks from the edge of one circle to the edge of the next (STREAM.edgeDist).
+    const walk = (2 * (0.4 - 2 * STREAM.edgeDist.small)) / ARMY.speed;
+    const ticksNeeded = Math.ceil(walk / 0.1);
     step(world, [send('P', 'E')]);
-    expect(world.armies[0]!.path).toEqual(['P', 'N', 'E']);
-    run(world, ticksNeeded - 2);
-    expect(world.armies).toHaveLength(1);
-    // Passing through own node N does not reinforce it.
+    expect(world.streams[0]!.route.path).toEqual(['P', 'N', 'E']);
+    const arrivals = [];
+    for (let i = 0; i < ticksNeeded - 1; i++) arrivals.push(...eventsOf(step(world), 'arrived'));
+    expect(arrivals).toHaveLength(0);
+    // Passing through own node N leaves nothing there (transit goes through the garrison and out again).
     expect(world.nodes.N!.troops).toBe(0);
-    run(world, 1);
-    expect(world.armies).toHaveLength(0);
+    for (let i = 0; i < 2; i++) arrivals.push(...eventsOf(step(world), 'arrived'));
+    expect(arrivals).toMatchObject([{ nodeId: 'E', outcome: 'repelled' }]);
+    drain(world);
+    // The second unit captures E, the enemy's last node: the battle is over.
     expect(world.nodes.E!.owner).toBe('player');
-    expect(world.nodes.E!.troops).toBe(19);
+    expect(world.winner).toBe('player');
   });
 
   it('cannot pass through neutral or enemy nodes', () => {
@@ -117,29 +124,20 @@ describe('send army', () => {
     expect(validate(world, send('P', 'E'))).toBe('noPath');
   });
 
-  it('if a stop on the way is captured, the army attacks it instead', () => {
+  it('if a stop on the way is captured, each unit attacks it instead', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 40 }, N: { owner: 'player', troops: 0 }, E: { troops: 1 } }));
-    run(world, 10, [send('P', 'E')]); // army of 20 is on the P–N road
+    run(world, 10, [send('P', 'E')]); // the column is on the P–N road
     world.nodes.N!.owner = 'enemy';
     world.nodes.N!.troops = 5;
-    run(world, 30);
-    expect(world.armies).toHaveLength(0);
-    expect(world.nodes.N).toMatchObject({ owner: 'player', troops: 15 });
-    expect(world.nodes.E).toMatchObject({ owner: 'enemy', troops: 1 });
+    const first = eventsOf(drain(world), 'arrived')[0];
+    expect(first).toMatchObject({ nodeId: 'N', owner: 'player', outcome: 'repelled' });
+    expect(world.nodes.N!.owner).toBe('player');
   });
 
-  it('several nodes can send in one tick (multi-node swipe)', () => {
-    const world = freezeEconomy(lineWorld({ N: { owner: 'player', troops: 8 } }));
-    step(world, [
-      { ...send('P', 'E'), mode: 'swipe' },
-      { ...send('N', 'E'), mode: 'swipe' },
-    ]);
-    expect(world.armies.map((a) => a.count)).toEqual([7, 6]);
-  });
-
-  it('own target: army joins the garrison, even above capacity', () => {
+  it('own target: units join the garrison, even above capacity', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 40 }, N: { owner: 'player', troops: 19 } }));
-    run(world, 40, [send('P', 'N')]);
+    step(world, [send('P', 'N')]);
+    drain(world);
     expect(world.nodes.N!.troops).toBe(39);
   });
 });

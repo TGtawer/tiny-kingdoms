@@ -1,4 +1,5 @@
 import { DRAGON, TICK_MS } from '../../../config/balance';
+import { markAttacked } from '../combat';
 import { random, type NodeState, type World } from '../World';
 import { biggestGarrison, stepStrikeTimer, type StrikeTimer } from './strikeTimer';
 
@@ -37,8 +38,11 @@ export function stepDragon(world: World, dragon: DragonState): DragonEvent[] {
   const { warned, struck } = stepStrikeTimer(world, dragon, EVERY_TICKS, WARN_TICKS, () => dragonTarget(world));
   if (warned) events.push({ type: 'dragonWarn', nodeId: warned.id, strikeTick });
   if (struck) {
-    const killed = struck.shieldTicks > 0 ? 0 : struck.troops * DRAGON.burnShare;
+    const shielded = struck.shieldTicks > 0;
+    const killed = shielded ? 0 : struck.troops * DRAGON.burnShare;
     struck.troops -= killed;
+    // A hit on the garrison is an attack (GDD 3.6, 3.8); a shield takes it without one.
+    if (!shielded) markAttacked(world, struck);
     events.push({ type: 'dragonStrike', nodeId: struck.id, killed });
   }
   return events;

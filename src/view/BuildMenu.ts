@@ -199,6 +199,6 @@ function nextLevelEffect(type: BuildingType, level: number): string {
         cap: BUILDINGS.barracks.extraCapacity[i] ?? 0,
       });
     case 'tower':
-      return t('build.next.tower', { damage: BUILDINGS.tower.damage[i] ?? 0 });
+      return t('build.next.tower', { shots: BUILDINGS.tower.shotsPerSec[i] ?? 0 });
   }
 }

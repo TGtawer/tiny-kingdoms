@@ -5,7 +5,7 @@
   "playerStartGold": 20,
   "enemy": {
     "productionMult": 0.7,
-    "startGold": 40,
+    "startGold": 20,
     "leader": "baron"
   },
   "tutorial": "c01_l08",
@@ -16,7 +16,7 @@
       "y": 0.581,
       "size": "large",
       "owner": "player",
-      "troops": 20,
+      "troops": 10,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -27,7 +27,7 @@
       "y": 0.419,
       "size": "large",
       "owner": "enemy",
-      "troops": 45,
+      "troops": 24,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -38,7 +38,7 @@
       "y": 0.671,
       "size": "medium",
       "owner": "neutral",
-      "troops": 11,
+      "troops": 6,
       "hasGoldVein": false,
       "building": null
     },
@@ -48,7 +48,7 @@
       "y": 0.329,
       "size": "medium",
       "owner": "neutral",
-      "troops": 11,
+      "troops": 6,
       "hasGoldVein": false,
       "building": null
     },
@@ -58,7 +58,7 @@
       "y": 0.307,
       "size": "small",
       "owner": "neutral",
-      "troops": 7,
+      "troops": 4,
       "hasGoldVein": false,
       "building": null,
       "kind": "chest"
@@ -69,7 +69,7 @@
       "y": 0.693,
       "size": "small",
       "owner": "neutral",
-      "troops": 7,
+      "troops": 4,
       "hasGoldVein": false,
       "building": null
     },
@@ -79,7 +79,7 @@
       "y": 0.889,
       "size": "small",
       "owner": "neutral",
-      "troops": 6,
+      "troops": 3,
       "hasGoldVein": false,
       "building": null
     },
@@ -89,7 +89,7 @@
       "y": 0.111,
       "size": "small",
       "owner": "neutral",
-      "troops": 6,
+      "troops": 3,
       "hasGoldVein": false,
       "building": null
     }

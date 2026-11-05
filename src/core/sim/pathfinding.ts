@@ -1,8 +1,6 @@
-import { ARMY, SPECIAL_NODES } from '../../config/balance';
-import type { NodeState, Side, World } from './World';
+import { PORTAL_LENGTH, type NodeState, type Side, type World } from './World';
 
-/** Length of the invisible portal road, field units: the distance an army covers in portal.delayMs. */
-export const PORTAL_LENGTH = (ARMY.speed * SPECIAL_NODES.portal.delayMs) / 1000;
+export { PORTAL_LENGTH };
 
 export function isPortalLink(world: World, a: string, b: string): boolean {
   return world.portals.some(([p, q]) => (p === a && q === b) || (p === b && q === a));

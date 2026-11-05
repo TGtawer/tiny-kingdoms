@@ -81,16 +81,19 @@ export class FieldLayout implements ScreenLayout {
   }
 
   toScreen(x: number, y: number): Point {
+    return this.toScreenInto(x, y, { x: 0, y: 0 });
+  }
+
+  /** `toScreen` into an existing point (no allocation: units are placed every frame). */
+  toScreenInto(x: number, y: number, out: Point): Point {
     if (this.rotated) {
-      return {
-        x: this.originX + (y - this.minY + this.pad) * this.scale,
-        y: this.originY + (this.maxX + this.pad - x) * this.scale,
-      };
+      out.x = this.originX + (y - this.minY + this.pad) * this.scale;
+      out.y = this.originY + (this.maxX + this.pad - x) * this.scale;
+    } else {
+      out.x = this.originX + (x - this.minX + this.pad) * this.scale;
+      out.y = this.originY + (y - this.minY + this.pad) * this.scale;
     }
-    return {
-      x: this.originX + (x - this.minX + this.pad) * this.scale,
-      y: this.originY + (y - this.minY + this.pad) * this.scale,
-    };
+    return out;
   }
 
   nodeRadius(size: NodeSize): number {
