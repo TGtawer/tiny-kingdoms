@@ -53,7 +53,7 @@ export function modifiersFrom(progress: Progress): SideModifiers {
   const mods = defaultModifiers();
   mods.troopProductionMult = 1 + per.troopProduction * b.troopProduction;
   mods.goldIncomeMult = 1 + per.goldIncome * b.goldIncome;
-  mods.unitStrengthMult = 1 + per.unitStrength * b.unitStrength;
+  // The unit strength bonus stays in the save but does nothing: 1 unit = 1 unit (GDD 3.6, 4.3).
   mods.spells.fireball.killShareBonus = spell.fireball.damageShare * s.fireball;
   mods.spells.fireball.cooldownReductionSec = -spell.fireball.cooldownSec * s.fireball;
   mods.spells.reinforcement.extraTroops = spell.reinforcement.troops * s.reinforcement;

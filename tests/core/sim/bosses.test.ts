@@ -4,7 +4,7 @@ import { aiParamsFromLevel, aiStep, createAi } from '../../../src/core/ai/EnemyA
 import { validateLevel, type LevelData } from '../../../src/core/level/schema';
 import { dragonTarget } from '../../../src/core/sim/specials/dragon';
 import { step, type TickEvent } from '../../../src/core/sim/tick';
-import { createWorld } from '../../../src/core/sim/World';
+import { createWorld, reindexRoads } from '../../../src/core/sim/World';
 import { getLevel } from '../../../src/levels';
 import { freezeEconomy, level, node } from '../helpers';
 
@@ -79,6 +79,7 @@ describe('dragon', () => {
     world.nodes.E!.troops = 40;
     world.nodes.F = { ...world.nodes.E!, id: 'F', x: 0.9, y: 0.8, troops: 5 };
     world.roads.push(['E', 'F']);
+    reindexRoads(world);
     world.boss = { type: 'dragon', strikeTick: 999, targetId: 'E' };
     world.tick = 10;
     const ai = createAi('enemy', { thinkMs: 100, aggression: 0 });

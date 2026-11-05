@@ -103,8 +103,7 @@ describe('three sides', () => {
             if ((before === 'enemy' && after === 'enemy2') || (before === 'enemy2' && after === 'enemy')) enemiesFought++;
           }
           if (ev.type === 'clash') {
-            const sides = ev.armies.map((id) => world.armies.find((a) => a.id === id)?.owner);
-            if (sides.includes('enemy') && sides.includes('enemy2')) enemiesFought++;
+            if (ev.owners.includes('enemy') && ev.owners.includes('enemy2')) enemiesFought++;
           }
         }
         for (const n of Object.values(world.nodes)) owners.set(n.id, n.owner);

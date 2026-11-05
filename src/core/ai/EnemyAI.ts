@@ -1,9 +1,12 @@
-import { AI, ARMY, BUILDINGS, LEADERS, TICK_MS, type BuildingType, type LeaderId, type LeaderPreset } from '../../config/balance';
-import { towerDamage } from '../sim/combat';
+import { AI, ARMY, BUILDINGS, LEADERS, STREAM, TICK_MS, type BuildingType, type LeaderId, type LeaderPreset } from '../../config/balance';
+import { towerRate } from '../sim/combat';
 import { buildCost, sendAmount, validate, type Command, type SendMode } from '../sim/commands';
 import { nodeCapacity, troopRate } from '../sim/economy';
-import { armyPath, routeLength, segmentLength } from '../sim/pathfinding';
-import { defenseStrength, isRival, random, strengthOf, type NodeState, type Side, type World } from '../sim/World';
+import { armyPath, routeLength } from '../sim/pathfinding';
+import { towerKillsEstimate } from '../sim/preview';
+import { pendingTo } from '../sim/stream';
+import { unitTarget } from '../sim/units';
+import { defenseMult, isAttacked, isRival, random, type NodeState, type Owner, type Side, type World } from '../sim/World';
 import type { EnemyParams } from '../level/schema';
 import type { Goal } from '../sim/victory';
 
@@ -84,9 +87,22 @@ export function recentDrop(snapshots: ReadonlyArray<Record<string, number>>, nod
   return drop >= AI.weakenedMinDrop && drop >= max * AI.weakenedShare ? drop : 0;
 }
 
+const OWNERS: readonly Owner[] = ['player', 'enemy', 'enemy2', 'neutral'];
+
+/** Hostile units on the field heading to `nodeId` (incoming counters, no unit scan). */
+function hostileIncoming(world: World, side: Side, nodeId: string): number {
+  const incoming = world.incoming[nodeId]!;
+  let n = 0;
+  for (const owner of OWNERS) if (owner !== side) n += incoming[owner];
+  return n;
+}
+
 function observe(world: World, ai: AiState): void {
-  if (world.armies.some((a) => a.owner !== ai.side && world.nodes[a.targetId]?.owner === ai.side)) {
-    ai.lastAttackedTick = world.tick;
+  for (const node of Object.values(world.nodes)) {
+    if (node.owner === ai.side && hostileIncoming(world, ai.side, node.id) > 0) {
+      ai.lastAttackedTick = world.tick;
+      break;
+    }
   }
   if (world.tick % SNAPSHOT_TICKS !== 0) return;
   const snap: Record<string, number> = {};
@@ -156,14 +172,16 @@ function own(world: World, side: Side): NodeState[] {
 /**
  * Troops a node can still send in this decision (one send per node per decision).
  * Attacks and defense are swipes (75%) like the player's; pushing troops to the front is the AI-only
- * `pull` mode (50%), so the rear is never emptied.
+ * `pull` mode (50%), so the rear is never emptied. A node still releasing a stream or under attack sends nothing
+ * (a new swipe would cancel the stream; an attacked node can't send, GDD 3.6).
  */
-function available(node: NodeState, plan: Plan, mode: SendMode = 'swipe'): number {
-  return plan.sent.has(node.id) ? 0 : sendAmount(node.troops, mode);
+function available(world: World, node: NodeState, plan: Plan, mode: SendMode = 'swipe'): number {
+  if (plan.sent.has(node.id) || node.streamId !== null || isAttacked(world, node)) return 0;
+  return sendAmount(node.troops, mode);
 }
 
-function send(plan: Plan, side: Side, from: NodeState, to: string, mode: SendMode = 'swipe'): number {
-  const count = available(from, plan, mode);
+function send(world: World, plan: Plan, side: Side, from: NodeState, to: string, mode: SendMode = 'swipe'): number {
+  const count = available(world, from, plan, mode);
   if (count <= 0 || from.id === to) return 0;
   plan.sent.set(from.id, count);
   plan.commands.push({ type: 'send', side, from: from.id, to, mode });
@@ -174,10 +192,6 @@ function etaSec(distance: number): number {
   return distance / ARMY.speed;
 }
 
-/** Troop strength ratio: how many own troops one defender is worth (fortresses count double). */
-function strengthRatio(world: World, attacker: Side, defender: NodeState): number {
-  return defenseStrength(world, defender) / strengthOf(world, attacker);
-}
 
 // ---- Dragon -------------------------------------------------------------------------------------
 
@@ -192,34 +206,59 @@ function evadeDragon(world: World, side: Side, dist: Distances, plan: Plan): voi
     .map((n) => ({ n, d: dist.get(marked.id, n.id) }))
     .filter((r): r is { n: NodeState; d: number } => r.d !== null)
     .sort((a, b) => a.d - b.d)[0];
-  if (refuge) send(plan, side, marked, refuge.n.id);
+  if (refuge) send(world, plan, side, marked, refuge.n.id);
 }
 
 // ---- Defense ------------------------------------------------------------------------------------
 
-/** Reinforces own nodes that incoming hostile armies would capture. Returns ids of threatened nodes. */
+/** Hostile units heading to one of our nodes within the lookahead. */
+interface Threat {
+  units: number;
+  soonestSec: number;
+}
+
+/**
+ * One pass over the field per decision: hostile units (and hostile streams still leaving) heading to `side`'s nodes
+ * that arrive within AI.defendLookaheadSec.
+ */
+function threats(world: World, side: Side): Map<string, Threat> {
+  const out = new Map<string, Threat>();
+  const add = (nodeId: string, units: number, eta: number): void => {
+    if (eta > AI.defendLookaheadSec || world.nodes[nodeId]!.owner !== side) return;
+    const t = out.get(nodeId);
+    if (t) {
+      t.units += units;
+      t.soonestSec = Math.min(t.soonestSec, eta);
+    } else {
+      out.set(nodeId, { units, soonestSec: eta });
+    }
+  };
+  for (const unit of world.units) {
+    if (unit.owner === side) continue;
+    let remaining = (1 - unit.progress) * world.lanes[unit.lanes[unit.segment]!]!.length;
+    for (let i = unit.segment + 1; i < unit.lanes.length; i++) remaining += world.lanes[unit.lanes[i]!]!.length;
+    add(unitTarget(unit), 1, etaSec(remaining));
+  }
+  for (const stream of world.streams) {
+    if (stream.owner === side) continue;
+    add(stream.path[stream.path.length - 1]!, stream.left, etaSec(routeLength(world, stream.path)));
+  }
+  return out;
+}
+
+/** Reinforces own nodes that incoming hostile units would capture. Returns ids of threatened nodes. */
 function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<string> {
   const threatened = new Set<string>();
 
-  for (const node of own(world, side)) {
-    // Any hostile army counts: the opponent's and bandit raids.
-    const incoming = world.armies.filter((a) => a.owner !== side && a.targetId === node.id);
-    if (incoming.length === 0) continue;
-
-    let hostile = 0;
-    let soonest = Infinity;
-    for (const army of incoming) {
-      const eta = armyEtaSec(world, army.path, army.segment, army.progress);
-      if (eta > AI.defendLookaheadSec) continue;
-      hostile += (Math.max(0, army.count - towerDamage(node)) * strengthOf(world, army.owner)) / defenseStrength(world, node);
-      soonest = Math.min(soonest, eta);
-    }
+  // Any hostile unit counts: the opponent's and bandit raids.
+  for (const [nodeId, threat] of threats(world, side)) {
+    const node = world.nodes[nodeId]!;
+    // Defender-equivalents the attack takes away: tower shots first, a fortress defender takes two attackers.
+    const hostile = Math.max(0, threat.units - towerKillsEstimate(node, threat.units, threat.units)) / defenseMult(node);
     if (hostile === 0) continue;
 
-    const friendly = world.armies
-      .filter((a) => a.owner === side && a.targetId === node.id)
-      .reduce((sum, a) => sum + a.count, 0);
-    const defense = node.troops + friendly + troopRate(node, world.sides[side].modifiers) * soonest;
+    const friendly = world.incoming[node.id]![side] + pendingTo(world, node.id, side);
+    const defense = node.troops + friendly + troopRate(node, world.sides[side].modifiers) * threat.soonestSec;
     let deficit = hostile - defense + 1;
     if (deficit <= 0) continue;
     threatened.add(node.id);
@@ -228,23 +267,14 @@ function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<stri
     const helpers = own(world, side)
       .filter((n) => n.id !== node.id)
       .map((n) => ({ n, d: dist.get(n.id, node.id) }))
-      .filter((h): h is { n: NodeState; d: number } => h.d !== null && etaSec(h.d) <= soonest)
+      .filter((h): h is { n: NodeState; d: number } => h.d !== null && etaSec(h.d) <= threat.soonestSec)
       .sort((a, b) => a.d - b.d);
     for (const { n } of helpers) {
       if (deficit <= 0) break;
-      deficit -= send(plan, side, n, node.id);
+      deficit -= send(world, plan, side, n, node.id);
     }
   }
   return threatened;
-}
-
-function armyEtaSec(world: World, path: readonly string[], segment: number, progress: number): number {
-  let remaining = 0;
-  for (let i = segment; i + 1 < path.length; i++) {
-    const len = segmentLength(world, path[i]!, path[i + 1]!);
-    remaining += i === segment ? len * (1 - progress) : len;
-  }
-  return etaSec(remaining);
 }
 
 // ---- Economy ------------------------------------------------------------------------------------
@@ -330,7 +360,7 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
   const maxAttacks = 1 + Math.round((AI.maxAttacksPerThink - 1) * aggression);
 
   for (let launched = 0; launched < maxAttacks; launched++) {
-    const sources = own(world, side).filter((n) => !threatened.has(n.id) && available(n, plan) > 0);
+    const sources = own(world, side).filter((n) => !threatened.has(n.id) && available(world, n, plan) > 0);
     if (sources.length === 0) return;
 
     let best: { target: NodeState; picks: NodeState[]; score: number } | null = null;
@@ -343,10 +373,8 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
         .sort((a, b) => a.d - b.d);
       if (reachable.length === 0) continue;
 
-      // Pick nearest sources until their armies beat the estimated defense at arrival.
-      const alreadyComing = world.armies
-        .filter((a) => a.owner === side && a.targetId === target.id)
-        .reduce((sum, a) => sum + a.count, 0);
+      // Pick nearest sources until their units beat the estimated defense at arrival.
+      const alreadyComing = world.incoming[target.id]![side] + pendingTo(world, target.id, side);
       const picks: NodeState[] = [];
       let force = alreadyComing;
       let required = Infinity;
@@ -354,9 +382,9 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
       const margin = isRival(side, target.owner) ? opponentMargin : baseMargin;
       for (const { n, d } of reachable) {
         picks.push(n);
-        force += available(n, plan);
+        force += available(world, n, plan);
         farthest = Math.max(farthest, d);
-        required = requiredForce(world, side, target, etaSec(farthest), margin);
+        required = requiredForce(world, target, etaSec(farthest), margin);
         if (force >= required) break;
       }
       if (force < required) continue;
@@ -371,18 +399,22 @@ function attack(world: World, ai: AiState, threatened: Set<string>, dist: Distan
       if (!best || score > best.score) best = { target, picks, score };
     }
     if (!best) return;
-    for (const n of best.picks) send(plan, side, n, best.target.id);
+    for (const n of best.picks) send(world, plan, side, n, best.target.id);
   }
 }
 
-/** Troops needed to capture `target` if the armies arrive in `etaSec`. */
-function requiredForce(world: World, side: Side, target: NodeState, eta: number, margin: number): number {
-  // Opponent nodes keep producing while the armies march (up to capacity); neutrals don't.
+/** Troops needed to capture `target` if the units arrive in `etaSec`. */
+function requiredForce(world: World, target: NodeState, eta: number, margin: number): number {
+  // Opponent nodes keep producing while the units march (up to capacity); neutrals don't.
   let defenders = target.troops;
   if (target.owner !== 'neutral' && defenders < nodeCapacity(target)) {
     defenders = Math.min(nodeCapacity(target), defenders + troopRate(target, world.sides[target.owner].modifiers) * eta);
   }
-  return defenders * strengthRatio(world, side, target) * (1 + margin) + towerDamage(target) + AI.flatMargin;
+  const hits = defenders * defenseMult(target);
+  // The tower shoots while the column arrives: about rate x its release time, plus the shot in reserve.
+  const rate = towerRate(target);
+  const tower = rate > 0 ? 1 + (rate * hits) / (STREAM.releasePerSec * STREAM.width) : 0;
+  return hits * (1 + margin) + tower + AI.flatMargin;
 }
 
 function targetValue(side: Side, target: NodeState, aggression: number): number {
@@ -407,7 +439,7 @@ function consolidate(world: World, side: Side, threatened: Set<string>, dist: Di
 
   for (const node of own(world, side)) {
     if (threatened.has(node.id) || isFrontier(world, node, side)) continue;
-    if (node.troops < nodeCapacity(node) * AI.consolidateAt || available(node, plan, 'pull') === 0) continue;
+    if (node.troops < nodeCapacity(node) * AI.consolidateAt || available(world, node, plan, 'pull') === 0) continue;
 
     const here = frontDistance(node.id);
     const next = world.roads
@@ -416,6 +448,6 @@ function consolidate(world: World, side: Side, threatened: Set<string>, dist: Di
       .map((id) => ({ id, d: frontDistance(id) }))
       .filter((c) => c.d < here)
       .sort((a, b) => a.d - b.d)[0];
-    if (next) send(plan, side, node, next.id, 'pull');
+    if (next) send(world, plan, side, node, next.id, 'pull');
   }
 }

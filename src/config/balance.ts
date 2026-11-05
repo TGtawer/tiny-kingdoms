@@ -53,8 +53,11 @@ export const BUILDINGS = {
     extraCapacity: [15, 30, 50] as PerLevel<number>,
   },
   tower: {
-    /** Damage dealt once to each arriving enemy army, before combat. */
-    damage: [4, 8, 14] as PerLevel<number>,
+    /**
+     * Shots per second; one shot kills one arriving hostile unit (GDD 3.6). At most one shot is held in reserve,
+     * so the first unit always dies and then no more than this many per second.
+     */
+    shotsPerSec: [1, 2, 3] as PerLevel<number>,
   },
   maxLevel: 3,
   /** Levels lost by a building when its node is captured; level 1 is destroyed. */
@@ -72,6 +75,20 @@ export const ARMY = {
   minSend: 1,
   /** A node with this many troops or fewer cannot send. */
   minTroopsToSend: 2,
+} as const;
+
+/** Stream armies (GDD 3.6, BALANCE.md «Армии и поток»): sent troops leave the node one by one. */
+export const STREAM = {
+  /** Units released per second. Spacing in the column = ARMY.speed / releasePerSec. */
+  releasePerSec: 5,
+  /** Column width (reserved for future upgrades; always 1 for now). */
+  width: 1,
+  /** A node counts as attacked until this long after the last hostile unit reached it, ms. */
+  attackWindowMs: 1000,
+  /** Balance lever only: stop the source's production while it releases a stream (decided: off). */
+  pauseSourceProduction: false,
+  /** Units of different sides closer than this touch and destroy each other, field widths. */
+  contactDist: 0.01,
 } as const;
 
 /** Enemy leaders (GDD 3.10, CONTENT.md C-2). */
@@ -120,7 +137,7 @@ export const LEADERS: Record<LeaderId, LeaderPreset> = {
 export const SPECIAL_NODES = {
   /** Owner's whole gold income +50% per temple (two temples: +100%). Temples produce nothing themselves. */
   temple: { goldBonus: 0.5 },
-  /** Each defender counts this many times (after the tower hits, together with unit strength). */
+  /** Each defender withstands this many attackers (after the tower shots). */
   fortress: { defenseMult: 2 },
   /** Gold given once to whoever captures the chest; then it is a normal small node. */
   chest: { gold: 60 },
@@ -190,7 +207,7 @@ export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
 } = {
   fireball: { cost: 40, cooldownSec: 20, killShare: 0.4, minKill: 5 },
   reinforcement: { cost: 30, cooldownSec: 25, troops: 10 },
-  /** Own node can't be attacked for durationSec: hostile armies that arrive are destroyed. */
+  /** Own node can't be attacked for durationSec: hostile units that arrive break on it. */
   shield: { cost: 30, cooldownSec: 30, durationSec: 8 },
 };
 

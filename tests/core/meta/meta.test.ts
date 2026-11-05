@@ -179,7 +179,8 @@ describe('permanent bonuses', () => {
     const m = modifiersFrom(p);
     expect(m.troopProductionMult).toBeCloseTo(1.2);
     expect(m.goldIncomeMult).toBeCloseTo(1.1);
-    expect(m.unitStrengthMult).toBeCloseTo(1.12);
+    // Unit strength is kept in the save but has no battle effect (GDD 4.3).
+    expect(m).not.toHaveProperty('unitStrengthMult');
 
     const world = createWorld(L[0]!, { player: playerSetupFrom(p) });
     const start = L[0]!.nodes.find((n) => n.owner === 'player')!;

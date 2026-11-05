@@ -4,7 +4,7 @@ import { validate, type CastSpell } from '../../../src/core/sim/commands';
 import { fireballKill, shieldTicks } from '../../../src/core/sim/spells';
 import { step, type TickEvent } from '../../../src/core/sim/tick';
 import { defaultModifiers } from '../../../src/core/sim/World';
-import { freezeEconomy, lineWorld, run } from '../helpers';
+import { freezeEconomy, lineWorld, placeUnit, run } from '../helpers';
 
 const cast = (spell: CastSpell['spell'], nodeId: string): CastSpell => ({ type: 'cast', side: 'player', spell, nodeId });
 
@@ -110,15 +110,16 @@ describe('shield', () => {
     expect(world.nodes.P!.shieldTicks).toBe(durationTicks - 1);
   });
 
-  it('a hostile army breaks on the shield: no capture, no losses', () => {
+  it('every hostile unit breaks on the shield: no capture, no losses, the node is not attacked', () => {
     const world = spellWorld({ P: { troops: 3 }, N: { owner: 'enemy', troops: 0 }, E: { troops: 40 } });
     step(world, [cast('shield', 'P')]);
-    world.armies.push({ id: 'x', owner: 'enemy', count: 30, path: ['N', 'P'], segment: 0, progress: 0.999, targetId: 'P' });
+    for (let i = 0; i < 5; i++) placeUnit(world, 'enemy', ['N', 'P'], 0.999);
     const events: TickEvent[] = step(world);
-    expect(events).toContainEqual(expect.objectContaining({ type: 'arrived', armyId: 'x', outcome: 'shielded' }));
-    expect(world.nodes.P!.owner).toBe('player');
-    expect(world.nodes.P!.troops).toBe(3);
-    expect(world.armies).toHaveLength(0);
+    const arrived = events.filter((e) => e.type === 'arrived');
+    expect(arrived).toHaveLength(5);
+    expect(arrived.every((e) => e.type === 'arrived' && e.outcome === 'shielded')).toBe(true);
+    expect(world.nodes.P).toMatchObject({ owner: 'player', troops: 3, attackedUntilMs: 0 });
+    expect(world.units).toHaveLength(0);
   });
 
   it('wears off after its duration; then the node can be attacked again', () => {
@@ -126,15 +127,15 @@ describe('shield', () => {
     step(world, [cast('shield', 'P')]);
     run(world, durationTicks - 1);
     expect(world.nodes.P!.shieldTicks).toBe(0);
-    world.armies.push({ id: 'y', owner: 'enemy', count: 30, path: ['N', 'P'], segment: 0, progress: 0.999, targetId: 'P' });
+    for (let i = 0; i < 4; i++) placeUnit(world, 'enemy', ['N', 'P'], 0.999);
     step(world);
     expect(world.nodes.P!.owner).toBe('enemy');
   });
 
-  it('own armies still reinforce a shielded node', () => {
+  it('own units still reinforce a shielded node', () => {
     const world = spellWorld({ P: { troops: 3 } });
     step(world, [cast('shield', 'P')]);
-    world.armies.push({ id: 'z', owner: 'player', count: 5, path: ['N', 'P'], segment: 0, progress: 0.999, targetId: 'P' });
+    for (let i = 0; i < 5; i++) placeUnit(world, 'player', ['N', 'P'], 0.999);
     step(world);
     expect(world.nodes.P!.troops).toBe(8);
   });

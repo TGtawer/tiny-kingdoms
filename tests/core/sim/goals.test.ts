@@ -4,7 +4,7 @@ import { aiParamsFromLevel, aiStep, createAi } from '../../../src/core/ai/EnemyA
 import { validateLevel, type LevelData } from '../../../src/core/level/schema';
 import { step, type TickEvent } from '../../../src/core/sim/tick';
 import { checkOutcome, goalProgressSec, type Goal } from '../../../src/core/sim/victory';
-import { createWorld } from '../../../src/core/sim/World';
+import { createWorld, reindexRoads } from '../../../src/core/sim/World';
 import { ALL_LEVELS } from '../../../src/levels';
 import { freezeEconomy, level, node } from '../helpers';
 
@@ -104,6 +104,7 @@ describe('goals', () => {
     // A juicier neutral elsewhere: a large node next to R.
     world.nodes.X = { ...world.nodes.H!, id: 'X', x: 0.95, y: 0.2, size: 'large', troops: 8 };
     world.roads.push(['R', 'X']);
+    reindexRoads(world);
     world.nodes.R!.troops = 20;
     plain.nextThinkTick = goalAware.nextThinkTick = 10;
     const firstTarget = (ai: typeof plain) => aiStep(structuredClone(world), ai).find((c) => c.type === 'send')?.to;

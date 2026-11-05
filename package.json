@@ -15,7 +15,8 @@
     "test": "vitest run",
     "lint": "eslint .",
     "zip": "node scripts/zip.mjs",
-    "gen-level": "node scripts/gen-level.mjs"
+    "gen-level": "node scripts/gen-level.mjs",
+    "bench": "node scripts/bench.mjs"
   },
   "dependencies": {
     "phaser": "^4.2.1"

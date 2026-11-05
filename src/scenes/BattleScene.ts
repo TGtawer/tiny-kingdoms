@@ -1,11 +1,12 @@
 import * as Phaser from 'phaser';
 import { DRAGON, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { ARMY_FX, COLORS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
+import { ARMY_RADIUS_PX, COLORS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
 import { sendAmount, type Command } from '../core/sim/commands';
-import { armyPath, blockingNode, isPortalLink } from '../core/sim/pathfinding';
+import { armyPath, blockingNode } from '../core/sim/pathfinding';
+import { unitPosition } from '../core/sim/units';
 import { battleSpeed, runClock } from '../core/sim/clock';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
@@ -32,7 +33,6 @@ import { playerSetupFrom } from '../core/meta/upgrades';
 import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
-import { ArmyView, armyLevelPosition } from '../view/ArmyView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
 import { explosion, floatText, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, textStyle, type Point } from '../view/layout';
@@ -77,8 +77,11 @@ export class BattleScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
   private roads!: RoadView;
   private dragLines!: Phaser.GameObjects.Graphics;
-  /** Fading dots behind marching armies; one Graphics for all of them. */
-  private trails!: Phaser.GameObjects.Graphics;
+  /**
+   * All units on the field.
+   * TODO(P-2): temporary single Graphics redrawn every frame; replaced by the pooled UnitsView.
+   */
+  private unitsLayer!: Phaser.GameObjects.Graphics;
   /** Hold goal: timer ring around the node to hold. */
   private goalRing!: Phaser.GameObjects.Graphics;
   /** Node owners before the current tick, to tell "captured" from "lost" in arrival events. */
@@ -86,8 +89,6 @@ export class BattleScene extends Phaser.Scene {
   private capitals = new Set<string>();
   /** Short info label for a special node (shown on tap). */
   private infoLabel: Phaser.GameObjects.Container | null = null;
-  /** Armies currently inside a portal (hidden). */
-  private inPortal = new Set<string>();
   /** Battle facts for the star rating and the defeat tip. */
   private stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
   /** After a win: what the chapter map animates when the player goes there from the result panel (V-3). */
@@ -98,9 +99,8 @@ export class BattleScene extends Phaser.Scene {
   private sendBadge!: Phaser.GameObjects.Text;
   private hud!: BattleHUD;
   private nodeViews = new Map<string, NodeView>();
-  private armyViews = new Map<string, ArmyView>();
-  /** Army positions (level coords) at the previous tick, for interpolation. */
-  private prevArmyPos = new Map<string, Point>();
+  /** Unit positions (level coords) at the previous tick, for interpolation. */
+  private prevUnitPos = new Map<number, Point>();
 
   private queue: Command[] = [];
   private accumulator = 0;
@@ -128,8 +128,7 @@ export class BattleScene extends Phaser.Scene {
   create(): void {
     // The scene instance is reused on restart: reset all state.
     this.nodeViews = new Map();
-    this.armyViews = new Map();
-    this.prevArmyPos = new Map();
+    this.prevUnitPos = new Map();
     this.queue = [];
     this.accumulator = 0;
     this.paused = false;
@@ -141,7 +140,6 @@ export class BattleScene extends Phaser.Scene {
     this.uiEvents = [];
     this.speed = 1;
     this.infoLabel = null;
-    this.inPortal = new Set();
     this.stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
     this.mapReveal = null;
     this.newSpells = [];
@@ -168,7 +166,7 @@ export class BattleScene extends Phaser.Scene {
       const mageTower = this.world.boss?.type === 'mage' && this.world.boss.towerId === node.id;
       this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id), mageTower));
     }
-    this.trails = this.add.graphics().setDepth(39);
+    this.unitsLayer = this.add.graphics().setDepth(40);
     this.goalRing = this.add.graphics().setDepth(38);
     this.dragLines = this.add.graphics().setDepth(50);
     this.sendBadge = this.add.text(0, 0, '', textStyle(20)).setOrigin(0.5).setStroke('#1f2937', px(5)).setDepth(60);
@@ -242,9 +240,9 @@ export class BattleScene extends Phaser.Scene {
   // ---- Simulation -------------------------------------------------------------------------------
 
   private tickOnce(): void {
-    this.prevArmyPos.clear();
+    this.prevUnitPos.clear();
     for (const node of Object.values(this.world.nodes)) this.ownersBefore.set(node.id, node.owner);
-    for (const army of this.world.armies) this.prevArmyPos.set(army.id, armyLevelPosition(this.world, army));
+    for (const unit of this.world.units) this.prevUnitPos.set(unit.id, unitPosition(this.world, unit, { x: 0, y: 0 }));
 
     // Player input and the enemy AI go through the same command queue and rules.
     const commands = [...this.queue, ...aiStep(this.world, this.ai), ...(this.ai2 ? aiStep(this.world, this.ai2) : [])];
@@ -268,10 +266,7 @@ export class BattleScene extends Phaser.Scene {
     switch (event.type) {
       case 'applied': {
         const cmd = event.command;
-        if (cmd.type === 'send' && event.armyId) {
-          // A new army starts its interpolation at the source node.
-          const from = this.world.nodes[cmd.from]!;
-          this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
+        if (cmd.type === 'send' && event.streamId !== undefined) {
           if (cmd.side === 'player') playSfx('send');
         } else if (cmd.type === 'build' || cmd.type === 'upgrade') {
           if (cmd.side === 'player') {
@@ -301,7 +296,6 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'arrived': {
         const view = this.nodeViews.get(event.nodeId)!;
-        if (event.towerDamage > 0) floatText(this, view.x, view.y - view.radius, `-${event.towerDamage}`, COLORS.fireball);
         if (event.chestGold > 0) {
           floatText(this, view.x, view.y - view.radius * 1.4, t('battle.chestGold', { gold: event.chestGold }), COLORS.gold);
           ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.gold);
@@ -326,24 +320,15 @@ export class BattleScene extends Phaser.Scene {
           }
           // Later arrivals in the same tick compare against the new owner.
           this.ownersBefore.set(event.nodeId, owner);
-        } else if (event.outcome === 'repelled' || event.outcome === 'destroyedByTower') {
-          ringBurst(this, view.x, view.y, view.radius * 0.9, COLORS.select);
         }
+        // TODO(P-2): capped flashes for tower shots and 1:1 trades at the node.
         break;
       }
-      case 'clash': {
-        // Head-on fight on a road: flash in the winner's color (grey if both died) and show the losses.
-        const p = this.layoutField.toScreen(event.x, event.y);
-        const survivor = event.survivorId ? this.world.armies.find((a) => a.id === event.survivorId) : undefined;
-        const lost = Math.min(...event.armies.map((id) => this.armyViews.get(id)?.shownCount ?? 0));
-        ringBurst(this, p.x, p.y, px(18), survivor ? COLORS.faction[survivor.owner] : COLORS.faction.neutral);
-        if (lost > 0) floatText(this, p.x, p.y - px(18), `-${lost}`, COLORS.select);
+      case 'clash':
+        // TODO(P-2): one capped flash per meeting point at most every 100 ms.
         break;
-      }
       case 'raid': {
         // Bandits leave their camp.
-        const from = this.world.nodes[event.from]!;
-        this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
         const view = this.nodeViews.get(event.from)!;
         ringBurst(this, view.x, view.y, view.radius, COLORS.bandits);
         break;
@@ -371,8 +356,6 @@ export class BattleScene extends Phaser.Scene {
         this.mageFireball(event.from, event.nodeId, event.killed);
         break;
       case 'citadelWave': {
-        const from = this.world.nodes[event.from]!;
-        this.prevArmyPos.set(event.armyId, { x: from.x, y: from.y });
         const view = this.nodeViews.get(event.from)!;
         ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.faction.enemy);
         break;
@@ -573,41 +556,19 @@ export class BattleScene extends Phaser.Scene {
       view.setHighlight(this.highlightFor(node));
     }
 
-    // Armies: create/remove views, interpolate between ticks; a light bob and a fading trail while marching.
-    const alive = new Set<string>();
-    const now = this.time.now;
-    this.trails.clear();
-    for (const army of world.armies) {
-      alive.add(army.id);
-      let view = this.armyViews.get(army.id);
-      if (!view) {
-        view = new ArmyView(this, army.owner, Number(army.id.slice(1)) * 1.7).setDepth(40);
-        this.armyViews.set(army.id, view);
-      }
-      view.setCount(army.count);
-      const cur = armyLevelPosition(world, army);
-      const prev = this.prevArmyPos.get(army.id) ?? cur;
+    // Units: one dot each, interpolated between ticks; hidden inside portals.
+    const g = this.unitsLayer;
+    g.clear();
+    const r = px(ARMY_RADIUS_PX * 0.45);
+    const cur = { x: 0, y: 0 };
+    for (const unit of world.units) {
+      const lane = world.lanes[unit.lanes[unit.segment]!]!;
+      if (lane.portal) continue;
+      unitPosition(world, unit, cur);
+      const prev = this.prevUnitPos.get(unit.id) ?? world.nodes[unit.path[0]!]!;
       const p = this.layoutField.toScreen(prev.x + (cur.x - prev.x) * alpha, prev.y + (cur.y - prev.y) * alpha);
-      view.setPosition(p.x, p.y);
-      view.setScale(1 + ARMY_FX.bob * Math.sin(now / ARMY_FX.bobPeriodMs + view.phase));
-      // Inside a portal the army is invisible; a flash marks entering and leaving.
-      const next = army.path[army.segment + 1];
-      const portal = next !== undefined && isPortalLink(world, army.path[army.segment]!, next);
-      if (portal !== this.inPortal.has(army.id)) {
-        const at = this.nodeViews.get(portal ? army.path[army.segment]! : next ?? army.targetId)!;
-        ringBurst(this, at.x, at.y, at.radius * 0.8, COLORS.portal);
-        if (portal) this.inPortal.add(army.id);
-        else this.inPortal.delete(army.id);
-      }
-      view.setVisible(!portal);
-      if (!portal) this.drawTrail(army.owner, army.path[army.segment]!, next, p);
-    }
-    for (const [id, view] of this.armyViews) {
-      if (!alive.has(id)) {
-        view.destroy();
-        this.armyViews.delete(id);
-        this.inPortal.delete(id);
-      }
+      g.fillStyle(COLORS.factionDark[unit.owner], 1).fillCircle(p.x, p.y, r);
+      g.fillStyle(COLORS.faction[unit.owner], 1).fillCircle(p.x, p.y - r * 0.15, r * 0.8);
     }
 
     this.drawDragLines();
@@ -873,25 +834,6 @@ export class BattleScene extends Phaser.Scene {
         : { type: 'upgrade', side: 'player', nodeId },
     );
     this.deselect();
-  }
-
-  /** 2–3 fading dots behind an army, along its current road. */
-  private drawTrail(owner: Owner, fromId: string, toId: string | undefined, at: Point): void {
-    if (!toId) return;
-    const a = this.nodeViews.get(fromId)!;
-    const b = this.nodeViews.get(toId)!;
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (len < 1) return;
-    const dx = (b.x - a.x) / len;
-    const dy = (b.y - a.y) / len;
-    const travelled = Math.hypot(at.x - a.x, at.y - a.y);
-    const step = px(ARMY_FX.trailSpacing);
-    for (let i = 1; i <= ARMY_FX.trailDots; i++) {
-      // No dots behind the start node: the trail grows as the army leaves.
-      if (i * step > travelled) break;
-      const fade = 1 - i / (ARMY_FX.trailDots + 1);
-      this.trails.fillStyle(COLORS.faction[owner], 0.55 * fade).fillCircle(at.x - dx * step * i, at.y - dy * step * i, px(5) * fade);
-    }
   }
 
   /** Name and effect of a special node, above it for a few seconds. */

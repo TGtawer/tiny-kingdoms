@@ -1,10 +1,13 @@
-import { SPECIAL_NODES, SPELL_IDS, TICK_MS, type BuildingType, type NodeKind, type NodeSize, type SpellId } from '../../config/balance';
+import { ARMY, SPECIAL_NODES, SPELL_IDS, TICK_MS, type BuildingType, type NodeKind, type NodeSize, type SpellId } from '../../config/balance';
 import type { LevelData } from '../level/schema';
 import type { Goal } from './victory';
 import { createCitadel, type CitadelState } from './specials/citadel';
 import { createDragon, type DragonState } from './specials/dragon';
 import { createMage, type MageState } from './specials/mage';
 import { nextRandom, seedState } from './rng';
+
+/** Length of the invisible portal road, field units: the distance a unit covers in portal.delayMs. */
+export const PORTAL_LENGTH = (ARMY.speed * SPECIAL_NODES.portal.delayMs) / 1000;
 
 export type Owner = 'player' | 'enemy' | 'enemy2' | 'neutral';
 export type Side = Exclude<Owner, 'neutral'>;
@@ -41,20 +44,65 @@ export interface NodeState {
   raidTick: number | null;
   /** Shield spell: ticks left while the node can't be attacked (0 = no shield). */
   shieldTicks: number;
+  /** Battle time (ms) until which the node counts as attacked (GDD 3.6). */
+  attackedUntilMs: number;
+  /** Battle time (ms) of the next tower shot; a shot is ready when it has passed (one held in reserve). */
+  towerReadyAtMs: number;
+  /** The node's active stream (at most one), or null. */
+  streamId: number | null;
 }
 
-export interface ArmyState {
-  id: string;
+/**
+ * A node's order "send N troops along `path`" (GDD 3.6). Units leave one by one at STREAM.releasePerSec;
+ * until a unit leaves it stays in the garrison (counted in the source's troops).
+ */
+export interface StreamState {
+  id: number;
+  sourceId: string;
   /** 'neutral' for bandit raids. */
   owner: Owner;
-  count: number;
-  /** Node ids from source to target. */
-  path: string[];
-  /** Index of the current segment: path[segment] -> path[segment + 1]. */
+  /** Node ids from the source to the target; shared by every unit of the stream. */
+  path: readonly string[];
+  /** Lane index of every path segment (lanes[i] = path[i] -> path[i + 1]); shared like `path`. */
+  lanes: readonly number[];
+  /** Units still to release. */
+  left: number;
+  /** Fractional units accumulated at STREAM.releasePerSec. */
+  releaseAcc: number;
+  /**
+   * Extra units on top of the garrison (citadel waves): releasing doesn't take troops from the source,
+   * and the stream doesn't occupy the node's stream slot.
+   */
+  extra: boolean;
+}
+
+/** One unit on a road. Plain object; path and lanes are shared with its stream. */
+export interface UnitState {
+  id: number;
+  owner: Owner;
+  path: readonly string[];
+  lanes: readonly number[];
+  /** Current segment: path[segment] -> path[segment + 1]. */
   segment: number;
   /** 0..1 along the current segment. */
   progress: number;
-  targetId: string;
+  /** Index in world.units (swap-remove). -1 once the unit is gone. */
+  slot: number;
+}
+
+/**
+ * One direction of a road (or a portal link). Units in a lane all move at the same speed, so they never overtake:
+ * `units` stays ordered from the head (highest progress) to the tail.
+ */
+export interface Lane {
+  from: string;
+  to: string;
+  length: number;
+  /** Portal links have no clashes inside. */
+  portal: boolean;
+  /** Lane of the same road in the opposite direction. */
+  reverse: number;
+  units: UnitState[];
 }
 
 export interface SpellModifiers {
@@ -67,8 +115,6 @@ export interface SpellModifiers {
 export interface SideModifiers {
   troopProductionMult: number;
   goldIncomeMult: number;
-  /** Multiplier applied to this side's units in combat. */
-  unitStrengthMult: number;
   spells: SpellModifiers;
 }
 
@@ -86,9 +132,20 @@ export interface World {
   roads: Array<[string, string]>;
   /** Portal links (invisible roads between the two nodes of a pair). */
   portals: Array<[string, string]>;
-  armies: ArmyState[];
+  streams: StreamState[];
+  /** Every unit on the field, in no particular order (swap-remove). */
+  units: UnitState[];
+  /** Road lanes: 2r = roads[r] a -> b, 2r + 1 = b -> a; then portal links the same way. */
+  lanes: Lane[];
+  /** Lane index by "from>to" (built once at load; used when a stream is created, not per tick). */
+  laneIndex: Record<string, number>;
+  /** Lanes that end at each node. */
+  lanesInto: Record<string, number[]>;
+  /** Units on the field heading to each node, by owner (AI and previews read this instead of scanning units). */
+  incoming: Record<string, Record<Owner, number>>;
   sides: Record<Side, SideState>;
-  nextArmyId: number;
+  nextUnitId: number;
+  nextStreamId: number;
   rngState: number;
   winner: Side | null;
   goal: Goal;
@@ -104,7 +161,6 @@ export function defaultModifiers(): SideModifiers {
   return {
     troopProductionMult: 1,
     goldIncomeMult: 1,
-    unitStrengthMult: 1,
     spells: {
       fireball: { killShareBonus: 0, cooldownReductionSec: 0 },
       reinforcement: { extraTroops: 0, cooldownReductionSec: 0 },
@@ -148,6 +204,9 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
       portalPair: n.portalPair ?? null,
       raidTick: n.kind === 'bandits' ? Math.round(SPECIAL_NODES.bandits.raidEveryMs / TICK_MS) : null,
       shieldTicks: 0,
+      attackedUntilMs: 0,
+      towerReadyAtMs: 0,
+      streamId: null,
     };
   }
   const pairs = new Map<string, string[]>();
@@ -161,12 +220,22 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
     return { gold: params?.startGold ?? 0, unlockedSpells: [], spellCooldowns: zeroCooldowns(), modifiers };
   };
 
+  const roads = level.roads.map(([a, b]) => [a, b] as [string, string]);
+  const { lanes, laneIndex, lanesInto } = buildLanes(nodes, roads, portals);
+  const incoming: Record<string, Record<Owner, number>> = {};
+  for (const id of Object.keys(nodes)) incoming[id] = { player: 0, enemy: 0, enemy2: 0, neutral: 0 };
+
   return {
     tick: 0,
     nodes,
-    roads: level.roads.map(([a, b]) => [a, b]),
+    roads,
     portals,
-    armies: [],
+    streams: [],
+    units: [],
+    lanes,
+    laneIndex,
+    lanesInto,
+    incoming,
     sides: {
       player: {
         gold: level.playerStartGold,
@@ -177,7 +246,8 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
       enemy: enemySide(level.enemy),
       enemy2: enemySide(level.enemy2),
     },
-    nextArmyId: 1,
+    nextUnitId: 1,
+    nextStreamId: 1,
     rngState: seedState(options.seed ?? 1),
     winner: null,
     goal: level.goal ? structuredClone(level.goal) : { type: 'conquer' },
@@ -198,19 +268,57 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
   };
 }
 
+/** Lanes of all roads and portal links (both directions), with lookups by endpoints. */
+function buildLanes(
+  nodes: Record<string, NodeState>,
+  roads: ReadonlyArray<readonly [string, string]>,
+  portals: ReadonlyArray<readonly [string, string]>,
+): Pick<World, 'lanes' | 'laneIndex' | 'lanesInto'> {
+  const lanes: Lane[] = [];
+  const laneIndex: Record<string, number> = {};
+  const lanesInto: Record<string, number[]> = {};
+  for (const id of Object.keys(nodes)) lanesInto[id] = [];
+  const add = (a: string, b: string, portal: boolean): void => {
+    const length = portal ? PORTAL_LENGTH : Math.hypot(nodes[a]!.x - nodes[b]!.x, nodes[a]!.y - nodes[b]!.y);
+    const i = lanes.length;
+    lanes.push({ from: a, to: b, length, portal, reverse: i + 1, units: [] });
+    lanes.push({ from: b, to: a, length, portal, reverse: i, units: [] });
+    laneIndex[`${a}>${b}`] = i;
+    laneIndex[`${b}>${a}`] = i + 1;
+    lanesInto[b]!.push(i);
+    lanesInto[a]!.push(i + 1);
+  };
+  for (const [a, b] of roads) add(a, b, false);
+  for (const [a, b] of portals) add(a, b, true);
+  return { lanes, laneIndex, lanesInto };
+}
+
+/**
+ * Rebuilds the lanes after nodes or roads were added to an existing world (editors, tests). Only valid while no
+ * units are on the field.
+ */
+export function reindexRoads(world: World): void {
+  Object.assign(world, buildLanes(world.nodes, world.roads, world.portals));
+  for (const id of Object.keys(world.nodes)) world.incoming[id] ??= { player: 0, enemy: 0, enemy2: 0, neutral: 0 };
+}
+
+/** Battle time in ms. */
+export function nowMs(world: World): number {
+  return world.tick * TICK_MS;
+}
+
+/** Whether the node counts as attacked right now (GDD 3.6): no sending, no production. */
+export function isAttacked(world: World, node: NodeState): boolean {
+  return nowMs(world) < node.attackedUntilMs;
+}
 
 export function nodesOf(world: World, owner: Owner): NodeState[] {
   return Object.values(world.nodes).filter((n) => n.owner === owner);
 }
 
-/** Unit strength of an owner in combat (neutrals and bandits: 1). */
-export function strengthOf(world: World, owner: Owner): number {
-  return owner === 'neutral' ? 1 : world.sides[owner].modifiers.unitStrengthMult;
-}
-
-/** How much one defender of `node` is worth: unit strength times the fortress bonus. */
-export function defenseStrength(world: World, node: NodeState): number {
-  return strengthOf(world, node.owner) * (node.kind === 'fortress' ? SPECIAL_NODES.fortress.defenseMult : 1);
+/** How many attackers one defender of `node` withstands (fortress: 2, GDD 3.12). */
+export function defenseMult(node: NodeState): number {
+  return node.kind === 'fortress' ? SPECIAL_NODES.fortress.defenseMult : 1;
 }
 
 /** Share of all nodes (neutrals included) owned by `owner`, 0..1. */

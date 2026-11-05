@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { ARMY } from '../../../src/config/balance';
-import { step, type TickEvent } from '../../../src/core/sim/tick';
+import { ARMY, STREAM, TICK_MS } from '../../../src/config/balance';
+import { step } from '../../../src/core/sim/tick';
 import { createWorld, type World } from '../../../src/core/sim/World';
-import { freezeEconomy, level, node } from '../helpers';
+import { drain, eventsOf, freezeEconomy, level, node, placeUnit, unitsOf } from '../helpers';
 
-/** P(player) — E(enemy), one road of length 0.8. Sends use the AI `pull` mode (50%). */
+/** P(player) — E(enemy), one road of length 0.8; E also keeps a far node so a capture does not end the battle. */
 function duel(playerTroops: number, enemyTroops: number): World {
   return freezeEconomy(
     createWorld(
       level(
-        [node('P', 0.1, 0.5, { owner: 'player', troops: playerTroops }), node('E', 0.9, 0.5, { owner: 'enemy', troops: enemyTroops })],
+        [
+          node('P', 0.1, 0.5, { owner: 'player', size: 'large', troops: playerTroops }),
+          node('E', 0.9, 0.5, { owner: 'enemy', size: 'large', troops: enemyTroops }),
+          node('P2', 0.1, 0.9, { owner: 'player', troops: 1 }),
+          node('E2', 0.9, 0.9, { owner: 'enemy', troops: 1 }),
+        ],
         [['P', 'E']],
       ),
     ),
@@ -17,95 +22,106 @@ function duel(playerTroops: number, enemyTroops: number): World {
 }
 
 const sendBoth = [
-  { type: 'send', side: 'player', from: 'P', to: 'E', mode: 'pull' },
-  { type: 'send', side: 'enemy', from: 'E', to: 'P', mode: 'pull' },
+  { type: 'send', side: 'player', from: 'P', to: 'E' },
+  { type: 'send', side: 'enemy', from: 'E', to: 'P' },
 ] as const;
 
-/** Runs until the first clash; returns it and the tick it happened on. */
-function untilClash(world: World): { clash: Extract<TickEvent, { type: 'clash' }>; tick: number } {
-  let events = step(world, [...sendBoth]);
-  for (let i = 0; i < 200; i++) {
-    const clash = events.find((e): e is Extract<TickEvent, { type: 'clash' }> => e.type === 'clash');
-    if (clash) return { clash, tick: world.tick };
-    events = step(world);
-  }
-  throw new Error('no clash');
-}
-
-describe('road clashes', () => {
-  it('armies meeting head-on fight: the stronger survives minus the weaker', () => {
-    const world = duel(20, 8); // sends 10 vs 4
-    const { clash } = untilClash(world);
-    expect(world.armies).toHaveLength(1);
-    expect(world.armies[0]).toMatchObject({ owner: 'player', count: 6 });
-    expect(clash.survivorId).toBe(world.armies[0]!.id);
+describe('road clashes 1:1 (GDD 3.6)', () => {
+  it('equal columns destroy each other unit by unit; nobody reaches a node', () => {
+    const world = duel(20, 20); // 15 vs 15
+    const events = [...step(world, [...sendBoth]), ...drain(world)];
+    expect(eventsOf(events, 'clash')).toHaveLength(15);
+    expect(eventsOf(events, 'arrived')).toHaveLength(0);
+    expect(world.nodes.P!.troops).toBe(5);
+    expect(world.nodes.E!.troops).toBe(5);
   });
 
-  it('they meet in the middle of the road, about half the travel time', () => {
+  it('the columns "stand": every pair meets at the same point', () => {
     const world = duel(20, 20);
-    const { clash, tick } = untilClash(world);
-    expect(clash.x).toBeCloseTo(0.5, 1);
-    const half = 0.4 / ARMY.speed / 0.1;
-    expect(Math.abs(tick - half)).toBeLessThanOrEqual(2);
+    const events = [...step(world, [...sendBoth]), ...drain(world)];
+    const xs = eventsOf(events, 'clash').map((c) => c.x);
+    for (const x of xs) expect(x).toBeCloseTo(0.5, 2);
   });
 
-  it('equal armies destroy each other', () => {
+  it('different lengths: the rest of the longer column marches on and attacks', () => {
+    const world = duel(20, 12); // 15 vs 9
+    const events = [...step(world, [...sendBoth]), ...drain(world)];
+    expect(eventsOf(events, 'clash')).toHaveLength(9);
+    const arrived = eventsOf(events, 'arrived');
+    expect(arrived).toHaveLength(6);
+    expect(arrived.every((a) => a.owner === 'player' && a.nodeId === 'E')).toBe(true);
+    // E kept 3 at home: 3 trades, the 4th captures, 2 reinforce.
+    expect(world.nodes.E).toMatchObject({ owner: 'player', troops: 3 });
+  });
+
+  it('a clash reports both sides and the meeting point', () => {
     const world = duel(20, 20);
-    const { clash } = untilClash(world);
-    expect(clash.survivorId).toBeNull();
-    expect(world.armies).toHaveLength(0);
+    placeUnit(world, 'player', ['P', 'E'], 0.5);
+    placeUnit(world, 'enemy', ['E', 'P'], 0.5);
+    expect(eventsOf(step(world), 'clash')).toMatchObject([{ owners: ['player', 'enemy'], y: 0.5 }]);
+    expect(world.units).toHaveLength(0);
+    expect(world.incoming.E!.player + world.incoming.P!.enemy).toBe(0);
   });
 
-  it('the survivor keeps marching to its target', () => {
-    const world = duel(20, 8);
-    untilClash(world);
-    for (let i = 0; i < 100 && world.armies.length; i++) step(world);
-    // 6 survivors hit E (4 left after sending): E is captured with 2.
-    expect(world.nodes.E).toMatchObject({ owner: 'player', troops: 2 });
-  });
-
-  it('unit strength scales the clash like a node battle', () => {
-    const world = duel(20, 20); // 10 vs 10
-    world.sides.player.modifiers.unitStrengthMult = 1.5;
-    untilClash(world);
-    expect(world.armies[0]!.owner).toBe('player');
-    expect(world.armies[0]!.count).toBeCloseTo(10 / 3);
-  });
-
-  it('same-side armies pass through each other', () => {
-    const world = freezeEconomy(
-      createWorld(
-        level(
-          [
-            node('A', 0.1, 0.5, { owner: 'player', troops: 20 }),
-            node('B', 0.9, 0.5, { owner: 'player', troops: 20 }),
-            node('E', 0.9, 0.1, { owner: 'enemy', troops: 5 }),
-          ],
-          [
-            ['A', 'B'],
-            ['B', 'E'],
-          ],
-        ),
-      ),
-    );
+  it('same-side units pass through each other', () => {
+    const world = duel(20, 20);
+    world.nodes.E!.owner = 'player';
     step(world, [
-      { type: 'send', side: 'player', from: 'A', to: 'B', mode: 'pull' },
-      { type: 'send', side: 'player', from: 'B', to: 'A', mode: 'pull' },
+      { type: 'send', side: 'player', from: 'P', to: 'E' },
+      { type: 'send', side: 'player', from: 'E', to: 'P' },
     ]);
-    for (let i = 0; i < 80; i++) expect(step(world).some((e) => e.type === 'clash')).toBe(false);
-    expect(world.nodes.A!.troops).toBe(20);
-    expect(world.nodes.B!.troops).toBe(20);
+    const events = drain(world);
+    expect(eventsOf(events, 'clash')).toHaveLength(0);
+    expect(eventsOf(events, 'arrived')).toHaveLength(30);
   });
 
-  it('armies on different roads do not clash', () => {
-    // P and E both attack neutral N from different sides.
-    const world = freezeEconomy(
+  it('a large step does not skip the touch: units closer than 2 × step + contact meet this tick', () => {
+    const world = duel(20, 20);
+    const step1 = ARMY.speed * (TICK_MS / 1000);
+    const gap = 2 * step1 + STREAM.contactDist - 0.001;
+    // Positions along the 0.8 road: they would cross each other within this tick.
+    placeUnit(world, 'player', ['P', 'E'], 0.4 / 0.8);
+    placeUnit(world, 'enemy', ['E', 'P'], (0.4 - gap) / 0.8);
+    expect(eventsOf(step(world), 'clash')).toHaveLength(1);
+  });
+
+  it('units just out of reach do not touch yet', () => {
+    const world = duel(20, 20);
+    const step1 = ARMY.speed * (TICK_MS / 1000);
+    const gap = 2 * step1 + STREAM.contactDist + 0.001;
+    placeUnit(world, 'player', ['P', 'E'], 0.4 / 0.8);
+    placeUnit(world, 'enemy', ['E', 'P'], (0.4 - gap) / 0.8);
+    expect(eventsOf(step(world), 'clash')).toHaveLength(0);
+    expect(eventsOf(step(world), 'clash')).toHaveLength(1);
+  });
+
+  it('works between any sides: the second enemy and bandits clash too', () => {
+    const world = duel(20, 20);
+    placeUnit(world, 'enemy2', ['P', 'E'], 0.5);
+    placeUnit(world, 'enemy', ['E', 'P'], 0.5);
+    placeUnit(world, 'neutral', ['P', 'E'], 0.3);
+    placeUnit(world, 'player', ['E', 'P'], 0.7);
+    const clashes = eventsOf(step(world), 'clash');
+    expect(clashes.map((c) => c.owners)).toEqual(
+      expect.arrayContaining([
+        ['enemy2', 'enemy'],
+        ['neutral', 'player'],
+      ]),
+    );
+  });
+});
+
+describe('clash at the fork by a node', () => {
+  /** P — N — E in a line; N is the player's. */
+  function fork(): World {
+    return freezeEconomy(
       createWorld(
         level(
           [
             node('P', 0.1, 0.5, { owner: 'player', troops: 20 }),
-            node('N', 0.5, 0.5, { troops: 0 }),
+            node('N', 0.5, 0.5, { owner: 'player', troops: 3 }),
             node('E', 0.9, 0.5, { owner: 'enemy', troops: 20 }),
+            node('E2', 0.9, 0.9, { owner: 'enemy', troops: 1 }),
           ],
           [
             ['P', 'N'],
@@ -114,26 +130,29 @@ describe('road clashes', () => {
         ),
       ),
     );
-    const events: TickEvent[] = [
-      ...step(world, [
-        { type: 'send', side: 'player', from: 'P', to: 'N', mode: 'pull' },
-        { type: 'send', side: 'enemy', from: 'E', to: 'N', mode: 'pull' },
-      ]),
-    ];
-    for (let i = 0; i < 60; i++) events.push(...step(world));
-    expect(events.some((e) => e.type === 'clash')).toBe(false);
+  }
+
+  it('a unit passing through its node meets a hostile unit coming to that node on the next road', () => {
+    const world = fork();
+    // Player unit 0.004 before N on its way to E; enemy unit 0.004 before N coming from E.
+    placeUnit(world, 'player', ['P', 'N', 'E'], 0.99);
+    placeUnit(world, 'enemy', ['E', 'N'], 0.99);
+    const events = step(world);
+    expect(eventsOf(events, 'clash')).toHaveLength(1);
+    expect(eventsOf(events, 'arrived')).toHaveLength(0);
+    expect(world.nodes.N!.troops).toBe(3);
   });
 
-  it('one big army can beat two smaller ones in a row', () => {
-    const world = duel(40, 8); // player sends 20
-    step(world, [{ type: 'send', side: 'player', from: 'P', to: 'E', mode: 'pull' }]);
-    step(world, [{ type: 'send', side: 'enemy', from: 'E', to: 'P', mode: 'pull' }]); // 4
-    for (let i = 0; i < 5; i++) step(world);
-    step(world, [{ type: 'send', side: 'enemy', from: 'E', to: 'P', mode: 'pull' }]); // 2
-    let clashes = 0;
-    for (let i = 0; i < 100 && clashes < 2; i++) clashes += step(world).filter((e) => e.type === 'clash').length;
-    expect(clashes).toBe(2);
-    expect(world.armies.filter((a) => a.owner === 'enemy')).toHaveLength(0);
-    expect(world.armies[0]).toMatchObject({ owner: 'player', count: 14 });
+  it('a long column through a node against a column coming at it: all pairs clash, none swap', () => {
+    const world = fork();
+    step(world, [{ type: 'send', side: 'player', from: 'P', to: 'E' }]);
+    // Time the enemy so the columns meet right at N.
+    for (let i = 0; i < 6; i++) step(world);
+    const events = [...step(world, [{ type: 'send', side: 'enemy', from: 'E', to: 'N' }]), ...drain(world)];
+    const clashes = eventsOf(events, 'clash').length;
+    const enemyAtN = eventsOf(events, 'arrived').filter((a) => a.owner === 'enemy').length;
+    // 15 player units vs 15 enemy units: every enemy unit is met on the road or fights at N; none slips past.
+    expect(clashes + enemyAtN).toBe(15);
+    expect(unitsOf(world, 'enemy')).toHaveLength(0);
   });
 });

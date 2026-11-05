@@ -1,21 +1,22 @@
 import { SPECIAL_NODES, TICK_MS } from '../../config/balance';
 import { sendAmount } from './commands';
 import { distance } from './pathfinding';
-import { random, type NodeState, type World } from './World';
+import { startStream } from './stream';
+import { isAttacked, random, type NodeState, type World } from './World';
 
 export interface BanditRaid {
   from: string;
   to: string;
-  armyId: string;
+  streamId: number;
   count: number;
 }
 
 const RAID_TICKS = Math.round(SPECIAL_NODES.bandits.raidEveryMs / TICK_MS);
 
 /**
- * Bandit camps (GDD 3.12): every raid interval a neutral camp sends 75% of its troops (as a swipe)
+ * Bandit camps (GDD 3.12): every raid interval a neutral camp sends 75% of its troops as a stream (like a swipe)
  * to the nearest neighbouring node of the player or the enemy; ties go to the weaker node, then to the seeded RNG.
- * No non-neutral neighbour or too few troops: no raid this time. Mutates `world`.
+ * No non-neutral neighbour, too few troops or the camp under attack: no raid this time. Mutates `world`.
  */
 export function stepBandits(world: World): BanditRaid[] {
   const raids: BanditRaid[] = [];
@@ -26,11 +27,9 @@ export function stepBandits(world: World): BanditRaid[] {
 
     const target = raidTarget(world, camp);
     const count = sendAmount(camp.troops, 'swipe');
-    if (!target || count <= 0) continue;
-    camp.troops -= count;
-    const armyId = `a${world.nextArmyId++}`;
-    world.armies.push({ id: armyId, owner: 'neutral', count, path: [camp.id, target.id], segment: 0, progress: 0, targetId: target.id });
-    raids.push({ from: camp.id, to: target.id, armyId, count });
+    if (!target || count <= 0 || isAttacked(world, camp)) continue;
+    const stream = startStream(world, 'neutral', camp.id, [camp.id, target.id], count);
+    raids.push({ from: camp.id, to: target.id, streamId: stream.id, count });
   }
   return raids;
 }

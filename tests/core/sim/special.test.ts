@@ -3,17 +3,20 @@ import { ARMY, NODES, SPECIAL_NODES, TICK_MS } from '../../../src/config/balance
 import { aiStep, createAi } from '../../../src/core/ai/EnemyAI';
 import { validateLevel } from '../../../src/core/level/schema';
 import { raidTarget } from '../../../src/core/sim/bandits';
-import { arrive } from '../../../src/core/sim/combat';
+import { arriveUnit } from '../../../src/core/sim/combat';
 import { validate } from '../../../src/core/sim/commands';
 import { goldRate, sideGoldRate, templeIncomeMult } from '../../../src/core/sim/economy';
 import { armyPath, PORTAL_LENGTH, routeLength } from '../../../src/core/sim/pathfinding';
 import { previewAttack } from '../../../src/core/sim/preview';
 import { step } from '../../../src/core/sim/tick';
-import { createWorld, type ArmyState, type World } from '../../../src/core/sim/World';
-import { freezeEconomy, level, lineWorld, node, run } from '../helpers';
+import { createWorld, type Owner, type World } from '../../../src/core/sim/World';
+import { drain, eventsOf, freezeEconomy, level, lineWorld, node, placeUnit, run } from '../helpers';
 
-function army(_world: World, count: number, target: string, owner: ArmyState['owner'] = 'player'): ArmyState {
-  return { id: 'x', owner, count, path: ['P', target], segment: 0, progress: 1, targetId: target };
+/** `n` units of `owner` arriving at `target` now; returns the last result. */
+function arriveMany(world: World, target: string, n: number, owner: Owner = 'player') {
+  let last = arriveUnit(world, 0, owner, world.nodes[target]!);
+  for (let i = 1; i < n; i++) last = arriveUnit(world, 0, owner, world.nodes[target]!);
+  return last;
 }
 
 const ticksFor = (ms: number): number => Math.round(ms / TICK_MS);
@@ -45,24 +48,22 @@ describe('temple', () => {
 });
 
 describe('fortress', () => {
-  it('defenders count double, after the tower', () => {
+  it('each defender withstands two attackers', () => {
     const world = lineWorld({ N: { troops: 5, kind: 'fortress' } });
-    expect(arrive(world, army(world, 10, 'N')).outcome).toBe('repelled');
+    expect(arriveMany(world, 'N', 10).outcome).toBe('repelled');
     expect(world.nodes.N!.troops).toBeCloseTo(0, 9);
 
     const w2 = lineWorld({ N: { troops: 5, kind: 'fortress' } });
-    const result = arrive(w2, army(w2, 11, 'N'));
-    expect(result.outcome).toBe('captured');
-    expect(w2.nodes.N!.troops).toBeCloseTo(1, 9);
+    expect(arriveMany(w2, 'N', 11).outcome).toBe('captured');
+    expect(w2.nodes.N!.troops).toBe(1);
     expect(w2.nodes.N!.kind).toBe('fortress');
   });
 
-  it('stacks with unit strength and is in the attack preview', () => {
-    const world = lineWorld({ P: { troops: 30 }, N: { troops: 5, kind: 'fortress' } });
-    world.sides.player.modifiers.unitStrengthMult = 0.5;
-    // 22 attackers × 0.5 = 11 power vs 5 × 2 = 10.
-    expect(previewAttack(world, 'player', ['P'], 'swipe', 'N')).toMatchObject({ sent: 22, wins: true });
-    world.nodes.N!.troops = 6;
+  it('is in the attack preview', () => {
+    const world = lineWorld({ P: { troops: 15 }, N: { troops: 5, kind: 'fortress' } });
+    // 11 attackers: 10 trades with 5 double defenders, the 11th captures.
+    expect(previewAttack(world, 'player', ['P'], 'swipe', 'N')).toMatchObject({ sent: 11, wins: true });
+    world.nodes.N!.troops = 5.5;
     expect(previewAttack(world, 'player', ['P'], 'swipe', 'N').wins).toBe(false);
   });
 
@@ -81,21 +82,21 @@ describe('chest', () => {
   it('gives gold once to the capturer and turns into a normal small node', () => {
     const world = lineWorld({ N: { troops: 2, size: 'large', kind: 'chest' } });
     const gold = world.sides.player.gold;
-    const result = arrive(world, army(world, 5, 'N'));
+    const result = arriveMany(world, 'N', 3);
     expect(result.chestGold).toBe(SPECIAL_NODES.chest.gold);
     expect(world.sides.player.gold).toBe(gold + SPECIAL_NODES.chest.gold);
     expect(world.nodes.N!).toMatchObject({ kind: 'normal', size: 'small', owner: 'player' });
 
     // Captured again: no second reward.
     world.nodes.N!.troops = 1;
-    const again = arrive(world, army(world, 5, 'N', 'enemy'));
+    const again = arriveMany(world, 'N', 2, 'enemy');
     expect(again.chestGold).toBe(0);
   });
 
   it('a failed attack gives nothing', () => {
     const world = lineWorld({ N: { troops: 9, kind: 'chest' } });
     const gold = world.sides.player.gold;
-    expect(arrive(world, army(world, 5, 'N')).chestGold).toBe(0);
+    expect(arriveMany(world, 'N', 5).chestGold).toBe(0);
     expect(world.sides.player.gold).toBe(gold);
     expect(world.nodes.N!.kind).toBe('chest');
   });
@@ -154,18 +155,20 @@ describe('portal', () => {
     expect(armyPath(world, 'enemy', 'B', 'P')).toBeNull(); // through A: not own
   });
 
-  it('an army crosses the portal in delayMs', () => {
+  it('each unit crosses the portal in delayMs; the column comes out in the same chain', () => {
     const world = freezeEconomy(createWorld(portalLevel()));
     world.nodes.A!.troops = 20;
-    step(world, [{ type: 'send', side: 'player', from: 'A', to: 'B', mode: 'swipe' }]);
+    const events = [...step(world, [{ type: 'send', side: 'player', from: 'A', to: 'B', mode: 'swipe' }])];
     const travelTicks = ticksFor(SPECIAL_NODES.portal.delayMs);
-    run(world, travelTicks - 2);
-    expect(world.nodes.B!.owner).toBe('neutral');
-    run(world, 3);
+    for (let i = 1; i < travelTicks - 1; i++) events.push(...step(world));
+    expect(eventsOf(events, 'arrived')).toHaveLength(0);
+    events.push(...step(world), ...step(world));
+    expect(eventsOf(events, 'arrived')).toHaveLength(1);
+    drain(world);
     expect(world.nodes.B!.owner).toBe('player');
   });
 
-  it('armies inside a portal do not clash', () => {
+  it('units inside a portal do not clash', () => {
     const world = freezeEconomy(createWorld(portalLevel()));
     world.nodes.B!.owner = 'enemy';
     world.nodes.B!.troops = 20;
@@ -177,7 +180,8 @@ describe('portal', () => {
     const events = [];
     for (let i = 0; i < ticksFor(SPECIAL_NODES.portal.delayMs) + 2; i++) events.push(...step(world));
     expect(events.some((e) => e.type === 'clash')).toBe(false);
-    expect(events.filter((e) => e.type === 'arrived')).toHaveLength(2);
+    // The first unit of each side has come out at the other end.
+    expect(new Set(eventsOf(events, 'arrived').map((e) => e.owner))).toEqual(new Set(['enemy', 'player']));
   });
 
   it('validation: pairs of two, no road between them, counted for connectivity', () => {
@@ -228,8 +232,8 @@ describe('bandit camp', () => {
     }
     expect(raids).toHaveLength(1);
     expect(raids[0]).toMatchObject({ from: 'C', to: 'P' });
-    const raid = world.armies.find((a) => a.owner === 'neutral')!;
-    expect(raid.targetId).toBe('P');
+    // The raid leaves as a stream, like a swipe.
+    expect(world.streams.find((s) => s.owner === 'neutral')?.path).toEqual(['C', 'P']);
   });
 
   it('breaks distance ties by the weaker node, then deterministically', () => {
@@ -271,7 +275,8 @@ describe('bandit camp', () => {
     );
     world.nodes.E!.owner = 'neutral';
     run(world, ticksFor(SPECIAL_NODES.bandits.raidEveryMs) + 1);
-    expect(world.armies).toHaveLength(0);
+    expect(world.streams).toHaveLength(0);
+    expect(world.units).toHaveLength(0);
   });
 
   it('a raid can capture a node for the neutrals; a captured camp stops raiding', () => {
@@ -282,17 +287,29 @@ describe('bandit camp', () => {
 
     const w2 = campWorld();
     w2.nodes.C!.troops = 1;
-    arrive(w2, { id: 'x', owner: 'enemy', count: 5, path: ['E', 'C'], segment: 0, progress: 1, targetId: 'C' });
+    arriveMany(w2, 'C', 2, 'enemy');
     expect(w2.nodes.C!).toMatchObject({ owner: 'enemy', kind: 'normal', raidTick: null });
   });
 
   it('the AI defends against a bandit raid', () => {
-    const world = campWorld({ P: 30, E: 2 });
-    world.nodes.E!.troops = 2;
-    // Second enemy node that can help E.
-    world.nodes.H = { ...world.nodes.E!, id: 'H', x: 0.9, y: 0.7, troops: 20 };
-    world.roads.push(['E', 'H']);
-    world.armies.push({ id: 'r', owner: 'neutral', count: 15, path: ['C', 'E'], segment: 0, progress: 0.1, targetId: 'E' });
+    const world = createWorld(
+      level(
+        [
+          node('P', 0.3, 0.5, { owner: 'player', troops: 30 }),
+          node('C', 0.5, 0.5, { troops: 4, kind: 'bandits' }),
+          node('E', 0.8, 0.5, { owner: 'enemy', troops: 2 }),
+          // Second enemy node that can help E.
+          node('H', 0.9, 0.7, { owner: 'enemy', troops: 20 }),
+        ],
+        [
+          ['P', 'C'],
+          ['C', 'E'],
+          ['E', 'H'],
+        ],
+      ),
+    );
+    // A raid of 8 still far enough for H to come in time.
+    for (let i = 0; i < 8; i++) placeUnit(world, 'neutral', ['C', 'E'], 0.1);
     world.tick = 10;
     const cmds = aiStep(world, createAi('enemy', { thinkMs: 100, aggression: 0.5 }));
     expect(cmds).toContainEqual(expect.objectContaining({ type: 'send', from: 'H', to: 'E' }));

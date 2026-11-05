@@ -42,7 +42,7 @@ describe('balance config', () => {
       balance.BUILDINGS.mine.extraGoldPerSec,
       balance.BUILDINGS.barracks.productionMult,
       balance.BUILDINGS.barracks.extraCapacity,
-      balance.BUILDINGS.tower.damage,
+      balance.BUILDINGS.tower.shotsPerSec,
     ];
     for (const table of tables) {
       expect(table).toHaveLength(3);

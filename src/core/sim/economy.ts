@@ -1,5 +1,5 @@
-import { BUILDINGS, NODES, SPECIAL_NODES } from '../../config/balance';
-import type { NodeState, Side, SideModifiers, World } from './World';
+import { BUILDINGS, NODES, SPECIAL_NODES, STREAM } from '../../config/balance';
+import { isAttacked, type NodeState, type Side, type SideModifiers, type World } from './World';
 
 /** Max troops a node produces up to (base + barracks). */
 export function nodeCapacity(node: NodeState): number {
@@ -48,7 +48,15 @@ export function sideGoldRate(world: World, side: Side): number {
   return total * templeIncomeMult(world, side);
 }
 
-/** Produces troops (stopping at capacity, never reducing an overfilled node) and gold. */
+/**
+ * Whether the node's troop production is stopped (GDD 3.3, 3.6): while it is attacked, and — only with the
+ * STREAM.pauseSourceProduction balance lever — while it releases a stream. Gold is not affected.
+ */
+export function productionPaused(world: World, node: NodeState): boolean {
+  return isAttacked(world, node) || (STREAM.pauseSourceProduction && node.streamId !== null);
+}
+
+/** Produces troops (stopping at capacity, never reducing an overfilled node, not while paused) and gold. */
 export function produce(world: World, dtSec: number): void {
   const incomeMult = {
     player: templeIncomeMult(world, 'player'),
@@ -58,7 +66,7 @@ export function produce(world: World, dtSec: number): void {
   for (const node of Object.values(world.nodes)) {
     if (node.owner === 'neutral') {
       // Bandit camps grow their garrison; other neutrals don't produce.
-      if (node.kind === 'bandits' && node.troops < nodeCapacity(node)) {
+      if (node.kind === 'bandits' && node.troops < nodeCapacity(node) && !productionPaused(world, node)) {
         node.troops = Math.min(nodeCapacity(node), node.troops + NODES.small.troopsPerSec * dtSec);
       }
       continue;
@@ -66,7 +74,7 @@ export function produce(world: World, dtSec: number): void {
     const side = world.sides[node.owner];
 
     const capacity = nodeCapacity(node);
-    if (node.troops < capacity) {
+    if (node.troops < capacity && !productionPaused(world, node)) {
       node.troops = Math.min(capacity, node.troops + troopRate(node, side.modifiers) * dtSec);
     }
     side.gold += goldRate(node, side.modifiers) * incomeMult[node.owner] * dtSec;

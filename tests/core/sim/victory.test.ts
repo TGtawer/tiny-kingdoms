@@ -47,7 +47,7 @@ describe('victory and defeat', () => {
       { type: 'send', side: 'enemy', from: 'E', to: 'P' },
     ]);
     run(world, 20);
-    expect(world.armies.some((a) => a.owner === 'player')).toBe(true);
+    expect(world.units.some((u) => u.owner === 'player')).toBe(true);
     expect(world.nodes.P!.owner).toBe('enemy');
     expect(world.winner).toBe('enemy');
   });

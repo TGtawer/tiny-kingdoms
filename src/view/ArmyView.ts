@@ -1,46 +1,6 @@
-import * as Phaser from 'phaser';
-import { ARMY_RADIUS_PX, COLORS, SQUAD_LIP } from '../config/game';
-import { visibleTroops } from '../core/sim/commands';
-import type { ArmyState, Owner, World } from '../core/sim/World';
-import { px, textStyle, type Point } from './layout';
-
-/** Army position in level coordinates (along its current road segment). */
-export function armyLevelPosition(world: World, army: ArmyState): Point {
-  const a = world.nodes[army.path[army.segment]!]!;
-  const b = world.nodes[army.path[Math.min(army.segment + 1, army.path.length - 1)]!]!;
-  return { x: a.x + (b.x - a.x) * army.progress, y: a.y + (b.y - a.y) * army.progress };
-}
-
-/** One squad marker with a number; armies are never drawn as individual units. */
-export class ArmyView extends Phaser.GameObjects.Container {
-  private readonly countText: Phaser.GameObjects.Text;
-  private drawnCount = -1;
-  /** Phase offset of the marching bob, so armies don't pulse in sync. */
-  readonly phase: number;
-
-  constructor(scene: Phaser.Scene, owner: Owner, phase = 0) {
-    super(scene, 0, 0);
-    this.phase = phase;
-    const g = scene.add.graphics();
-    drawSquad(g, px(ARMY_RADIUS_PX), owner, px(1));
-
-    this.countText = scene.add.text(0, 0, '', textStyle(14)).setOrigin(0.5).setStroke('#1f2937', px(3));
-    this.add([g, this.countText]);
-    scene.add.existing(this);
-  }
-
-  /** The number currently shown on the marker. */
-  get shownCount(): number {
-    return Math.max(0, this.drawnCount);
-  }
-
-  setCount(count: number): void {
-    const visible = visibleTroops(count);
-    if (visible === this.drawnCount) return;
-    this.drawnCount = visible;
-    this.countText.setText(String(visible));
-  }
-}
+import type * as Phaser from 'phaser';
+import { COLORS, SQUAD_LIP } from '../config/game';
+import type { Owner } from '../core/sim/World';
 
 /**
  * Squad marker body without the number, centered at (0, 0): ground shadow, colored disc, outline, banner.
