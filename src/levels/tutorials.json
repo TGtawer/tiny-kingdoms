@@ -80,7 +80,16 @@
     ]
   },
   "c01_l08": {
-    "steps": [{ "hint": "tut.chest", "highlight": [{ "node": "a2" }], "until": { "type": "time", "sec": 4 } }]
+    "steps": [
+      {
+        "hint": "tut.chest",
+        "highlight": [{ "node": "a3" }],
+        "finger": { "kind": "drag", "from": "player", "to": "a3" },
+        "until": { "type": "send", "to": "a3" },
+        "slow": true
+      },
+      { "until": { "type": "capture", "node": "a3" } }
+    ]
   },
   "c01_l10": {
     "gate": "step",

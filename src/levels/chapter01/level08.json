@@ -5,7 +5,7 @@
   "playerStartGold": 20,
   "enemy": {
     "productionMult": 0.7,
-    "startGold": 20,
+    "startGold": 40,
     "leader": "baron"
   },
   "tutorial": "c01_l08",
@@ -27,7 +27,7 @@
       "y": 0.419,
       "size": "large",
       "owner": "enemy",
-      "troops": 26,
+      "troops": 28,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -60,8 +60,7 @@
       "owner": "neutral",
       "troops": 4,
       "hasGoldVein": false,
-      "building": null,
-      "kind": "chest"
+      "building": null
     },
     {
       "id": "b2",
@@ -79,9 +78,10 @@
       "y": 0.889,
       "size": "small",
       "owner": "neutral",
-      "troops": 3,
+      "troops": 4,
       "hasGoldVein": false,
-      "building": null
+      "building": null,
+      "kind": "chest"
     },
     {
       "id": "b3",

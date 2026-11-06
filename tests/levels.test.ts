@@ -28,6 +28,37 @@ describe('chapter 1', () => {
     }
   });
 
+  it('level 8: the chest is a road neighbour of the castle, far nearer to the player than to the enemy (PLAYTEST-1 F-7)', () => {
+    const l = chapter.find((x) => x.id === 'c01_l08')!;
+    const chest = l.nodes.find((n) => n.kind === 'chest')!;
+    const castle = l.nodes.find((n) => n.owner === 'player' && n.capital)!;
+    const enemy = l.nodes.find((n) => n.owner === 'enemy' && n.capital)!;
+    expect(l.roads.some(([a, b]) => (a === castle.id && b === chest.id) || (b === castle.id && a === chest.id))).toBe(true);
+    // Shortest road distances over the whole map (the enemy goes through what will be its nodes).
+    const pos = new Map(l.nodes.map((n) => [n.id, n]));
+    const shortest = (from: string, to: string): number => {
+      const dist = new Map<string, number>([[from, 0]]);
+      const open = new Set([from]);
+      while (open.size) {
+        const id = [...open].reduce((a, b) => (dist.get(a)! <= dist.get(b)! ? a : b));
+        open.delete(id);
+        if (id === to) return dist.get(id)!;
+        for (const [a, b] of l.roads) {
+          const next = a === id ? b : b === id ? a : null;
+          if (!next) continue;
+          const d = dist.get(id)! + Math.hypot(pos.get(id)!.x - pos.get(next)!.x, pos.get(id)!.y - pos.get(next)!.y);
+          if (d < (dist.get(next) ?? Infinity)) {
+            dist.set(next, d);
+            open.add(next);
+          }
+        }
+      }
+      return Infinity;
+    };
+    expect(shortest(enemy.id, chest.id)).toBeGreaterThanOrEqual(1.3 * shortest(castle.id, chest.id));
+    expect(chest.troops).toBeLessThan(0.75 * castle.troops);
+  });
+
   it('uses 6–9 nodes per level and enemy production 0.7 (BALANCE.md, chapter 1)', () => {
     for (const l of chapter) {
       expect(l.nodes.length, l.id).toBeGreaterThanOrEqual(6);
