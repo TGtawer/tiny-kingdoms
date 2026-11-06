@@ -33,6 +33,7 @@ src/
       EnemyAI.ts          # выдаёт commands на основе World и параметров уровня
     tutorial/
       tutorial.ts         # шаги обучения: условия, какие шаги замедляют бой (TUTORIAL.md)
+      gate.ts             # блокировка на уроке: что разрешено сейчас, идёт ли урок (PLAYTEST-1 F-6)
     level/
       schema.ts           # тип LevelData + валидация
       loader.ts
