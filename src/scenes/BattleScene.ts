@@ -6,6 +6,7 @@ import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/En
 import type { LevelData } from '../core/level/schema';
 import { sendAmount, type Command } from '../core/sim/commands';
 import { armyPath, blockingNode } from '../core/sim/pathfinding';
+import { contestStep, createContest, type ContestState } from '../core/dev/contest';
 import { createStress, stressStep, type StressState } from '../core/dev/stress';
 import { battleSpeed, runClock } from '../core/sim/clock';
 import { previewAttack } from '../core/sim/preview';
@@ -30,13 +31,14 @@ import { isCompleted } from '../core/meta/Progress';
 import { defeatTip } from '../core/meta/tips';
 import { featureLevel, isFeatureAvailable, isGoldVisible } from '../core/meta/unlocks';
 import { playerSetupFrom } from '../core/meta/upgrades';
-import { ALL_LEVELS, FIRST_LEVEL, getLevel, nextLevel, STRESS_LEVEL, TUTORIALS } from '../levels';
+import { ALL_LEVELS, CONTEST_LEVEL, FIRST_LEVEL, getLevel, nextLevel, STRESS_LEVEL, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
 import { explosion, floatText, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, textStyle } from '../view/layout';
 import { NodeView, type Highlight } from '../view/NodeView';
+import { SHOWN_OWNER_CHANGED } from '../view/displayFilter';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
 import { audioFiles, canPlayJingle, isMusicEnabled, playJingle, playMusic, setMusicDucked, setMusicEnabled, stopMusic } from '../view/music';
@@ -92,6 +94,8 @@ export class BattleScene extends Phaser.Scene {
   private fpsShownAt = 0;
   /** Dev only: the stress driver on dev_stress (instead of the AIs). */
   private stress: StressState | null = null;
+  /** Dev only: the contest driver on dev_contest (instead of the AIs). */
+  private contest: ContestState | null = null;
   /** Hold goal: timer ring around the node to hold. */
   private goalRing!: Phaser.GameObjects.Graphics;
   /** Node owners before the current tick, to tell "captured" from "lost" in arrival events. */
@@ -180,6 +184,7 @@ export class BattleScene extends Phaser.Scene {
     if (import.meta.env.DEV) {
       if (DEV_TOOLS.showFps) this.fpsText = this.add.text(0, 0, '', textStyle(13)).setStroke('#1f2937', px(3)).setDepth(400);
       this.stress = this.level.id === STRESS_LEVEL.id ? createStress() : null;
+      this.contest = this.level.id === CONTEST_LEVEL.id ? createContest() : null;
     }
     this.goalRing = this.add.graphics().setDepth(38);
     this.dragLines = this.add.graphics().setDepth(50);
@@ -259,7 +264,9 @@ export class BattleScene extends Phaser.Scene {
     // Player input and the enemy AI go through the same command queue and rules.
     const commands = this.stress
       ? stressStep(this.world, this.stress, STRESS_UNITS)
-      : [...this.queue, ...aiStep(this.world, this.ai), ...(this.ai2 ? aiStep(this.world, this.ai2) : [])];
+      : this.contest
+        ? [...this.queue, ...contestStep(this.world, this.contest)]
+        : [...this.queue, ...aiStep(this.world, this.ai), ...(this.ai2 ? aiStep(this.world, this.ai2) : [])];
     this.queue = [];
     const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
@@ -318,20 +325,10 @@ export class BattleScene extends Phaser.Scene {
           ringBurst(this, view.x, view.y, view.radius * 1.3, COLORS.shield);
         }
         if (event.outcome === 'captured') {
+          // The pop, sound and vibration wait for the node to show its new owner (F-2: no crackle on a ping-pong).
           const owner = this.world.nodes[event.nodeId]!.owner;
-          pop(this, view);
-          ringBurst(this, view.x, view.y, view.radius, owner === 'neutral' ? COLORS.faction.neutral : COLORS.faction[owner]);
           if (this.selected === event.nodeId) this.deselect();
-          const before = this.ownersBefore.get(event.nodeId);
-          if (owner === 'player') {
-            playSfx('capture');
-            this.vibrate(HAPTICS.short);
-            if (before !== undefined && isRival('player', before) && this.capitals.has(event.nodeId)) this.shake();
-          } else if (before === 'player') {
-            this.stats.lostOwnNode = true;
-            playSfx('lost');
-            this.vibrate(HAPTICS.short);
-          }
+          if (this.ownersBefore.get(event.nodeId) === 'player' && owner !== 'player') this.stats.lostOwnNode = true;
           // Later arrivals in the same tick compare against the new owner.
           this.ownersBefore.set(event.nodeId, owner);
         } else if (event.outcome === 'destroyedByTower' || event.outcome === 'repelled') {
@@ -586,7 +583,7 @@ export class BattleScene extends Phaser.Scene {
 
     for (const node of Object.values(world.nodes)) {
       const view = this.nodeViews.get(node.id)!;
-      view.sync(node);
+      if (view.sync(node, this.time.now) & SHOWN_OWNER_CHANGED) this.showCapture(view);
       view.setHighlight(this.highlightFor(node));
     }
 
@@ -864,6 +861,22 @@ export class BattleScene extends Phaser.Scene {
         : { type: 'upgrade', side: 'player', nodeId },
     );
     this.deselect();
+  }
+
+  /** The node just showed a new owner (PLAYTEST-1 F-2): pop, burst, sound and vibration. */
+  private showCapture(view: NodeView): void {
+    const owner = view.shown.owner;
+    const before = view.shown.previousOwner;
+    pop(this, view);
+    ringBurst(this, view.x, view.y, view.radius, COLORS.faction[owner]);
+    if (owner === 'player') {
+      playSfx('capture');
+      this.vibrate(HAPTICS.short);
+      if (isRival('player', before) && view.capital) this.shake();
+    } else if (before === 'player') {
+      playSfx('lost');
+      this.vibrate(HAPTICS.short);
+    }
   }
 
   /** Name and effect of a special node, above it for a few seconds. */

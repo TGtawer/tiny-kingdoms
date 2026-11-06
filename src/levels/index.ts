@@ -20,6 +20,7 @@ import devSpecials from './dev/dev_specials.json';
 import devSurvive from './dev/dev_survive.json';
 import devThree from './dev/dev_three.json';
 import devStress from './dev/dev_stress.json';
+import devContest from './dev/dev_contest.json';
 
 // Levels are validated on load: a broken JSON fails fast in dev and in tests.
 export const CHAPTERS: readonly (readonly LevelData[])[] = [
@@ -44,10 +45,16 @@ export const DEV_LEVELS: readonly LevelData[] = [devSpecials, devHold, devSurviv
  */
 export const STRESS_LEVEL: LevelData = loadLevel(devStress);
 
+/**
+ * Display check (PLAYTEST-1 F-2): both castles stream into one small neutral node. In dev, ?level=dev_contest runs
+ * the contest driver (core/dev/contest.ts) instead of the AI. Not a playable level, so it is not in DEV_LEVELS.
+ */
+export const CONTEST_LEVEL: LevelData = loadLevel(devContest);
+
 export const TUTORIALS: Readonly<Record<string, TutorialScript>> = tutorials as Record<string, TutorialScript>;
 
 export function getLevel(id: string): LevelData | undefined {
-  return ALL_LEVELS.find((l) => l.id === id) ?? DEV_LEVELS.find((l) => l.id === id) ?? (id === STRESS_LEVEL.id ? STRESS_LEVEL : undefined);
+  return ALL_LEVELS.find((l) => l.id === id) ?? DEV_LEVELS.find((l) => l.id === id) ?? [STRESS_LEVEL, CONTEST_LEVEL].find((l) => l.id === id);
 }
 
 /** The level after `id` in play order, or null after the last one. */

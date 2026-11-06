@@ -1,9 +1,10 @@
 import * as Phaser from 'phaser';
 import { TICK_MS } from '../config/balance';
-import { COLORS, NODE_LIP, SHIELD_FX } from '../config/game';
+import { COLORS, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
-import type { NodeState } from '../core/sim/World';
+import type { NodeState, Owner } from '../core/sim/World';
+import { DisplayFilter } from './displayFilter';
 import { drawBuilding, drawCrown, drawKind } from './icons';
 import { px, textStyle, type ScreenLayout } from './layout';
 
@@ -18,7 +19,10 @@ const HIGHLIGHT_COLOR: Record<Exclude<Highlight, 'none'>, number> = {
   hint: COLORS.hint,
 };
 
-/** A node drawn with Graphics: faction circle, building badge, gold vein, troop count. Redraws only on change. */
+/**
+ * A node drawn with Graphics: faction circle, building badge, gold vein, troop count. Redraws only on change.
+ * The owner and the count go through a DisplayFilter (PLAYTEST-1 F-2): they don't flicker while units pour in.
+ */
 export class NodeView extends Phaser.GameObjects.Container {
   readonly nodeId: string;
   /** Start castle of a side: drawn with a crown whoever owns it now. */
@@ -43,12 +47,15 @@ export class NodeView extends Phaser.GameObjects.Container {
   private drawnCapKey = '';
   private highlight: Highlight = 'none';
   private ringTween: Phaser.Tweens.Tween | null = null;
+  /** What the node shows (owner, count); the real state is in the world. */
+  readonly shown: DisplayFilter;
 
   constructor(scene: Phaser.Scene, node: NodeState, capital = false, mageTower = false) {
     super(scene, 0, 0);
     this.nodeId = node.id;
     this.capital = capital;
     this.mageTower = mageTower;
+    this.shown = new DisplayFilter(node.owner, visibleTroops(node.troops), NODE_VIEW.refreshMs, NODE_VIEW.ownerStableMs);
     this.ring = scene.add.graphics();
     this.capGfx = scene.add.graphics();
     this.bodyGfx = scene.add.graphics();
@@ -72,23 +79,30 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.drawnCapKey = '';
     this.drawnShield = false;
     this.drawHighlight();
-    this.sync(node);
+    this.shown.reset(node.owner, visibleTroops(node.troops));
+    this.sync(node, 0);
   }
 
-  /** Updates visuals from state; cheap when nothing changed. */
-  sync(node: NodeState): void {
-    const key = `${node.owner}|${node.kind}|${node.size}|${node.building?.type ?? '-'}|${node.building?.level ?? 0}|${node.hasGoldVein}|${this.radius}`;
+  /**
+   * Updates visuals from state; cheap when nothing changed. `now`: scene time, ms.
+   * Returns the DisplayFilter bits (SHOWN_OWNER_CHANGED: the color just changed on screen).
+   */
+  sync(node: NodeState, now: number): number {
+    const changed = this.shown.update(now, node.owner, visibleTroops(node.troops));
+    const owner = this.shown.owner;
+    const key = `${owner}|${node.kind}|${node.size}|${node.building?.type ?? '-'}|${node.building?.level ?? 0}|${node.hasGoldVein}|${this.radius}`;
     if (key !== this.drawnKey) {
       this.drawnKey = key;
-      this.drawBody(node);
+      this.drawBody(node, owner);
     }
-    const troops = visibleTroops(node.troops);
+    const troops = this.shown.troops;
     if (troops !== this.drawnCount) {
       this.drawnCount = troops;
       this.countText.setText(String(troops));
     }
-    this.syncCapacity(node);
+    this.syncCapacity(node, owner, troops);
     this.syncShield(node);
+    return changed;
   }
 
   /** Dome drawn once when the shield goes up; blinks during its last moments. */
@@ -114,11 +128,12 @@ export class NodeView extends Phaser.GameObjects.Container {
    * Capacity arc for owned nodes, plus the "/max" label while selected (neutrals don't produce, so capacity means nothing there).
    * Full arc = production stopped; gold arc = above capacity (e.g. after reinforcements).
    */
-  private syncCapacity(node: NodeState): void {
-    const owned = node.owner !== 'neutral';
+  private syncCapacity(node: NodeState, owner: Owner, troops: number): void {
+    const owned = owner !== 'neutral';
     const capacity = nodeCapacity(node);
-    const fill = Math.min(1, node.troops / capacity);
-    const over = node.troops > capacity + 1e-9;
+    // The shown count, so the arc moves with the number (and as rarely).
+    const fill = Math.min(1, troops / capacity);
+    const over = troops > capacity + 1e-9;
     // Quantized so the arc redraws a few dozen times while filling, not every frame.
     const showCap = owned && this.highlight === 'selected';
     const key = owned ? `${Math.round(fill * 48)}|${over}|${capacity}|${this.radius}|${showCap}` : 'neutral';
@@ -149,10 +164,9 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.drawHighlight();
   }
 
-  private drawBody(node: NodeState): void {
+  private drawBody(node: NodeState, owner: Owner): void {
     const g = this.bodyGfx;
     const r = this.radius;
-    const owner = node.owner;
     g.clear();
 
     // Shadow, rim, face, highlight crescent.
