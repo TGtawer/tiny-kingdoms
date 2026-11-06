@@ -69,7 +69,7 @@
   "tip.barracks": "Совет: построй казармы — они быстрее делают войска",
   "tip.mine": "Совет: на узле с золотой жилой построй шахту",
   "tip.upgrades": "Совет: хватает кристаллов на прокачку — загляни туда",
-  "battle.chestGold": "+{gold}",
+  "battle.captureGold": "+{gold}",
   "kind.temple": "Храм",
   "kind.temple.desc": "+50% ко всему золоту владельца",
   "kind.fortress": "Крепость",

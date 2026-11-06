@@ -35,13 +35,22 @@ export const TICK_MS = 100;
 
 export const NODES: Record<NodeSize, { capacity: number; troopsPerSec: number; goldPerSec: number }> = {
   // Troop numbers halved for stream armies (BALANCE.md, stage 9); gold unchanged.
-  small: { capacity: 10, troopsPerSec: 0.25, goldPerSec: 0.3 },
-  medium: { capacity: 18, troopsPerSec: 0.4, goldPerSec: 0.4 },
-  large: { capacity: 25, troopsPerSec: 0.6, goldPerSec: 0.5 },
+  // Gold ×1.5 after the playtest (PLAYTEST-1 F-4; was 0.3 / 0.4 / 0.5).
+  small: { capacity: 10, troopsPerSec: 0.25, goldPerSec: 0.45 },
+  medium: { capacity: 18, troopsPerSec: 0.4, goldPerSec: 0.6 },
+  large: { capacity: 25, troopsPerSec: 0.6, goldPerSec: 0.75 },
 };
 
 /** Index 0 = level 1, index 1 = level 2, index 2 = level 3. */
 type PerLevel<T> = readonly [T, T, T];
+
+export const ECONOMY = {
+  /**
+   * Gold for capturing a neutral node, given at once to any side (PLAYTEST-1 F-4). Nodes taken from another side
+   * give nothing, so a ping-pong over a node can't be farmed; a chest gives its own gold instead of this.
+   */
+  neutralCaptureGold: 10,
+} as const;
 
 export const BUILDINGS = {
   /** Cost to build (level 1) and to upgrade to level 2 and 3. */

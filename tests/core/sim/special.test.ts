@@ -83,20 +83,20 @@ describe('chest', () => {
     const world = lineWorld({ N: { troops: 2, size: 'large', kind: 'chest' } });
     const gold = world.sides.player.gold;
     const result = arriveMany(world, 'N', 3);
-    expect(result.chestGold).toBe(SPECIAL_NODES.chest.gold);
+    expect(result.captureGold).toBe(SPECIAL_NODES.chest.gold);
     expect(world.sides.player.gold).toBe(gold + SPECIAL_NODES.chest.gold);
     expect(world.nodes.N!).toMatchObject({ kind: 'normal', size: 'small', owner: 'player' });
 
     // Captured again: no second reward.
     world.nodes.N!.troops = 1;
     const again = arriveMany(world, 'N', 2, 'enemy');
-    expect(again.chestGold).toBe(0);
+    expect(again.captureGold).toBe(0);
   });
 
   it('a failed attack gives nothing', () => {
     const world = lineWorld({ N: { troops: 9, kind: 'chest' } });
     const gold = world.sides.player.gold;
-    expect(arriveMany(world, 'N', 5).chestGold).toBe(0);
+    expect(arriveMany(world, 'N', 5).captureGold).toBe(0);
     expect(world.sides.player.gold).toBe(gold);
     expect(world.nodes.N!.kind).toBe('chest');
   });

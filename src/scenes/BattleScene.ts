@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DRAGON, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
+import { DRAGON, ECONOMY, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
 import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
@@ -35,7 +35,7 @@ import { ALL_LEVELS, CONTEST_LEVEL, FIRST_LEVEL, getLevel, nextLevel, STRESS_LEV
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
-import { explosion, floatText, pop, ringBurst } from '../view/effects';
+import { explosion, floatText, goldFloat, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, textStyle } from '../view/layout';
 import { NodeView, type Highlight } from '../view/NodeView';
 import { SHOWN_OWNER_CHANGED } from '../view/displayFilter';
@@ -317,9 +317,10 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'arrived': {
         const view = this.nodeViews.get(event.nodeId)!;
-        if (event.chestGold > 0) {
-          floatText(this, view.x, view.y - view.radius * 1.4, t('battle.chestGold', { gold: event.chestGold }), COLORS.gold);
-          ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.gold);
+        // Gold for a chest or a neutral node (F-4): a "+N" with a coin, only while the gold counter is shown.
+        if (event.captureGold > 0 && event.owner === 'player' && this.hud.isGoldVisible) {
+          goldFloat(this, view.x, view.y - view.radius * 1.4, t('battle.captureGold', { gold: event.captureGold }));
+          if (event.captureGold > ECONOMY.neutralCaptureGold) ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.gold);
         }
         if (event.outcome === 'shielded') {
           ringBurst(this, view.x, view.y, view.radius * 1.3, COLORS.shield);

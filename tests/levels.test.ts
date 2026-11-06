@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
 import { validateLevel, type LevelData } from '../src/core/level/schema';
+import { buildCost } from '../src/core/sim/commands';
 import { previewAttack } from '../src/core/sim/preview';
-import { step } from '../src/core/sim/tick';
-import { createWorld } from '../src/core/sim/World';
+import { spellCost } from '../src/core/sim/spells';
+import { step, type TickEvent } from '../src/core/sim/tick';
+import { createWorld, type World } from '../src/core/sim/World';
 import { CHAPTERS, DEV_LEVELS, getLevel, nextLevel } from '../src/levels';
 
 describe('chapter 1', () => {
@@ -91,25 +93,71 @@ const WIN_CORRIDOR: Record<number, readonly [number, number]> = {
   10: [5, 7],
 };
 
-/** Wins of the AI player over seeds 1..10. */
-function wins(level: LevelData): number {
+/** Gold the player spent on purchases (buildings, upgrades, spells) applied in one tick, and their number. */
+function purchases(world: World, events: readonly TickEvent[]): { spent: number; count: number } {
+  let spent = 0;
+  let count = 0;
+  for (const e of events) {
+    if (e.type !== 'applied' || e.command.side !== 'player') continue;
+    const c = e.command;
+    // After the tick an upgraded building is one level up: the upgrade cost the price of its previous level.
+    if (c.type === 'build') spent += buildCost(0)!;
+    else if (c.type === 'upgrade') spent += buildCost((world.nodes[c.nodeId]!.building!.level - 1) as 1 | 2)!;
+    else if (c.type === 'cast') spent += spellCost(c.spell);
+    else continue;
+    count++;
+  }
+  return { spent, count };
+}
+
+interface LevelRun {
+  /** Wins of the AI player over seeds 1..10. */
+  won: number;
+  /** Per battle, on average: gold the AI player earned (income, chests, neutral captures) and purchases made. */
+  gold: number;
+  buys: number;
+}
+
+const runs = new Map<string, LevelRun>();
+
+function runLevel(level: LevelData): LevelRun {
+  const cached = runs.get(level.id);
+  if (cached) return cached;
   let won = 0;
+  let gold = 0;
+  let buys = 0;
   for (let seed = 1; seed <= 10; seed++) {
     const world = createWorld(level, { seed });
     const player = createAi('player', { thinkMs: 1200, aggression: 0.6 });
     const enemy = createAi('enemy', aiParamsFromLevel(level.enemy, world.goal, world.capitals.player));
-    while (!world.winner && world.tick < 6000) step(world, [...aiStep(world, player), ...aiStep(world, enemy)]);
+    while (!world.winner && world.tick < 6000) {
+      const before = world.sides.player.gold;
+      const events = step(world, [...aiStep(world, player), ...aiStep(world, enemy)]);
+      const bought = purchases(world, events);
+      gold += world.sides.player.gold - before + bought.spent;
+      buys += bought.count;
+    }
     expect(world.winner, `${level.id} seed ${seed} did not finish in 10 min`).not.toBeNull();
     if (world.winner === 'player') won++;
   }
-  return won;
+  const run = { won, gold: gold / 10, buys: buys / 10 };
+  runs.set(level.id, run);
+  return run;
 }
 
 describe('chapter 1 difficulty curve', () => {
   it.each(CHAPTERS[0]!.map((l) => [l.id, l] as const))('%s', (_id, level) => {
     const [min, max] = WIN_CORRIDOR[level.index]!;
-    const won = wins(level);
+    const { won } = runLevel(level);
     expect(won, `${level.id}: ${won}/10`).toBeGreaterThanOrEqual(min);
     expect(won, `${level.id}: ${won}/10`).toBeLessThanOrEqual(max);
+  });
+
+  // PLAYTEST-1 F-4: 4–5 gold decisions a battle on levels 4–10, i.e. at least 120 gold earned on average.
+  it('levels 4–10: the AI player earns at least 120 gold a battle on average', () => {
+    const levels = CHAPTERS[0]!.filter((l) => l.index >= 4);
+    const gold = levels.map((l) => runLevel(l).gold);
+    const avg = gold.reduce((a, b) => a + b, 0) / gold.length;
+    expect(avg, levels.map((l, i) => `${l.index}: ${Math.round(gold[i]!)} gold, ${runLevel(l).buys} buys`).join('; ')).toBeGreaterThanOrEqual(120);
   });
 });

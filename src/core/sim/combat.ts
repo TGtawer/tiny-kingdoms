@@ -1,4 +1,4 @@
-import { BUILDINGS, SPECIAL_NODES, STREAM } from '../../config/balance';
+import { BUILDINGS, ECONOMY, SPECIAL_NODES, STREAM } from '../../config/balance';
 import { captureNode } from './capture';
 import { dropForeignStreams } from './stream';
 import { defenseMult, nowMs, refreshLaneEnds, type NodeState, type Owner, type World } from './World';
@@ -16,7 +16,8 @@ export interface ArrivalResult {
   fromId: string;
   outcome: ArrivalOutcome;
   /** Gold the capturer got from a chest (0 otherwise). */
-  chestGold: number;
+  /** Gold the capture gave the capturer: a chest's gold, or ECONOMY.neutralCaptureGold for a neutral node. */
+  captureGold: number;
 }
 
 /** Tower shots per second of the node (0 without a tower). */
@@ -62,7 +63,7 @@ export function markAttacked(world: World, node: NodeState): void {
  * garrison. Every hostile arrival except on a shield marks the node attacked for STREAM.attackWindowMs.
  */
 export function arriveUnit(world: World, unitId: number, owner: Owner, node: NodeState, fromId = node.id): ArrivalResult {
-  const base = { unitId, owner, nodeId: node.id, fromId, chestGold: 0 };
+  const base = { unitId, owner, nodeId: node.id, fromId, captureGold: 0 };
 
   if (node.owner === owner) {
     node.troops += 1;
@@ -80,7 +81,10 @@ export function arriveUnit(world: World, unitId: number, owner: Owner, node: Nod
     return { ...base, outcome: 'repelled' };
   }
 
-  const chest = node.kind === 'chest' && owner !== 'neutral' ? SPECIAL_NODES.chest.gold : 0;
+  // A chest gives its gold (as before), any other neutral node ECONOMY.neutralCaptureGold; a node taken from another
+  // side gives nothing. Bandits taking a node get nothing either.
+  const gold =
+    owner === 'neutral' ? 0 : node.kind === 'chest' ? SPECIAL_NODES.chest.gold : node.owner === 'neutral' ? ECONOMY.neutralCaptureGold : 0;
   const size = node.size;
   captureNode(node, owner, 1);
   dropForeignStreams(world, node.id);
@@ -88,6 +92,6 @@ export function arriveUnit(world: World, unitId: number, owner: Owner, node: Nod
   if (node.size !== size) refreshLaneEnds(world, node.id);
   // The capturer's node is not under its own attack.
   node.attackedUntilMs = 0;
-  if (chest > 0 && owner !== 'neutral') world.sides[owner].gold += chest;
-  return { ...base, outcome: 'captured', chestGold: chest };
+  if (gold > 0 && owner !== 'neutral') world.sides[owner].gold += gold;
+  return { ...base, outcome: 'captured', captureGold: gold };
 }

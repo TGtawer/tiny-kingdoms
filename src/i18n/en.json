@@ -69,7 +69,7 @@
   "tip.barracks": "Tip: build barracks, they make troops faster",
   "tip.mine": "Tip: build a mine on a gold-vein node",
   "tip.upgrades": "Tip: you have enough crystals for an upgrade",
-  "battle.chestGold": "+{gold}",
+  "battle.captureGold": "+{gold}",
   "kind.temple": "Temple",
   "kind.temple.desc": "+50% to all of the owner's gold",
   "kind.fortress": "Fortress",

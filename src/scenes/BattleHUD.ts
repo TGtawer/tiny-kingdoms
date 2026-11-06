@@ -208,6 +208,10 @@ export class BattleHUD {
     scene.time.delayedCall(LEADER_CARD.autoCloseMs, close);
   }
 
+  get isGoldVisible(): boolean {
+    return this.goldVisible;
+  }
+
   /** Shows or hides the gold counter and income; the title takes the freed space. */
   setGoldVisible(visible: boolean): void {
     this.goldVisible = visible;
