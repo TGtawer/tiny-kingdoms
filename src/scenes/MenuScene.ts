@@ -1,12 +1,13 @@
 import * as Phaser from 'phaser';
-import { BUTTON_STYLE, COLORS, MENU_FX, MENU_LAYOUT, type MenuBannerId } from '../config/game';
+import { BUTTON_STYLE, COLORS, MENU_FOCUS, MENU_FX, MENU_LAYOUT, type MenuBannerId } from '../config/game';
 import { FEATURE_UNLOCKS } from '../config/balance';
+import { isMenuFocus } from '../core/meta/menuFocus';
 import { currentLevel } from '../core/meta/Progress';
 import { isUpgradesOpen } from '../core/meta/unlocks';
 import { t } from '../i18n/i18n';
 import { ALL_LEVELS, FIRST_LEVEL, getLevel } from '../levels';
 import { toast } from '../view/effects';
-import { drawNote, drawOff, drawSpeaker } from '../view/icons';
+import { drawFinger, drawNote, drawOff, drawSpeaker } from '../view/icons';
 import { px } from '../view/layout';
 import { backOut, frameX, frameY, seg } from '../view/MenuBanner';
 import { MENU_DEPTH, NightScreen, TournamentScreen, type MenuScreen } from '../view/menuScreens';
@@ -15,12 +16,13 @@ import { ShinyTitle } from '../view/ShinyTitle';
 import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
 import { crystalCounter } from '../view/ui';
 import type { BattleSceneData } from './BattleScene';
-import { getStore } from './registry';
+import { getMenuFocusOverride, getStore } from './registry';
 
 /**
  * Main menu (docs/VISUALS.md V-4): three banners that are the buttons — Map, Play (→ the next level right
  * away), Upgrades. Portrait shows «Tournament», landscape «Night castle». The title, the sound and music
  * toggles and the crystal counter are shared. The entrance plays on every visit, not on resize.
+ * Focus mode on the first launch (PLAYTEST-1 F-1): Map dimmed and not pressable, a finger taps «Play».
  */
 export class MenuScene extends Phaser.Scene {
   private screen: MenuScreen | null = null;
@@ -30,6 +32,9 @@ export class MenuScene extends Phaser.Scene {
   /** Scene time when the entrance started, ms. */
   private enteredAt = 0;
   private leaving = false;
+  /** Focus mode finger over the Play medallion (null outside the focus mode). */
+  private finger: Phaser.GameObjects.Graphics | null = null;
+  private readonly medal = { x: 0, y: 0, r: 0 };
 
   constructor() {
     super('MenuScene');
@@ -46,6 +51,7 @@ export class MenuScene extends Phaser.Scene {
       this.title?.destroy();
       this.screen = null;
       this.title = null;
+      this.finger = null;
       this.corner = [];
     });
   }
@@ -66,6 +72,17 @@ export class MenuScene extends Phaser.Scene {
     this.title?.image.setPosition(frameX(screen.frame, T.x), frameY(screen.frame, y)).setAlpha(seg(ms, 0, E.titleFadeMs));
     if (MENU_FX.showShine) this.title?.update(time);
 
+    if (this.finger) {
+      // Taps the Play medallion, following its sway; fades in after the entrance.
+      const F = MENU_FOCUS;
+      const m = screen.medal('play', this.medal);
+      const lift = (Math.cos((ms * Math.PI) / F.tapMs) + 1) / 2;
+      this.finger
+        .setPosition(m.x + m.r * F.fingerAt.x, m.y + m.r * F.fingerAt.y + px(F.tapLift) * lift)
+        .setScale(0.9 + 0.1 * lift)
+        .setAlpha(seg(ms, F.fingerFromMs, F.fingerFromMs + F.fingerFadeMs));
+    }
+
     const corner = seg(ms, 0, E.cornerMs);
     for (const obj of this.corner) (obj as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(corner);
   }
@@ -77,13 +94,18 @@ export class MenuScene extends Phaser.Scene {
   private build(entrance: boolean): void {
     this.screen?.destroy();
     this.title?.destroy();
+    this.finger?.destroy();
+    this.finger = null;
     const w = this.scale.width;
     const h = this.scale.height;
     this.cameras.main.setSize(w, h);
     // Without the entrance everything is in place at once.
     this.enteredAt = entrance ? this.time.now : this.time.now - 10_000;
 
-    const level = currentLevel(getStore(this).progress, ALL_LEVELS) ?? FIRST_LEVEL;
+    const progress = getStore(this).progress;
+    // Play always starts the next level to win (on the first launch: level 1 with its tutorial).
+    const level = currentLevel(progress, ALL_LEVELS) ?? FIRST_LEVEL;
+    const focus = isMenuFocus(progress, MENU_FOCUS.firstLaunch, getMenuFocusOverride(this));
     const labels: Record<MenuBannerId, readonly string[]> = {
       map: [t('menu.map')],
       play: [t('menu.play'), t('menu.levelN', { index: level.index })],
@@ -92,9 +114,14 @@ export class MenuScene extends Phaser.Scene {
     const options = {
       labels,
       onPress: (id: MenuBannerId) => this.press(id, level.id),
-      locked: { up: !isUpgradesOpen(getStore(this).progress) },
+      locked: { up: !isUpgradesOpen(progress) },
+      dimmed: { map: focus },
     };
     this.screen = h > w ? new TournamentScreen(this, w, h, options) : new NightScreen(this, w, h, options);
+    if (focus) {
+      this.finger = this.add.graphics().setDepth(MENU_DEPTH.ui).setAlpha(0);
+      drawFinger(this.finger, px(1));
+    }
 
     const T = this.screen.title;
     const sizeCss = (T.size * this.screen.frame.s) / px(1);

@@ -461,6 +461,23 @@ export const BUTTON_STYLE = {
   pressDrop: 3,
 } as const;
 
+/**
+ * Main menu focus mode on the first launch (docs/PLAYTEST-1.md F-1): the Map banner dimmed and not pressable,
+ * a finger taps the Play medallion. `?menuFocus=on|off` overrides `firstLaunch` (works in production too).
+ */
+export const MENU_FOCUS = {
+  /** Off after the playtest (2026-11-06): the plain menu from the first launch; ?menuFocus=on still shows the mode. */
+  firstLaunch: false,
+  /** The finger appears this long after the menu opens, fading in, ms. */
+  fingerFromMs: 1400,
+  fingerFadeMs: 250,
+  /** Tap loop: half period, ms, and how far the finger lifts, CSS px. */
+  tapMs: 420,
+  tapLift: 6,
+  /** Fingertip offset from the medallion center, shares of its radius (on the lower right, not over the icon). */
+  fingerAt: { x: 0.35, y: 0.45 },
+} as const;
+
 export const MENU_LAYOUT = {
   /** Round sound / music toggles in the top-left corner, CSS px (drawn 44, touch area 48). */
   toggleSize: 44,
