@@ -29,7 +29,7 @@ import { activeSpell, claimableSpell, grantWinSpells } from '../core/meta/spellb
 import { bestStars, recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
 import { isCompleted } from '../core/meta/Progress';
 import { defeatTip } from '../core/meta/tips';
-import { featureLevel, isFeatureAvailable, isGoldVisible } from '../core/meta/unlocks';
+import { featureLevel, isFeatureAvailable, isGoldVisible, isLearned, learnByBuilding } from '../core/meta/unlocks';
 import { playerSetupFrom } from '../core/meta/upgrades';
 import { ALL_LEVELS, CONTEST_LEVEL, FIRST_LEVEL, getLevel, nextLevel, STRESS_LEVEL, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
@@ -294,6 +294,11 @@ export class BattleScene extends Phaser.Scene {
             playSfx('build');
             if (cmd.type === 'build' && cmd.building === 'barracks') this.stats.builtBarracks = true;
             if (cmd.type === 'build' && cmd.building === 'mine') this.stats.builtMine = true;
+            // Built on its lesson: open in every battle from now on, saved at once (F-5).
+            if (cmd.type === 'build' && learnByBuilding(getStore(this).progress, cmd.building, this.level.id)) {
+              getStore(this).commit();
+              getStore(this).flush();
+            }
           }
           const view = this.nodeViews.get(cmd.nodeId)!;
           pop(this, view);
@@ -468,8 +473,12 @@ export class BattleScene extends Phaser.Scene {
     const total = getStore(this).progress.crystals;
     if (winner !== 'player') {
       const progress = getStore(this).progress;
-      const open = (f: 'barracks' | 'mine' | 'upgrades'): boolean => isFeatureAvailable(f, this.level.id, progress, ALL_LEVELS);
-      const tip = defeatTip(this.stats, progress, { barracks: open('barracks'), mine: open('mine'), upgrades: open('upgrades') });
+      // Tips only suggest what the player has learned or opened (F-5).
+      const tip = defeatTip(this.stats, progress, {
+        barracks: isLearned(progress, 'barracks'),
+        mine: isLearned(progress, 'mine'),
+        upgrades: isFeatureAvailable('upgrades', this.level.id, progress, ALL_LEVELS),
+      });
       const buttons = [replay, toMap];
       if (tip === 'upgrades') {
         buttons.splice(1, 0, { label: t('menu.upgrades'), onClick: () => this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }) });

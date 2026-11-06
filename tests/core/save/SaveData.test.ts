@@ -129,3 +129,17 @@ describe('music setting (v6)', () => {
     expect(parseSave({ version: 6, settings: { music: 1 } }).settings.music).toBe(true);
   });
 });
+
+describe('buildings learned by use (v9, PLAYTEST-1 F-5)', () => {
+  it('a won lesson counts as learned: level 3 → barracks, level 5 → tower', () => {
+    expect(parseSave({ version: 8, progress: { completed: ['c01_l01', 'c01_l02'] } }).progress.learned).toEqual([]);
+    expect(parseSave({ version: 8, progress: { completed: ['c01_l01', 'c01_l02', 'c01_l03', 'c01_l04'] } }).progress.learned).toEqual(['barracks']);
+    const all = parseSave({ version: 8, progress: { completed: ['c01_l03', 'c01_l05', 'c01_l06'] } });
+    expect(all.version).toBe(9);
+    expect(all.progress.learned).toEqual(['barracks', 'tower']);
+  });
+
+  it('keeps only known buildings, once each', () => {
+    expect(parseSave({ version: 9, progress: { learned: ['tower', 'tower', 'castle', 3] } }).progress.learned).toEqual(['tower']);
+  });
+});

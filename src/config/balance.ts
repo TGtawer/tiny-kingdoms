@@ -2,6 +2,7 @@
 
 export type NodeSize = 'small' | 'medium' | 'large';
 export type BuildingType = 'mine' | 'barracks' | 'tower';
+export const BUILDING_TYPES: readonly BuildingType[] = ['barracks', 'tower', 'mine'];
 export type SpellId = 'fireball' | 'reinforcement' | 'shield';
 /** Special node kinds (GDD 3.12); 'normal' is the default. */
 export type NodeKind = 'normal' | 'temple' | 'fortress' | 'chest' | 'portal' | 'bandits';
@@ -20,13 +21,14 @@ export const SPELL_UNLOCKS: Record<SpellId, { tour: string } | { afterWin: strin
 };
 
 /**
- * TUTORIAL.md T-3: when buildings and screens open. Buildings: from that level on (in play order);
- * Upgrades: after the first win on that level. The enemy always has every building.
+ * When buildings and screens open (PLAYTEST-1 F-5, TUTORIAL.md T-3). A building opens everywhere once the player
+ * has built it on its lesson (`learnOn`); until then it is available only there. Upgrades: after the first win on
+ * that level. The enemy always has every building.
  */
 export const FEATURE_UNLOCKS = {
-  barracks: 'c01_l03',
-  tower: 'c01_l05',
-  mine: 'c02_l01',
+  barracks: { learnOn: 'c01_l03' },
+  tower: { learnOn: 'c01_l05' },
+  mine: { learnOn: 'c02_l01' },
   upgrades: { afterWin: 'c01_l06' },
 } as const;
 

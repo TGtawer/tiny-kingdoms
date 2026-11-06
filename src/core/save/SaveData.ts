@@ -1,10 +1,10 @@
-import { BONUSES, SPELL_IDS, SPELL_UPGRADES, STARS, type SpellId } from '../../config/balance';
+import { BONUSES, BUILDING_TYPES, SPELL_IDS, SPELL_UPGRADES, STARS, type BuildingType, type SpellId } from '../../config/balance';
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
 import { TOUR_STEPS, type TourState, type TourStep } from '../meta/onboarding';
 import { totalStars } from '../meta/stars';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 export interface SaveData {
   version: number;
@@ -68,6 +68,13 @@ export const MIGRATIONS: Record<number, Migration> = {
     const completed = Array.isArray(progress.completed) ? progress.completed : [];
     progress.onboarding = { upgradesTour: completed.includes('c01_l06') ? 'done' : 'pending' };
     return { ...d, version: 8, progress };
+  },
+  // v9 (PLAYTEST-1 F-5): buildings open once built on their lesson. A won lesson counts as learned.
+  8: (d) => {
+    const progress: Record<string, unknown> = isObject(d.progress) ? { ...d.progress } : {};
+    const completed = Array.isArray(progress.completed) ? progress.completed : [];
+    progress.learned = [...(completed.includes('c01_l03') ? ['barracks'] : []), ...(completed.includes('c01_l05') ? ['tower'] : [])];
+    return { ...d, version: 9, progress };
   },
 };
 
@@ -134,6 +141,9 @@ function sanitizeProgress(raw: unknown): Progress {
   }
   const active = raw.activeSpell as SpellId;
   progress.activeSpell = progress.unlockedSpells.includes(active) ? active : (progress.unlockedSpells[0] ?? null);
+  if (Array.isArray(raw.learned)) {
+    progress.learned = [...new Set(raw.learned.filter((b): b is BuildingType => BUILDING_TYPES.includes(b as BuildingType)))];
+  }
   const tour = isObject(raw.onboarding) ? raw.onboarding.upgradesTour : undefined;
   if (tour === 'done' || tour === 'pending' || TOUR_STEPS.includes(tour as TourStep)) {
     progress.onboarding.upgradesTour = tour as TourState;

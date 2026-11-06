@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defaultProgress, type Progress } from '../../../src/core/meta/Progress';
-import { featureLevel, isFeatureAvailable, isGoldVisible, isUpgradesOpen } from '../../../src/core/meta/unlocks';
+import { featureLevel, isFeatureAvailable, isGoldVisible, isUpgradesOpen, learnByBuilding } from '../../../src/core/meta/unlocks';
+import { playerSetupFrom } from '../../../src/core/meta/upgrades';
+import { parseSave, serializeSave, defaultSave } from '../../../src/core/save/SaveData';
 import { ALL_LEVELS } from '../../../src/levels';
 
 const L = ALL_LEVELS;
@@ -12,29 +14,56 @@ const wonUpTo = (n: number): Progress => {
   return p;
 };
 
-describe('buildings open level by level (TUTORIAL.md T-3)', () => {
-  it('first playthrough: barracks from level 3, tower from level 5', () => {
-    for (let n = 1; n <= 10; n++) {
-      const p = wonUpTo(n - 1);
-      expect(isFeatureAvailable('barracks', id(n), p, L), `barracks on ${n}`).toBe(n >= 3);
-      expect(isFeatureAvailable('tower', id(n), p, L), `tower on ${n}`).toBe(n >= 5);
+describe('buildings open by use (PLAYTEST-1 F-5)', () => {
+  it('before it is built on its lesson, a building is locked everywhere except on that lesson', () => {
+    for (const p of [defaultProgress(), wonUpTo(4), wonUpTo(9)]) {
+      p.learned = [];
+      for (let n = 1; n <= 10; n++) {
+        expect(isFeatureAvailable('barracks', id(n), p, L), `barracks on ${n}`).toBe(n === 3);
+        expect(isFeatureAvailable('tower', id(n), p, L), `tower on ${n}`).toBe(n === 5);
+      }
     }
   });
 
-  it('replaying an early level keeps what the player has reached', () => {
-    const p = wonUpTo(4); // the next level to win is 5
+  it('winning level 4 does not open the tower: replaying level 1 keeps it locked', () => {
+    const p = wonUpTo(4);
+    p.learned = ['barracks'];
+    expect(isFeatureAvailable('tower', id(1), p, L)).toBe(false);
     expect(isFeatureAvailable('barracks', id(1), p, L)).toBe(true);
-    expect(isFeatureAvailable('tower', id(1), p, L)).toBe(true);
-    expect(isFeatureAvailable('tower', id(1), wonUpTo(3), L)).toBe(false);
   });
 
-  it('the mine opens in chapter 2, so never in chapter 1', () => {
+  it('building it on its lesson opens it in every battle; elsewhere building teaches nothing', () => {
+    const p = defaultProgress();
+    expect(learnByBuilding(p, 'tower', id(4))).toBe(false);
+    expect(p.learned).toEqual([]);
+    expect(learnByBuilding(p, 'tower', id(5))).toBe(true);
+    expect(learnByBuilding(p, 'tower', id(5))).toBe(false);
+    expect(p.learned).toEqual(['tower']);
+    for (let n = 1; n <= 10; n++) expect(isFeatureAvailable('tower', id(n), p, L)).toBe(true);
+  });
+
+  it('a learned building survives the save right after it is built (leaving the battle keeps it)', () => {
+    const save = defaultSave();
+    learnByBuilding(save.progress, 'barracks', id(3));
+    expect(parseSave(serializeSave(save)).progress.learned).toEqual(['barracks']);
+  });
+
+  it('an unlocked spell goes into every battle, early levels included', () => {
+    const p = wonUpTo(6);
+    p.unlockedSpells = ['reinforcement'];
+    p.activeSpell = 'reinforcement';
+    // The battle setup does not depend on the level: replaying level 1 has the spell too.
+    expect(playerSetupFrom(p).unlockedSpells).toEqual(['reinforcement']);
+  });
+
+  it('the mine is learned in chapter 2, so it is never open in chapter 1', () => {
     expect(isFeatureAvailable('mine', id(10), wonUpTo(10), L)).toBe(false);
   });
 
   it('dev sandbox levels have everything open', () => {
     const p = defaultProgress();
     for (const f of ['barracks', 'tower', 'mine'] as const) expect(isFeatureAvailable(f, 'dev_specials', p, L)).toBe(true);
+    expect(isGoldVisible('dev_specials', p, L)).toBe(true);
   });
 
   it('names the level a building opens on', () => {
@@ -52,15 +81,19 @@ describe('Upgrades screen', () => {
   });
 });
 
-describe('gold counter', () => {
-  it('is hidden on levels 1–2 of a fresh save and shown from level 3', () => {
+describe('gold counter (PLAYTEST-1 F-5)', () => {
+  it('is hidden on levels 1–2 of a fresh save and shown on a building lesson', () => {
     expect(isGoldVisible(id(1), defaultProgress(), L)).toBe(false);
     expect(isGoldVisible(id(2), wonUpTo(1), L)).toBe(false);
     expect(isGoldVisible(id(3), wonUpTo(2), L)).toBe(true);
+    expect(isGoldVisible(id(5), wonUpTo(4), L)).toBe(true);
   });
 
-  it('is shown when replaying level 1 later, and whenever a spell is unlocked', () => {
-    expect(isGoldVisible(id(1), wonUpTo(2), L)).toBe(true);
+  it('is shown in every battle once a building is learned or a spell is unlocked', () => {
+    const learned = wonUpTo(2);
+    expect(isGoldVisible(id(1), learned, L)).toBe(false);
+    learned.learned = ['barracks'];
+    expect(isGoldVisible(id(1), learned, L)).toBe(true);
     const p = defaultProgress();
     p.unlockedSpells = ['reinforcement'];
     expect(isGoldVisible(id(1), p, L)).toBe(true);
