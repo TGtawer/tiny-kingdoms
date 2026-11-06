@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
-import { DRAGON, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
+import { DRAGON, ECONOMY, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
+import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -15,12 +15,14 @@ import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
 import {
   advanceTutorial,
   currentStep,
+  introCardFor,
   shouldRunTutorial,
   startTutorial,
   isTutorialSlow,
   type TutorialState,
   type UiEvent,
 } from '../core/tutorial/tutorial';
+import { enemyMayAct, gateLocked, isCommandAllowed, isSendAllowed, isUiAllowed, lessonActive, type GateUi } from '../core/tutorial/gate';
 import { createWorld, isRival, ownedShare, type NodeState, type Owner, type Side, type World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
 import { applyBattleResult } from '../core/meta/rewards';
@@ -29,15 +31,16 @@ import { activeSpell, claimableSpell, grantWinSpells } from '../core/meta/spellb
 import { bestStars, recordStars, starChecks, starTimeSec, type StarChecks } from '../core/meta/stars';
 import { isCompleted } from '../core/meta/Progress';
 import { defeatTip } from '../core/meta/tips';
-import { featureLevel, isFeatureAvailable, isGoldVisible } from '../core/meta/unlocks';
+import { featureLevel, isFeatureAvailable, isGoldVisible, isLearned, learnByBuilding } from '../core/meta/unlocks';
 import { playerSetupFrom } from '../core/meta/upgrades';
 import { ALL_LEVELS, CONTEST_LEVEL, FIRST_LEVEL, getLevel, nextLevel, STRESS_LEVEL, TUTORIALS } from '../levels';
 import type { Platform } from '../platform/Platform';
 import { TutorialView } from '../view/TutorialView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
-import { explosion, floatText, pop, ringBurst } from '../view/effects';
+import { explosion, floatText, goldFloat, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, textStyle } from '../view/layout';
-import { NodeView, type Highlight } from '../view/NodeView';
+import { drawMagePicture, NodeView, type Highlight } from '../view/NodeView';
+import { showIntroCard } from '../view/introCard';
 import { SHOWN_OWNER_CHANGED } from '../view/displayFilter';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
@@ -164,13 +167,16 @@ export class BattleScene extends Phaser.Scene {
       seed: this.level.chapter * 100 + this.level.index,
       player: playerSetupFrom(getStore(this).progress),
     });
-    this.ai = createAi('enemy', aiParamsFromLevel(this.level.enemy, this.world.goal, this.world.capitals.player));
-    const enemy2 = this.level.enemy2;
-    this.ai2 = enemy2 && this.level.nodes.some((n) => n.owner === 'enemy2') ? createAi('enemy2', aiParamsFromLevel(enemy2)) : null;
-    // Hints and the slow-down only on the first playthrough (TUTORIAL.md T-4).
+    // Hints, the slow-down and the lesson gate only on the first playthrough (TUTORIAL.md T-4, PLAYTEST-1 F-6).
     const levelScript = this.level.tutorial ? TUTORIALS[this.level.tutorial] : undefined;
     const script = shouldRunTutorial(this.level, getStore(this).progress, levelScript) ? levelScript : undefined;
     this.tutorial = script ? startTutorial(script, this.world.tick) : null;
+    // On a lesson the enemy waits for its end instead of the level's start delay (that one is for replays).
+    const lesson = lessonActive(this.tutorial);
+    const aiParams = aiParamsFromLevel(this.level.enemy, this.world.goal, this.world.capitals.player);
+    this.ai = createAi('enemy', lesson ? { ...aiParams, startDelayMs: 0 } : aiParams);
+    const enemy2 = this.level.enemy2;
+    this.ai2 = enemy2 && this.level.nodes.some((n) => n.owner === 'enemy2') ? createAi('enemy2', aiParamsFromLevel(enemy2)) : null;
 
     this.background = this.add.graphics();
     this.roads = new RoadView(this);
@@ -219,7 +225,25 @@ export class BattleScene extends Phaser.Scene {
     // Same level, same track: "Play again" keeps it, "Next" crossfades to the next level's one.
     playMusic(battleTrack(this.level, MUSIC.battleTracks, audioFiles()));
 
-    this.platform.gameplayStart();
+    // The evil mage card (PLAYTEST-1 F-8): on the first playthrough of the mage level, before the battle, on a full
+    // pause; read as long as needed, the battle and GameplayAPI start on "To battle".
+    if (introCardFor(this.level, getStore(this).progress, levelScript) === 'mage') {
+      this.paused = true;
+      showIntroCard(this, {
+        accent: COLORS.mage,
+        picture: drawMagePicture,
+        pictureSize: INTRO_CARD.magePicture,
+        title: t('mage.card.title'),
+        body: t('mage.card.body', { sec: MAGE.everyMs / 1000 }),
+        button: t('mage.card.go'),
+        onClose: () => {
+          this.paused = false;
+          this.platform.gameplayStart();
+        },
+      });
+    } else {
+      this.platform.gameplayStart();
+    }
 
     // Enemy leader: portrait in the HUD and a short card before the battle (the battle waits for it).
     // Turned off by SHOW_LEADER_INTRO; the leader still drives the AI behavior.
@@ -266,7 +290,10 @@ export class BattleScene extends Phaser.Scene {
       ? stressStep(this.world, this.stress, STRESS_UNITS)
       : this.contest
         ? [...this.queue, ...contestStep(this.world, this.contest)]
-        : [...this.queue, ...aiStep(this.world, this.ai), ...(this.ai2 ? aiStep(this.world, this.ai2) : [])];
+        : enemyMayAct(this.tutorial)
+          ? [...this.queue, ...aiStep(this.world, this.ai), ...(this.ai2 ? aiStep(this.world, this.ai2) : [])]
+          : // The lesson runs first: the enemy makes no decisions until it is over (F-6).
+            this.queue;
     this.queue = [];
     const events = step(this.world, commands);
     for (const event of events) this.handleEvent(event);
@@ -294,6 +321,11 @@ export class BattleScene extends Phaser.Scene {
             playSfx('build');
             if (cmd.type === 'build' && cmd.building === 'barracks') this.stats.builtBarracks = true;
             if (cmd.type === 'build' && cmd.building === 'mine') this.stats.builtMine = true;
+            // Built on its lesson: open in every battle from now on, saved at once (F-5).
+            if (cmd.type === 'build' && learnByBuilding(getStore(this).progress, cmd.building, this.level.id)) {
+              getStore(this).commit();
+              getStore(this).flush();
+            }
           }
           const view = this.nodeViews.get(cmd.nodeId)!;
           pop(this, view);
@@ -317,9 +349,10 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'arrived': {
         const view = this.nodeViews.get(event.nodeId)!;
-        if (event.chestGold > 0) {
-          floatText(this, view.x, view.y - view.radius * 1.4, t('battle.chestGold', { gold: event.chestGold }), COLORS.gold);
-          ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.gold);
+        // Gold for a chest or a neutral node (F-4): a "+N" with a coin, only while the gold counter is shown.
+        if (event.captureGold > 0 && event.owner === 'player' && this.hud.isGoldVisible) {
+          goldFloat(this, view.x, view.y - view.radius * 1.4, t('battle.captureGold', { gold: event.captureGold }));
+          if (event.captureGold > ECONOMY.neutralCaptureGold) ringBurst(this, view.x, view.y, view.radius * 1.2, COLORS.gold);
         }
         if (event.outcome === 'shielded') {
           ringBurst(this, view.x, view.y, view.radius * 1.3, COLORS.shield);
@@ -467,8 +500,12 @@ export class BattleScene extends Phaser.Scene {
     const total = getStore(this).progress.crystals;
     if (winner !== 'player') {
       const progress = getStore(this).progress;
-      const open = (f: 'barracks' | 'mine' | 'upgrades'): boolean => isFeatureAvailable(f, this.level.id, progress, ALL_LEVELS);
-      const tip = defeatTip(this.stats, progress, { barracks: open('barracks'), mine: open('mine'), upgrades: open('upgrades') });
+      // Tips only suggest what the player has learned or opened (F-5).
+      const tip = defeatTip(this.stats, progress, {
+        barracks: isLearned(progress, 'barracks'),
+        mine: isLearned(progress, 'mine'),
+        upgrades: isFeatureAvailable('upgrades', this.level.id, progress, ALL_LEVELS),
+      });
       const buttons = [replay, toMap];
       if (tip === 'upgrades') {
         buttons.splice(1, 0, { label: t('menu.upgrades'), onClick: () => this.scene.start('UpgradesScene', { from: 'ChapterMapScene' }) });
@@ -762,7 +799,12 @@ export class BattleScene extends Phaser.Scene {
 
     if (this.armed) {
       if (node && this.highlightFor(node) !== 'none') {
-        this.queue.push({ type: 'cast', side: 'player', spell: this.armed, nodeId: node.id });
+        const cast = { type: 'cast', side: 'player', spell: this.armed, nodeId: node.id } as const;
+        // On the lesson only the shown node takes the spell; the spell stays armed for it.
+        if (!isCommandAllowed(this.tutorial, this.world, cast)) return this.refused();
+        this.queue.push(cast);
+      } else if (!isUiAllowed(this.tutorial, { type: 'spellSelect' })) {
+        return this.refused();
       }
       this.armed = null;
       return;
@@ -783,6 +825,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // Sends are swipe-only: a tap on a foreign node only closes the menu (and labels special nodes, GDD 3.12).
+    if (this.menu && !this.ui({ type: 'deselect' })) return;
     this.deselect();
     if (node) this.showInfo(node);
   }
@@ -794,7 +837,8 @@ export class BattleScene extends Phaser.Scene {
     drag.y = pointer.y;
     if (!drag.moved && Math.hypot(pointer.x - drag.startX, pointer.y - drag.startY) > px(DRAG_THRESHOLD_PX)) {
       drag.moved = true;
-      this.deselect();
+      // A lesson's open build menu stays open (the swipe itself is refused on release).
+      if (isUiAllowed(this.tutorial, { type: 'deselect' })) this.deselect();
     }
     if (drag.moved) {
       // Sliding over more own nodes adds them as sources (multi-select).
@@ -816,12 +860,30 @@ export class BattleScene extends Phaser.Scene {
     }
 
     // A tap on an own node opens its build menu; a second tap on the same node closes it.
-    if (this.selected === drag.downNode) this.deselect();
-    else this.select(drag.downNode);
+    if (this.selected === drag.downNode) {
+      if (this.ui({ type: 'deselect' })) this.deselect();
+    } else if (this.ui({ type: 'select', node: drag.downNode })) {
+      this.select(drag.downNode);
+    }
+  }
+
+  /** Asks the lesson gate about a tap or button; a refused one nudges the hint. */
+  private ui(event: GateUi): boolean {
+    if (isUiAllowed(this.tutorial, event)) return true;
+    this.refused();
+    return false;
+  }
+
+  /** Something the lesson does not allow now: the hint jumps and the finger shows the gesture again (F-6). */
+  private refused(): void {
+    this.tutorialView?.nudge(this.time.now);
   }
 
   /** The player's only way to send troops: a swipe, 75% from every source (GDD 3.5). */
   private sendFrom(sources: readonly string[], target: string): void {
+    const real = sources.filter((s) => s !== target);
+    if (real.length === 0) return;
+    if (!isSendAllowed(this.tutorial, this.world, real, target)) return this.refused();
     for (const from of sources) {
       if (from !== target) this.queue.push({ type: 'send', side: 'player', from, to: target, mode: 'swipe' });
     }
@@ -855,11 +917,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private onBuild(nodeId: string, choice: BuildChoice): void {
-    this.queue.push(
-      choice.kind === 'build'
-        ? { type: 'build', side: 'player', nodeId, building: choice.building }
-        : { type: 'upgrade', side: 'player', nodeId },
-    );
+    const cmd: Command =
+      choice.kind === 'build' ? { type: 'build', side: 'player', nodeId, building: choice.building } : { type: 'upgrade', side: 'player', nodeId };
+    // On the lesson the other buttons don't work; the menu stays open for the right one.
+    if (!isCommandAllowed(this.tutorial, this.world, cmd)) return this.refused();
+    this.queue.push(cmd);
     this.deselect();
   }
 
@@ -923,7 +985,7 @@ export class BattleScene extends Phaser.Scene {
    * or a spell is armed and waits for its target. The battle runs at SLOW_MO.speed meanwhile.
    */
   private isChoosing(): boolean {
-    return isTutorialSlow(this.tutorial, this.world.tick) || this.menu !== null || this.drag !== null || this.armed !== null;
+    return isTutorialSlow(this.tutorial) || this.menu !== null || this.drag !== null || this.armed !== null;
   }
 
   /** The speed-up is offered only while the player holds more than SPEED_UP.unlockShare of all nodes. */
@@ -932,8 +994,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private syncSpeed(): void {
-    // No speed-up button while a tutorial step slows the battle down.
-    const available = !this.ended && this.speedAvailable() && !isTutorialSlow(this.tutorial, this.world.tick);
+    // No speed-up button during a lesson or while a tutorial step slows the battle down.
+    const available = !this.ended && this.speedAvailable() && !gateLocked(this.tutorial) && !isTutorialSlow(this.tutorial);
     if (!available) this.speed = 1;
     this.hud.setSpeed(available, this.speed);
   }
@@ -945,6 +1007,7 @@ export class BattleScene extends Phaser.Scene {
 
   private toggleSpell(spell: SpellId): void {
     if (this.paused || this.ended) return;
+    if (!this.ui({ type: 'spellSelect' })) return;
     this.deselect();
     this.armed = this.armed === spell ? null : spell;
     if (this.armed) this.uiEvents.push({ type: 'spellSelect', spell });

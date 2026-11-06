@@ -1,6 +1,7 @@
 import type * as Phaser from 'phaser';
 import { COLORS, INFO_LABEL_MS } from '../config/game';
 import { hintLabel } from './hintPlaque';
+import { drawCoin } from './icons';
 import { px, textStyle } from './layout';
 
 /** Expanding ring that fades out. */
@@ -44,6 +45,27 @@ export function floatText(scene: Phaser.Scene, x: number, y: number, text: strin
     duration: 800,
     ease: 'Cubic.Out',
     onComplete: () => label.destroy(),
+  });
+}
+
+/** "+10" with a coin floating up above a point: gold given by a capture (chest, neutral node). */
+export function goldFloat(scene: Phaser.Scene, x: number, y: number, text: string): void {
+  const label = scene.add.text(0, 0, text, textStyle(18, COLORS.gold)).setOrigin(0, 0.5).setStroke('#1f2937', px(4));
+  const size = px(18);
+  const coin = scene.add.graphics();
+  drawCoin(coin, 0, 0, size);
+  // The coin and the number side by side, centered on x.
+  const width = size + px(3) + label.width;
+  coin.setX(-width / 2 + size / 2);
+  label.setX(-width / 2 + size + px(3));
+  const box = scene.add.container(x, y, [coin, label]).setDepth(70);
+  scene.tweens.add({
+    targets: box,
+    y: y - px(36),
+    alpha: 0,
+    duration: 900,
+    ease: 'Cubic.Out',
+    onComplete: () => box.destroy(),
   });
 }
 

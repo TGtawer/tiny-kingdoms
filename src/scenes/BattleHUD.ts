@@ -9,6 +9,7 @@ import { t } from '../i18n/i18n';
 import { Button } from '../view/Button';
 import { drawCoin, drawCrystal, drawLeader, drawPause, drawSpell, drawStar } from '../view/icons';
 import { drawHintPlaque } from '../view/hintPlaque';
+import { showIntroCard } from '../view/introCard';
 import { px, textStyle } from '../view/layout';
 
 export interface HudCallbacks {
@@ -169,43 +170,19 @@ export class BattleHUD {
    * Leader card before the battle: portrait, name, one line. Closes on tap or after LEADER_CARD.autoCloseMs.
    */
   showLeaderCard(leader: LeaderId, onClose: () => void): void {
-    const scene = this.scene;
-    const w = scene.scale.width;
-    const h = scene.scale.height;
-    const card = scene.add.container(0, 0).setDepth(210);
-    const dim = scene.add.rectangle(w / 2, h / 2, w, h, COLORS.dim, 0.55).setInteractive();
-    const panelW = Math.min(w - px(32), px(320));
-    const panelH = px(LEADER_CARD.portrait) + px(130);
-    const x0 = w / 2 - panelW / 2;
-    const y0 = h / 2 - panelH / 2;
-    const panel = scene.add.graphics();
-    panel.fillStyle(COLORS.outline, 0.4).fillRoundedRect(x0 + px(4), y0 + px(6), panelW, panelH, px(22));
-    panel.fillStyle(COLORS.panel, 1).fillRoundedRect(x0, y0, panelW, panelH, px(22));
-    panel.lineStyle(px(4), COLORS.faction.enemy, 1).strokeRoundedRect(x0, y0, panelW, panelH, px(22));
-    const portrait = scene.add.graphics();
-    drawLeader(portrait, leader, w / 2, y0 + px(16) + px(LEADER_CARD.portrait) / 2, px(LEADER_CARD.portrait));
-    const name = scene.add
-      .text(w / 2, y0 + px(LEADER_CARD.portrait) + px(36), t(`leader.${leader}`), textStyle(24, COLORS.faction.enemy))
-      .setOrigin(0.5)
-      .setStroke('#1f2937', px(4));
-    const quote = scene.add
-      .text(w / 2, y0 + px(LEADER_CARD.portrait) + px(66), t(`leader.${leader}.quote`), textStyle(16, COLORS.textDark))
-      .setOrigin(0.5, 0)
-      .setAlign('center')
-      .setWordWrapWidth(panelW - px(32), true);
-    card.add([dim, panel, portrait, name, quote]);
-    card.setAlpha(0);
-    scene.tweens.add({ targets: card, alpha: 1, duration: 160 });
+    showIntroCard(this.scene, {
+      accent: COLORS.faction.enemy,
+      picture: (g, size) => drawLeader(g, leader, 0, 0, size),
+      pictureSize: LEADER_CARD.portrait,
+      title: t(`leader.${leader}`),
+      body: t(`leader.${leader}.quote`),
+      autoCloseMs: LEADER_CARD.autoCloseMs,
+      onClose,
+    });
+  }
 
-    let closed = false;
-    const close = (): void => {
-      if (closed) return;
-      closed = true;
-      scene.tweens.add({ targets: card, alpha: 0, duration: 160, onComplete: () => card.destroy() });
-      onClose();
-    };
-    dim.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, close);
-    scene.time.delayedCall(LEADER_CARD.autoCloseMs, close);
+  get isGoldVisible(): boolean {
+    return this.goldVisible;
   }
 
   /** Shows or hides the gold counter and income; the title takes the freed space. */

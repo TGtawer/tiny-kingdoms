@@ -1,4 +1,4 @@
-import type { SpellId } from '../../config/balance';
+import type { BuildingType, SpellId } from '../../config/balance';
 import type { TourState } from './onboarding';
 import type { LevelData } from '../level/schema';
 
@@ -20,6 +20,8 @@ export interface Progress {
   unlockedSpells: SpellId[];
   /** The unlocked spell taken into battle; null until the first one is unlocked. */
   activeSpell: SpellId | null;
+  /** Buildings the player has built on their lesson: open in every battle (PLAYTEST-1 F-5, see unlocks.ts). */
+  learned: BuildingType[];
   /** Guided tours outside battle (see onboarding.ts). */
   onboarding: { upgradesTour: TourState };
 }
@@ -34,6 +36,7 @@ export function defaultProgress(): Progress {
     spentStars: 0,
     unlockedSpells: [],
     activeSpell: null,
+    learned: [],
     onboarding: { upgradesTour: 'pending' },
   };
 }

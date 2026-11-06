@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import { COLORS, HUD } from '../config/game';
+import { COLORS, HUD, TUTORIAL_FX } from '../config/game';
 import { SPECIAL_NODES, type BuildingType } from '../config/balance';
 import { dragPath, type FingerHint, type TutorialStep, type UiAnchor } from '../core/tutorial/tutorial';
 import { t } from '../i18n/i18n';
@@ -35,6 +35,12 @@ export class TutorialView {
   private bottomOffsetCss = 0;
   /** Last known boss target, for `bossTarget` highlights. */
   private bossTargetId: string | null = null;
+  /** The finger gesture loop starts at this time (a refusal restarts it). */
+  private fingerFrom = 0;
+  private lastBounceAt = -Infinity;
+  private bounce: Phaser.Tweens.Tween | null = null;
+  /** Rest position of the hint text. */
+  private textY = 0;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -74,6 +80,32 @@ export class TutorialView {
     this.scene.tweens.add({ targets: [this.panel, this.text], alpha: 1, duration: 220 });
   }
 
+  /**
+   * The player tried something the lesson does not allow now (PLAYTEST-1 F-6): the plaque jumps, the finger shows
+   * the gesture from the start. `now`: scene time, ms.
+   */
+  nudge(now: number): void {
+    if (!this.step) return;
+    this.fingerFrom = now;
+    if (now - this.lastBounceAt < TUTORIAL_FX.bounceEveryMs) return;
+    this.lastBounceAt = now;
+    this.bounce?.stop();
+    this.panel.setY(0);
+    this.text.setY(this.textY);
+    this.bounce = this.scene.tweens.add({
+      targets: this.panel,
+      y: -px(TUTORIAL_FX.bounce),
+      duration: TUTORIAL_FX.bounceMs / 2,
+      yoyo: true,
+      ease: 'Quad.Out',
+      onUpdate: () => this.text.setY(this.textY + this.panel.y),
+      onComplete: () => {
+        this.panel.setY(0);
+        this.text.setY(this.textY);
+      },
+    });
+  }
+
   layout(): void {
     if (!this.step) return;
     const w = this.scene.scale.width;
@@ -84,6 +116,7 @@ export class TutorialView {
     const cy = h - px(this.bottomOffsetCss) - px(HUD.hintBar) / 2;
 
     this.text.setWordWrapWidth(panelW - px(28), true);
+    this.textY = cy;
     this.text.setPosition(cx, cy);
     this.panel.clear();
     drawHintPlaque(this.panel, cx, cy, panelW, panelH);
@@ -108,7 +141,7 @@ export class TutorialView {
   }
 
   private animateFinger(finger: FingerHint, time: number, ctx: TutorialContext): void {
-    const phase = (time % FINGER_PERIOD_MS) / FINGER_PERIOD_MS;
+    const phase = ((((time - this.fingerFrom) % FINGER_PERIOD_MS) + FINGER_PERIOD_MS) % FINGER_PERIOD_MS) / FINGER_PERIOD_MS;
     const g = this.finger;
 
     if (finger.kind === 'tap' || finger.kind === 'tapUi') {

@@ -9,6 +9,7 @@
         "slow": true
       },
       { "until": { "type": "capture", "node": "n1" } },
+      { "until": { "type": "time", "sec": 1 } },
       {
         "hint": "tut.swipeMany",
         "highlight": [{ "node": "player" }, { "node": "n1" }, { "node": "n2" }],
@@ -79,16 +80,25 @@
     ]
   },
   "c01_l08": {
-    "steps": [{ "hint": "tut.chest", "highlight": [{ "node": "a2" }], "until": { "type": "time", "sec": 4 } }]
+    "steps": [
+      {
+        "hint": "tut.chest",
+        "highlight": [{ "node": "a3" }],
+        "finger": { "kind": "drag", "from": "player", "to": "a3" },
+        "until": { "type": "send", "to": "a3" },
+        "slow": true
+      },
+      { "until": { "type": "capture", "node": "a3" } }
+    ]
   },
   "c01_l10": {
+    "gate": "step",
     "steps": [
-      { "hint": "tut.mage", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 4 } },
       { "until": { "type": "special", "event": "mageWarning" } },
       {
         "hint": "tut.mageFireball",
         "highlight": [{ "bossTarget": true }],
-        "until": { "type": "any", "of": [{ "type": "send" }, { "type": "special", "event": "mageStrike" }] },
+        "until": { "type": "any", "of": [{ "type": "send", "from": "bossTarget" }, { "type": "special", "event": "mageStrike" }] },
         "slow": true
       }
     ]

@@ -2,6 +2,7 @@
 
 export type NodeSize = 'small' | 'medium' | 'large';
 export type BuildingType = 'mine' | 'barracks' | 'tower';
+export const BUILDING_TYPES: readonly BuildingType[] = ['barracks', 'tower', 'mine'];
 export type SpellId = 'fireball' | 'reinforcement' | 'shield';
 /** Special node kinds (GDD 3.12); 'normal' is the default. */
 export type NodeKind = 'normal' | 'temple' | 'fortress' | 'chest' | 'portal' | 'bandits';
@@ -20,13 +21,14 @@ export const SPELL_UNLOCKS: Record<SpellId, { tour: string } | { afterWin: strin
 };
 
 /**
- * TUTORIAL.md T-3: when buildings and screens open. Buildings: from that level on (in play order);
- * Upgrades: after the first win on that level. The enemy always has every building.
+ * When buildings and screens open (PLAYTEST-1 F-5, TUTORIAL.md T-3). A building opens everywhere once the player
+ * has built it on its lesson (`learnOn`); until then it is available only there. Upgrades: after the first win on
+ * that level. The enemy always has every building.
  */
 export const FEATURE_UNLOCKS = {
-  barracks: 'c01_l03',
-  tower: 'c01_l05',
-  mine: 'c02_l01',
+  barracks: { learnOn: 'c01_l03' },
+  tower: { learnOn: 'c01_l05' },
+  mine: { learnOn: 'c02_l01' },
   upgrades: { afterWin: 'c01_l06' },
 } as const;
 
@@ -35,13 +37,22 @@ export const TICK_MS = 100;
 
 export const NODES: Record<NodeSize, { capacity: number; troopsPerSec: number; goldPerSec: number }> = {
   // Troop numbers halved for stream armies (BALANCE.md, stage 9); gold unchanged.
-  small: { capacity: 10, troopsPerSec: 0.25, goldPerSec: 0.3 },
-  medium: { capacity: 18, troopsPerSec: 0.4, goldPerSec: 0.4 },
-  large: { capacity: 25, troopsPerSec: 0.6, goldPerSec: 0.5 },
+  // Gold ×1.5 after the playtest (PLAYTEST-1 F-4; was 0.3 / 0.4 / 0.5).
+  small: { capacity: 10, troopsPerSec: 0.25, goldPerSec: 0.45 },
+  medium: { capacity: 18, troopsPerSec: 0.4, goldPerSec: 0.6 },
+  large: { capacity: 25, troopsPerSec: 0.6, goldPerSec: 0.75 },
 };
 
 /** Index 0 = level 1, index 1 = level 2, index 2 = level 3. */
 type PerLevel<T> = readonly [T, T, T];
+
+export const ECONOMY = {
+  /**
+   * Gold for capturing a neutral node, given at once to any side (PLAYTEST-1 F-4). Nodes taken from another side
+   * give nothing, so a ping-pong over a node can't be farmed; a chest gives its own gold instead of this.
+   */
+  neutralCaptureGold: 10,
+} as const;
 
 export const BUILDINGS = {
   /** Cost to build (level 1) and to upgrade to level 2 and 3. */
@@ -61,8 +72,6 @@ export const BUILDINGS = {
     shotsPerSec: [1, 2, 3] as PerLevel<number>,
   },
   maxLevel: 3,
-  /** Levels lost by a building when its node is captured; level 1 is destroyed. */
-  captureLevelLoss: 1,
 } as const;
 
 export const ARMY = {
@@ -199,11 +208,6 @@ export const SLOW_MO = {
 export const TUTORIAL = {
   /** Info-only steps (`until: time`) last at most this long. */
   infoStepMaxSec: 4,
-  /**
-   * A slow step the player ignores stops slowing the battle after this much battle time (≈33 s of real time at
-   * SLOW_MO.speed); its hint stays until it is done.
-   */
-  slowMaxSec: 5,
 } as const;
 
 export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
@@ -238,7 +242,11 @@ export const AI = {
   /** Weight of a target node by size. */
   sizeValue: { small: 1, medium: 1.5, large: 2 },
   goldVeinValue: 0.6,
-  buildingLevelValue: 0.4,
+  /**
+   * Value of a building, per level (PLAYTEST-1 F-3: a captured building changes owner intact): added to a target's
+   * value, and own threatened nodes are defended in order of size value + this × level.
+   */
+  buildingValueBonus: 0.4,
   /** Opponent nodes are worth (1 + aggression × this) times more than neutrals. */
   opponentTargetBonus: 1,
   /** Each field unit of travel counts as this many troops of cost when scoring targets. */

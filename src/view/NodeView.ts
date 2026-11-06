@@ -255,8 +255,23 @@ export class NodeView extends Phaser.GameObjects.Container {
   }
 }
 
+/**
+ * The evil mage's tower as on the field, fitted in a box of `size` centered on (0, 0) of `g`: the tower behind an
+ * enemy node (the mage card before level 10, PLAYTEST-1 F-8).
+ */
+export function drawMagePicture(g: Phaser.GameObjects.Graphics, size: number): void {
+  // From the roof's star (2.6 r above the center) to the node's bottom (1 r below): 3.6 r, centered.
+  const r = size / 3.7;
+  g.setY(g.y + r * 0.8);
+  drawMageTower(g, r);
+  g.fillStyle(COLORS.factionDark.enemy, 1).fillCircle(0, 0, r);
+  g.fillStyle(COLORS.faction.enemy, 1).fillCircle(0, -r * NODE_LIP, r * (1 - NODE_LIP));
+  g.lineStyle(Math.max(2, r * 0.09), COLORS.outline, 1).strokeCircle(0, 0, r);
+  g.fillStyle(0xffffff, 0.28).fillEllipse(-r * 0.3, -r * 0.45, r * 0.8, r * 0.38);
+}
+
 /** Purple wizard tower behind a node of radius r: body, pointed roof, a star on the tip and a lit window. */
-function drawMageTower(g: Phaser.GameObjects.Graphics, r: number): void {
+export function drawMageTower(g: Phaser.GameObjects.Graphics, r: number): void {
   const line = Math.max(2, r * 0.08);
   const bw = r * 0.78;
   const top = -r * 1.55;

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
 import { validateLevel, type LevelData } from '../src/core/level/schema';
+import { buildCost } from '../src/core/sim/commands';
 import { previewAttack } from '../src/core/sim/preview';
-import { step } from '../src/core/sim/tick';
-import { createWorld } from '../src/core/sim/World';
+import { spellCost } from '../src/core/sim/spells';
+import { step, type TickEvent } from '../src/core/sim/tick';
+import { createWorld, type World } from '../src/core/sim/World';
 import { CHAPTERS, DEV_LEVELS, getLevel, nextLevel } from '../src/levels';
 
 describe('chapter 1', () => {
@@ -24,6 +26,37 @@ describe('chapter 1', () => {
       expect(l.special?.type, l.id).toBe(l.index === 10 ? 'mage' : undefined);
       expect(l.nodes.filter((n) => n.kind === 'chest').length, l.id).toBe(l.id === 'c01_l08' ? 1 : 0);
     }
+  });
+
+  it('level 8: the chest is a road neighbour of the castle, far nearer to the player than to the enemy (PLAYTEST-1 F-7)', () => {
+    const l = chapter.find((x) => x.id === 'c01_l08')!;
+    const chest = l.nodes.find((n) => n.kind === 'chest')!;
+    const castle = l.nodes.find((n) => n.owner === 'player' && n.capital)!;
+    const enemy = l.nodes.find((n) => n.owner === 'enemy' && n.capital)!;
+    expect(l.roads.some(([a, b]) => (a === castle.id && b === chest.id) || (b === castle.id && a === chest.id))).toBe(true);
+    // Shortest road distances over the whole map (the enemy goes through what will be its nodes).
+    const pos = new Map(l.nodes.map((n) => [n.id, n]));
+    const shortest = (from: string, to: string): number => {
+      const dist = new Map<string, number>([[from, 0]]);
+      const open = new Set([from]);
+      while (open.size) {
+        const id = [...open].reduce((a, b) => (dist.get(a)! <= dist.get(b)! ? a : b));
+        open.delete(id);
+        if (id === to) return dist.get(id)!;
+        for (const [a, b] of l.roads) {
+          const next = a === id ? b : b === id ? a : null;
+          if (!next) continue;
+          const d = dist.get(id)! + Math.hypot(pos.get(id)!.x - pos.get(next)!.x, pos.get(id)!.y - pos.get(next)!.y);
+          if (d < (dist.get(next) ?? Infinity)) {
+            dist.set(next, d);
+            open.add(next);
+          }
+        }
+      }
+      return Infinity;
+    };
+    expect(shortest(enemy.id, chest.id)).toBeGreaterThanOrEqual(1.3 * shortest(castle.id, chest.id));
+    expect(chest.troops).toBeLessThan(0.75 * castle.troops);
   });
 
   it('uses 6–9 nodes per level and enemy production 0.7 (BALANCE.md, chapter 1)', () => {
@@ -91,25 +124,71 @@ const WIN_CORRIDOR: Record<number, readonly [number, number]> = {
   10: [5, 7],
 };
 
-/** Wins of the AI player over seeds 1..10. */
-function wins(level: LevelData): number {
+/** Gold the player spent on purchases (buildings, upgrades, spells) applied in one tick, and their number. */
+function purchases(world: World, events: readonly TickEvent[]): { spent: number; count: number } {
+  let spent = 0;
+  let count = 0;
+  for (const e of events) {
+    if (e.type !== 'applied' || e.command.side !== 'player') continue;
+    const c = e.command;
+    // After the tick an upgraded building is one level up: the upgrade cost the price of its previous level.
+    if (c.type === 'build') spent += buildCost(0)!;
+    else if (c.type === 'upgrade') spent += buildCost((world.nodes[c.nodeId]!.building!.level - 1) as 1 | 2)!;
+    else if (c.type === 'cast') spent += spellCost(c.spell);
+    else continue;
+    count++;
+  }
+  return { spent, count };
+}
+
+interface LevelRun {
+  /** Wins of the AI player over seeds 1..10. */
+  won: number;
+  /** Per battle, on average: gold the AI player earned (income, chests, neutral captures) and purchases made. */
+  gold: number;
+  buys: number;
+}
+
+const runs = new Map<string, LevelRun>();
+
+function runLevel(level: LevelData): LevelRun {
+  const cached = runs.get(level.id);
+  if (cached) return cached;
   let won = 0;
+  let gold = 0;
+  let buys = 0;
   for (let seed = 1; seed <= 10; seed++) {
     const world = createWorld(level, { seed });
     const player = createAi('player', { thinkMs: 1200, aggression: 0.6 });
     const enemy = createAi('enemy', aiParamsFromLevel(level.enemy, world.goal, world.capitals.player));
-    while (!world.winner && world.tick < 6000) step(world, [...aiStep(world, player), ...aiStep(world, enemy)]);
+    while (!world.winner && world.tick < 6000) {
+      const before = world.sides.player.gold;
+      const events = step(world, [...aiStep(world, player), ...aiStep(world, enemy)]);
+      const bought = purchases(world, events);
+      gold += world.sides.player.gold - before + bought.spent;
+      buys += bought.count;
+    }
     expect(world.winner, `${level.id} seed ${seed} did not finish in 10 min`).not.toBeNull();
     if (world.winner === 'player') won++;
   }
-  return won;
+  const run = { won, gold: gold / 10, buys: buys / 10 };
+  runs.set(level.id, run);
+  return run;
 }
 
 describe('chapter 1 difficulty curve', () => {
   it.each(CHAPTERS[0]!.map((l) => [l.id, l] as const))('%s', (_id, level) => {
     const [min, max] = WIN_CORRIDOR[level.index]!;
-    const won = wins(level);
+    const { won } = runLevel(level);
     expect(won, `${level.id}: ${won}/10`).toBeGreaterThanOrEqual(min);
     expect(won, `${level.id}: ${won}/10`).toBeLessThanOrEqual(max);
+  });
+
+  // PLAYTEST-1 F-4: 4–5 gold decisions a battle on levels 4–10, i.e. at least 120 gold earned on average.
+  it('levels 4–10: the AI player earns at least 120 gold a battle on average', () => {
+    const levels = CHAPTERS[0]!.filter((l) => l.index >= 4);
+    const gold = levels.map((l) => runLevel(l).gold);
+    const avg = gold.reduce((a, b) => a + b, 0) / gold.length;
+    expect(avg, levels.map((l, i) => `${l.index}: ${Math.round(gold[i]!)} gold, ${runLevel(l).buys} buys`).join('; ')).toBeGreaterThanOrEqual(120);
   });
 });

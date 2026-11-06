@@ -9,7 +9,8 @@ import type { World } from '../sim/World';
 /**
  * Step-by-step tutorial (GDD 6, TUTORIAL.md T-4): one short hint at a time, highlights and a finger showing
  * the gesture. A step ends when the player does what it asks (or after a few seconds for info-only steps).
- * While a `slow` step waits for the player, the whole battle runs at SLOW_MO.speed (see sim/clock.ts).
+ * While a `slow` step (an action step) waits for the player, the whole battle runs at SLOW_MO.speed until it is
+ * done (see sim/clock.ts). During the lesson only the current step's action works (gate.ts, PLAYTEST-1 F-6).
  */
 
 /** HUD elements a step can point at: the gold counter, the spell button, the goal plaque. */
@@ -30,8 +31,11 @@ export type FingerHint =
 export type SpecialEvent = MageEvent['type'];
 
 export type StepCondition =
-  /** `minSources`: one swipe from at least that many own nodes (one tick, one target). */
-  | { type: 'send'; to?: string; minSources?: number }
+  /**
+   * `minSources`: one swipe from at least that many own nodes (one tick, one target). `from`: only a send from
+   * this node counts (`bossTarget`: the node a boss has marked).
+   */
+  | { type: 'send'; to?: string; from?: string; minSources?: number }
   | { type: 'capture'; node?: string }
   | { type: 'build'; building?: BuildingType; node?: string }
   | { type: 'gold'; atLeast: number }
@@ -54,9 +58,17 @@ export interface TutorialStep {
   slow?: boolean;
 }
 
+/**
+ * What the tutorial locks (PLAYTEST-1 F-6). `lesson` (default): from the battle start to the last action step only
+ * the current step's action works, and the enemy AI waits. `step`: only action steps lock; between them the player
+ * is free and the enemy acts (hints that come up mid-battle, e.g. on a boss event).
+ */
+export type TutorialGate = 'lesson' | 'step';
+
 export interface TutorialScript {
   /** Run only if the player takes this spell into battle (the spell lesson, TUTORIAL.md T-5). */
   requires?: { activeSpell: SpellId };
+  gate?: TutorialGate;
   steps: TutorialStep[];
 }
 
@@ -81,17 +93,24 @@ export function shouldRunTutorial(level: LevelData, progress: Progress, script: 
   return !script.requires || activeSpell(progress) === script.requires.activeSpell;
 }
 
+/**
+ * The card shown before the battle on a full pause (PLAYTEST-1 F-8): the evil mage on the first playthrough of the
+ * mage level (with its tutorial); nothing on replays.
+ */
+export function introCardFor(level: LevelData, progress: Progress, script: TutorialScript | undefined): 'mage' | null {
+  return level.special?.type === 'mage' && shouldRunTutorial(level, progress, script) ? 'mage' : null;
+}
+
 export function currentStep(state: TutorialState): TutorialStep | null {
   return state.script.steps[state.index] ?? null;
 }
 
 /**
- * Whether the tutorial slows the battle down at `tick`: a `slow` step is waiting for the player, for at most
- * TUTORIAL.slowMaxSec (a player who ignores the hint is not kept slowed down for the whole level).
+ * Whether the tutorial slows the battle down: a `slow` step is waiting for the player. No time limit (F-6): only its
+ * action works, and the lesson test proves it can always be done.
  */
-export function isTutorialSlow(state: TutorialState | null, tick: number): boolean {
-  if (state === null || currentStep(state)?.slow !== true) return false;
-  return (tick - state.stepStartTick) * TICK_MS < TUTORIAL.slowMaxSec * 1000;
+export function isTutorialSlow(state: TutorialState | null): boolean {
+  return state !== null && currentStep(state)?.slow === true;
 }
 
 /** Checks the current step against this tick's events; moves to the next step if done. Returns true on change. */
@@ -103,48 +122,21 @@ export function advanceTutorial(
 ): boolean {
   const step = currentStep(state);
   let changed = false;
+  // Steps go strictly in order: during the lesson nothing but the current action works (gate.ts), so no step can be
+  // done ahead of time.
   if (step && isDone(step.until, state, world, events, ui)) {
     state.index += 1;
     changed = true;
-  }
-  // The player may do things before the hint asks (e.g. barracks built during the gold hint): a waiting step
-  // whose goal, or a later step's goal, is already reached in the world is skipped, up to that later step.
-  // An info step still runs its course first.
-  const steps = state.script.steps;
-  if (currentStep(state) && currentStep(state)!.until.type !== 'time') {
-    for (let j = steps.length - 1; j >= state.index; j--) {
-      if (goalReached(steps[j]!.until, world)) {
-        state.index = j + 1;
-        changed = true;
-        break;
-      }
-    }
   }
   if (changed) state.stepStartTick = world.tick;
   return changed;
 }
 
-/**
- * Whether a step's goal can be seen in the world right now, no matter when it happened: a building the player
- * owns, a node the player holds. Other goals are events and only count when they happen during their step.
- */
-export function goalReached(until: StepCondition, world: World): boolean {
-  switch (until.type) {
-    case 'build':
-      return Object.values(world.nodes).some(
-        (n) =>
-          n.owner === 'player' &&
-          n.building !== null &&
-          (!until.building || n.building.type === until.building) &&
-          (!until.node || n.id === until.node),
-      );
-    case 'capture':
-      return until.node !== undefined && world.nodes[until.node]?.owner === 'player';
-    case 'any':
-      return until.of.some((c) => goalReached(c, world));
-    default:
-      return false;
-  }
+/** The node a `send.from` means now (`bossTarget`: the boss's marked node; null while there is none). */
+export function resolveFrom(from: string, world: World): string | null {
+  if (from !== 'bossTarget') return from;
+  const boss = world.boss;
+  return boss && 'targetId' in boss ? (boss.targetId ?? null) : null;
 }
 
 function isDone(
@@ -161,6 +153,7 @@ function isDone(
       for (const e of events) {
         if (e.type !== 'applied' || e.command.type !== 'send' || e.command.side !== 'player') continue;
         if (until.to && e.command.to !== until.to) continue;
+        if (until.from && e.command.from !== resolveFrom(until.from, world)) continue;
         targets.set(e.command.to, (targets.get(e.command.to) ?? 0) + 1);
       }
       return [...targets.values()].some((n) => n >= (until.minSources ?? 1));
@@ -204,7 +197,8 @@ function isDone(
 
 /**
  * Checks a script against its level: known nodes and texts, no `slow` on `time` steps (nothing to wait for),
- * info-only `time` steps at most TUTORIAL.infoStepMaxSec.
+ * info-only `time` steps at most TUTORIAL.infoStepMaxSec, and every action step names what the gate lets through.
+ * That the action can actually be done when its step starts is a property of the battle: tests/core/tutorial/gate.test.ts.
  */
 export function validateTutorial(script: TutorialScript, level: LevelData, hasKey: (key: string) => boolean): string[] {
   const errors: string[] = [];
@@ -213,7 +207,10 @@ export function validateTutorial(script: TutorialScript, level: LevelData, hasKe
     if (id !== undefined && !ids.has(id)) errors.push(`${level.id} ${where}: unknown node ${id}`);
   };
   const condition = (u: StepCondition, where: string): void => {
-    if (u.type === 'send') node(u.to, where);
+    if (u.type === 'send') {
+      node(u.to, where);
+      if (u.from !== 'bossTarget') node(u.from, where);
+    }
     if (u.type === 'capture' || u.type === 'build' || u.type === 'select') node(u.node, where);
     if (u.type === 'any') {
       if (u.of.length === 0) errors.push(`${level.id} ${where}: 'any' needs conditions`);
@@ -233,6 +230,18 @@ export function validateTutorial(script: TutorialScript, level: LevelData, hasKe
       path.forEach((id) => node(id, where));
     }
     condition(step.until, where);
+    if (step.slow) {
+      // An action step must say exactly what is allowed (the lesson gate lets only that through, F-6).
+      const ps = step.until.type === 'any' ? step.until.of : [step.until];
+      const endsByItself = ps.some((u) => u.type === 'special');
+      for (const u of ps) {
+        if (u.type === 'send' && !endsByItself && f?.kind !== 'drag' && !u.to && !u.from) {
+          errors.push(`${level.id} ${where}: an action send needs a drag finger, 'to' or 'from'`);
+        }
+        if (u.type === 'build' && !u.building) errors.push(`${level.id} ${where}: an action build needs a building`);
+        if (u.type === 'cast' && !u.spell) errors.push(`${level.id} ${where}: an action cast needs a spell`);
+      }
+    }
     if (step.until.type === 'time') {
       if (step.slow) errors.push(`${level.id} ${where}: a time step cannot be slow`);
       if (step.until.sec > TUTORIAL.infoStepMaxSec) errors.push(`${level.id} ${where}: info step longer than ${TUTORIAL.infoStepMaxSec} s`);
