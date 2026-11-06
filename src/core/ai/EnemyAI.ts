@@ -261,12 +261,21 @@ function threats(world: World, side: Side): Map<string, Threat> {
   return out;
 }
 
-/** Reinforces own nodes that incoming hostile units would capture. Returns ids of threatened nodes. */
+/** How much an own node is worth keeping: its size, plus its building (a lost building goes to the enemy intact). */
+function keepValue(node: NodeState): number {
+  return AI.sizeValue[node.size] + (node.building ? AI.buildingValueBonus * node.building.level : 0);
+}
+
+/**
+ * Reinforces own nodes that incoming hostile units would capture, the most valuable first (helpers are shared).
+ * Returns ids of threatened nodes.
+ */
 function defend(world: World, side: Side, dist: Distances, plan: Plan): Set<string> {
   const threatened = new Set<string>();
 
   // Any hostile unit counts: the opponent's and bandit raids.
-  for (const [nodeId, threat] of threats(world, side)) {
+  const byValue = [...threats(world, side)].sort(([a], [b]) => keepValue(world.nodes[b]!) - keepValue(world.nodes[a]!));
+  for (const [nodeId, threat] of byValue) {
     const node = world.nodes[nodeId]!;
     // Defender-equivalents the attack takes away: tower shots first, a fortress defender takes two attackers.
     const hostile = Math.max(0, threat.units - towerKillsEstimate(node, threat.units, threat.units)) / defenseMult(node);
@@ -437,7 +446,7 @@ function requiredForce(world: World, target: NodeState, eta: number, margin: num
 function targetValue(side: Side, target: NodeState, aggression: number): number {
   let value = AI.sizeValue[target.size];
   if (target.hasGoldVein) value += AI.goldVeinValue;
-  if (target.building) value += AI.buildingLevelValue * target.building.level;
+  if (target.building) value += AI.buildingValueBonus * target.building.level;
   if (target.kind === 'temple') value += AI.templeValue;
   if (target.kind === 'chest') value += AI.chestValue;
   // The player and a second enemy are equal targets (GDD 3.2).

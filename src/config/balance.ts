@@ -61,8 +61,6 @@ export const BUILDINGS = {
     shotsPerSec: [1, 2, 3] as PerLevel<number>,
   },
   maxLevel: 3,
-  /** Levels lost by a building when its node is captured; level 1 is destroyed. */
-  captureLevelLoss: 1,
 } as const;
 
 export const ARMY = {
@@ -238,7 +236,11 @@ export const AI = {
   /** Weight of a target node by size. */
   sizeValue: { small: 1, medium: 1.5, large: 2 },
   goldVeinValue: 0.6,
-  buildingLevelValue: 0.4,
+  /**
+   * Value of a building, per level (PLAYTEST-1 F-3: a captured building changes owner intact): added to a target's
+   * value, and own threatened nodes are defended in order of size value + this × level.
+   */
+  buildingValueBonus: 0.4,
   /** Opponent nodes are worth (1 + aggression × this) times more than neutrals. */
   opponentTargetBonus: 1,
   /** Each field unit of travel counts as this many troops of cost when scoring targets. */

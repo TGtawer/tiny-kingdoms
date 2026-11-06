@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, STREAM, TICK_MS } from '../../../src/config/balance';
-import { downgradeOnCapture } from '../../../src/core/sim/capture';
 import { arriveUnit, defenseHits } from '../../../src/core/sim/combat';
 import { step } from '../../../src/core/sim/tick';
 import type { Owner, World } from '../../../src/core/sim/World';
@@ -108,28 +107,27 @@ describe('tower (GDD 3.6, BALANCE.md)', () => {
 });
 
 describe('capture and buildings', () => {
-  it('building passes to the new owner and loses a level', () => {
-    const world = lineWorld({ E: { troops: 0, building: { type: 'barracks', level: 3 } } });
-    arrive(world, 'E');
-    expect(world.nodes.E).toMatchObject({ owner: 'player', building: { type: 'barracks', level: 2 } });
+  it('a building of any type and level passes to the new owner intact (PLAYTEST-1 F-3)', () => {
+    for (const type of ['barracks', 'mine'] as const) {
+      for (const level of [1, 2, 3] as const) {
+        const world = lineWorld({ E: { troops: 0, building: { type, level } } });
+        arrive(world, 'E');
+        expect(world.nodes.E).toMatchObject({ owner: 'player', building: { type, level } });
+      }
+    }
   });
 
-  it('level 1 building is destroyed on capture', () => {
-    const world = lineWorld({ E: { troops: 0, building: { type: 'barracks', level: 1 } } });
-    arrive(world, 'E');
-    expect(world.nodes.E).toMatchObject({ owner: 'player', building: null });
-  });
-
-  it('a tower is downgraded when its node falls', () => {
+  it('a captured tower keeps its level and its reload, and shoots at its former owner', () => {
     const world = lineWorld({ E: { troops: 0, building: { type: 'tower', level: 2 } } });
-    expect(arriveMany(world, 'E', 2)).toEqual(['destroyedByTower', 'captured']);
-    expect(world.nodes.E!.building).toEqual({ type: 'tower', level: 1 });
-  });
-
-  it('downgradeOnCapture', () => {
-    expect(downgradeOnCapture(null)).toBeNull();
-    expect(downgradeOnCapture({ type: 'mine', level: 1 })).toBeNull();
-    expect(downgradeOnCapture({ type: 'mine', level: 2 })).toEqual({ type: 'mine', level: 1 });
-    expect(downgradeOnCapture({ type: 'mine', level: 3 })).toEqual({ type: 'mine', level: 2 });
+    expect(arrive(world, 'E').outcome).toBe('destroyedByTower');
+    const node = world.nodes.E!;
+    const readyAt = node.towerReadyAtMs;
+    expect(arrive(world, 'E').outcome).toBe('captured');
+    expect(node.building).toEqual({ type: 'tower', level: 2 });
+    expect(node.towerReadyAtMs).toBe(readyAt);
+    // The enemy comes back: the tower now kills enemy units.
+    world.nodes.E!.troops = 5;
+    world.tick += 100;
+    expect(arriveMany(world, 'E', 1, 'enemy')).toEqual(['destroyedByTower']);
   });
 });
