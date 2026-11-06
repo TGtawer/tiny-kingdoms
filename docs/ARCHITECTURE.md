@@ -68,7 +68,7 @@ src/
     UpgradesScene.ts
     ShopScene.ts
   view/
-    NodeView.ts           # отрисовка узла кодом (Graphics)
+    NodeView.ts           # отрисовка узла кодом (Graphics); показ через фильтр частоты (displayFilter.ts, PLAYTEST-1 F-2)
     UnitsView.ts          # все юниты одним батчем: пул изображений из одной запечённой текстуры
     RoadView.ts
     BuildMenu.ts          # меню построек; закрытые — тёмные с замком
