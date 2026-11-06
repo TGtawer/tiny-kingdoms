@@ -31,34 +31,49 @@ describe('node display filter (PLAYTEST-1 F-2)', () => {
     expect(now - 3000).toBeLessThanOrEqual(NODE_VIEW.refreshMs + 16);
   });
 
-  it('an owner change shorter than ownerStableMs never shows; the count freezes meanwhile', () => {
-    const f = filter('player', 1);
-    // 0 ↔ 1 ping-pong: the enemy holds the node for 200 ms at a time.
-    for (let now = 0; now < 3000; now += 16) {
-      const enemy = Math.floor(now / 200) % 2 === 1;
-      expect(f.update(now, enemy ? 'enemy' : 'player', enemy ? 1 : now % 3) & SHOWN_OWNER_CHANGED).toBe(0);
-      expect(f.owner).toBe('player');
-      if (enemy) expect(f.troops).toBeLessThanOrEqual(2);
-    }
-  });
-
-  it('an owner held for ownerStableMs shows, with its count, and reports the previous owner', () => {
+  it('a capture after a quiet spell shows at once, skipping the rate window, and reports the previous owner', () => {
     const f = filter('neutral', 2);
-    expect(f.update(1000, 'player', 1)).toBe(0);
-    expect(f.troops).toBe(2);
-    expect(f.update(1000 + NODE_VIEW.ownerStableMs - 1, 'player', 3)).toBe(0);
-    expect(f.update(1000 + NODE_VIEW.ownerStableMs, 'player', 3)).toBe(SHOWN_CHANGED | SHOWN_OWNER_CHANGED);
+    expect(f.update(1000, 'neutral', 1)).toBe(SHOWN_CHANGED);
+    // 10 ms later, still inside the rate window: the capture shows in the same update, with its count.
+    expect(f.update(1010, 'player', 1)).toBe(SHOWN_CHANGED | SHOWN_OWNER_CHANGED);
     expect(f.owner).toBe('player');
-    expect(f.troops).toBe(3);
+    expect(f.troops).toBe(1);
     expect(f.previousOwner).toBe('neutral');
   });
 
-  it('a new owner that changes again restarts the wait', () => {
+  it('in a ping-pong only the first capture shows; then the color holds and the count freezes', () => {
+    const f = filter('player', 1);
+    let ownerChanges = 0;
+    // 0 ↔ 1 ping-pong: the owner flips every 200 ms for 3 s (sooner than ownerStableMs each time).
+    for (let now = 0; now < 3000; now += 16) {
+      const enemy = Math.floor(now / 200) % 2 === 0;
+      if (f.update(now, enemy ? 'enemy' : 'player', enemy ? 1 : now % 3) & SHOWN_OWNER_CHANGED) ownerChanges++;
+      expect(f.owner).toBe('enemy');
+      expect(f.troops).toBeLessThanOrEqual(2);
+    }
+    expect(ownerChanges).toBe(1);
+  });
+
+  it('after a ping-pong the owner that held for ownerStableMs shows, with its count', () => {
+    const f = filter('neutral', 2);
+    f.update(0, 'player', 1); // quiet capture: shows at once
+    f.update(100, 'enemy', 1); // ping-pong: waits
+    expect(f.owner).toBe('player');
+    expect(f.update(100 + NODE_VIEW.ownerStableMs - 1, 'enemy', 3)).toBe(0);
+    expect(f.troops).toBe(1);
+    expect(f.update(100 + NODE_VIEW.ownerStableMs, 'enemy', 3)).toBe(SHOWN_CHANGED | SHOWN_OWNER_CHANGED);
+    expect(f.owner).toBe('enemy');
+    expect(f.troops).toBe(3);
+    expect(f.previousOwner).toBe('player');
+  });
+
+  it('a waiting owner that changes again restarts the wait', () => {
     const f = filter('neutral', 2);
     f.update(0, 'player', 1);
-    f.update(200, 'enemy', 1);
-    expect(f.update(400, 'enemy', 1)).toBe(0);
-    expect(f.update(500, 'enemy', 1) & SHOWN_OWNER_CHANGED).toBe(SHOWN_OWNER_CHANGED);
-    expect(f.owner).toBe('enemy');
+    f.update(100, 'enemy', 1);
+    f.update(300, 'enemy2', 1);
+    expect(f.update(500, 'enemy2', 1)).toBe(0);
+    expect(f.update(600, 'enemy2', 1) & SHOWN_OWNER_CHANGED).toBe(SHOWN_OWNER_CHANGED);
+    expect(f.owner).toBe('enemy2');
   });
 });
