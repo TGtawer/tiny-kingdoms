@@ -387,6 +387,17 @@ export const LEADER_CARD = {
   hudPortrait: 34,
 } as const;
 
+/** A card before the battle (view/introCard.ts: the leader card, the evil mage card of PLAYTEST-1 F-8), CSS px. */
+export const INTRO_CARD = {
+  width: 320,
+  pad: 16,
+  gap: 14,
+  buttonWidth: 180,
+  buttonHeight: 52,
+  /** The mage card picture: the tower over its node, as on the field. */
+  magePicture: 110,
+} as const;
+
 /** Guided-tour overlay outside battle (view/Spotlight.ts, TUTORIAL.md T-6), CSS px / ms. */
 /**
  * Tutorial hint reactions (PLAYTEST-1 F-6): a refused action makes the hint plaque jump `bounce` CSS px up and back

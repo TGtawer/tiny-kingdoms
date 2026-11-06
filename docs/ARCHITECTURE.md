@@ -74,6 +74,8 @@ src/
     RoadView.ts
     BuildMenu.ts          # меню построек; закрытые — тёмные с замком
     TutorialView.ts       # палец, подсветка, подсказка в бою
+    introCard.ts          # карточка перед боем: лидер (выключена), злой маг (PLAYTEST-1 F-8)
+    displayFilter.ts      # что показывает узел: число и цвет не чаще refreshMs (PLAYTEST-1 F-2)
     Spotlight.ts          # затемнение с «дыркой» и палец для тура вне боя
     effects.ts            # твины, частицы, вспышки
     layout.ts             # адаптация под портрет/альбом

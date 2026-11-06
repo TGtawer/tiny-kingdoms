@@ -93,6 +93,14 @@ export function shouldRunTutorial(level: LevelData, progress: Progress, script: 
   return !script.requires || activeSpell(progress) === script.requires.activeSpell;
 }
 
+/**
+ * The card shown before the battle on a full pause (PLAYTEST-1 F-8): the evil mage on the first playthrough of the
+ * mage level (with its tutorial); nothing on replays.
+ */
+export function introCardFor(level: LevelData, progress: Progress, script: TutorialScript | undefined): 'mage' | null {
+  return level.special?.type === 'mage' && shouldRunTutorial(level, progress, script) ? 'mage' : null;
+}
+
 export function currentStep(state: TutorialState): TutorialStep | null {
   return state.script.steps[state.index] ?? null;
 }

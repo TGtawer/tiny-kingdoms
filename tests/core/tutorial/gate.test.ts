@@ -23,6 +23,7 @@ import {
   advanceTutorial,
   currentStep,
   dragPath,
+  introCardFor,
   resolveFrom,
   shouldRunTutorial,
   startTutorial,
@@ -274,5 +275,38 @@ describe('validateTutorial: action steps name what the gate lets through', () =>
     ]);
     const boss = { steps: [{ hint: 'tut.goal', until: { type: 'any', of: [{ type: 'send' }, { type: 'special', event: 'mageStrike' }] }, slow: true }] } as const;
     expect(validateTutorial(boss as never, level, ok)).toEqual([]);
+  });
+});
+
+describe('level 10: the evil mage (PLAYTEST-1 F-8)', () => {
+  const level = ALL_LEVELS.find((l) => l.id === 'c01_l10')!;
+  const script = TUTORIALS.c01_l10!;
+
+  it('the mage card comes before the first playthrough only', () => {
+    const fresh = defaultProgress();
+    expect(introCardFor(level, fresh, script)).toBe('mage');
+    fresh.completed.push(level.id);
+    expect(introCardFor(level, fresh, script)).toBeNull();
+    expect(introCardFor(ALL_LEVELS.find((l) => l.id === 'c01_l09')!, defaultProgress(), TUTORIALS.c01_l09)).toBeNull();
+  });
+
+  it('no timed mage hint any more: the script waits for the warning, then asks to move out of the marked node', () => {
+    expect(script.gate).toBe('step');
+    expect(script.steps.map((s) => s.until.type)).toEqual(['special', 'any']);
+  });
+
+  it('on the warning only a send out of the marked node works, to any target', () => {
+    const world = createWorld(level, { seed: 1 });
+    const own = Object.keys(world.nodes).filter((id) => world.nodes[id]!.owner === 'player');
+    const marked = own[0]!;
+    world.boss = { ...(world.boss as Extract<World['boss'], { type: 'mage' }>), targetId: marked };
+    const state: TutorialState = { ...startTutorial(script, 0), index: 1 };
+    expect(gateLocked(state)).toBe(true);
+    const others = Object.keys(world.nodes).filter((id) => id !== marked);
+    for (const to of others) expect(isSendAllowed(state, world, [marked], to), to).toBe(true);
+    for (const from of own.slice(1)) expect(isSendAllowed(state, world, [from], marked)).toBe(false);
+    expect(isUiAllowed(state, { type: 'select', node: marked })).toBe(false);
+    // Before the warning the player is free.
+    expect(gateLocked({ ...state, index: 0 })).toBe(false);
   });
 });

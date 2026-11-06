@@ -94,12 +94,11 @@
   "c01_l10": {
     "gate": "step",
     "steps": [
-      { "hint": "tut.mage", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 4 } },
       { "until": { "type": "special", "event": "mageWarning" } },
       {
         "hint": "tut.mageFireball",
         "highlight": [{ "bossTarget": true }],
-        "until": { "type": "any", "of": [{ "type": "send" }, { "type": "special", "event": "mageStrike" }] },
+        "until": { "type": "any", "of": [{ "type": "send", "from": "bossTarget" }, { "type": "special", "event": "mageStrike" }] },
         "slow": true
       }
     ]

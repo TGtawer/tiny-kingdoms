@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DRAGON, ECONOMY, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
+import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -15,6 +15,7 @@ import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
 import {
   advanceTutorial,
   currentStep,
+  introCardFor,
   shouldRunTutorial,
   startTutorial,
   isTutorialSlow,
@@ -38,7 +39,8 @@ import { TutorialView } from '../view/TutorialView';
 import { BuildMenu, type BuildChoice } from '../view/BuildMenu';
 import { explosion, floatText, goldFloat, pop, ringBurst } from '../view/effects';
 import { FieldLayout, fieldArea, px, textStyle } from '../view/layout';
-import { NodeView, type Highlight } from '../view/NodeView';
+import { drawMagePicture, NodeView, type Highlight } from '../view/NodeView';
+import { showIntroCard } from '../view/introCard';
 import { SHOWN_OWNER_CHANGED } from '../view/displayFilter';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
@@ -223,7 +225,25 @@ export class BattleScene extends Phaser.Scene {
     // Same level, same track: "Play again" keeps it, "Next" crossfades to the next level's one.
     playMusic(battleTrack(this.level, MUSIC.battleTracks, audioFiles()));
 
-    this.platform.gameplayStart();
+    // The evil mage card (PLAYTEST-1 F-8): on the first playthrough of the mage level, before the battle, on a full
+    // pause; read as long as needed, the battle and GameplayAPI start on "To battle".
+    if (introCardFor(this.level, getStore(this).progress, levelScript) === 'mage') {
+      this.paused = true;
+      showIntroCard(this, {
+        accent: COLORS.mage,
+        picture: drawMagePicture,
+        pictureSize: INTRO_CARD.magePicture,
+        title: t('mage.card.title'),
+        body: t('mage.card.body', { sec: MAGE.everyMs / 1000 }),
+        button: t('mage.card.go'),
+        onClose: () => {
+          this.paused = false;
+          this.platform.gameplayStart();
+        },
+      });
+    } else {
+      this.platform.gameplayStart();
+    }
 
     // Enemy leader: portrait in the HUD and a short card before the battle (the battle waits for it).
     // Turned off by SHOW_LEADER_INTRO; the leader still drives the AI behavior.
