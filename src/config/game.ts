@@ -456,7 +456,8 @@ export const BUTTON_STYLE = {
  * a finger taps the Play medallion. `?menuFocus=on|off` overrides `firstLaunch` (works in production too).
  */
 export const MENU_FOCUS = {
-  firstLaunch: true,
+  /** Off after the playtest (2026-11-06): the plain menu from the first launch; ?menuFocus=on still shows the mode. */
+  firstLaunch: false,
   /** The finger appears this long after the menu opens, fading in, ms. */
   fingerFromMs: 1400,
   fingerFadeMs: 250,
