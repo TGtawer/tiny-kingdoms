@@ -72,6 +72,16 @@ export const NODE_LIP = 0.08;
 /** The same for squads on the road. */
 export const SQUAD_LIP = 0.1;
 
+/**
+ * What a node shows (docs/PLAYTEST-1.md F-2, GDD 3.6 «Отображение»): the count, the owner color, the capacity arc
+ * and the building badge change at most once per `refreshMs` (a lone change shows at once); a new owner shows only
+ * after it held for `ownerStableMs`. View only: the simulation, tutorial, AI and victory use the real state.
+ */
+export const NODE_VIEW = {
+  refreshMs: 250,
+  ownerStableMs: 300,
+} as const;
+
 /** Node radius in field units (fraction of field width), clamped to CSS px bounds. */
 export const NODE_RADIUS: Record<NodeSize, number> = {
   small: 0.055,

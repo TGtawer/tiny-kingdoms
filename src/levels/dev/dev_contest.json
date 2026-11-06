@@ -1,0 +1,84 @@
+{
+  "id": "dev_contest",
+  "chapter": 0,
+  "index": 9,
+  "playerStartGold": 0,
+  "enemy": {
+    "productionMult": 1,
+    "aiThinkMs": 1000,
+    "aggression": 1,
+    "startGold": 0
+  },
+  "nodes": [
+    {
+      "id": "player",
+      "x": 0.1,
+      "y": 0.25,
+      "size": "large",
+      "owner": "player",
+      "troops": 40,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "player2",
+      "x": 0.1,
+      "y": 0.75,
+      "size": "large",
+      "owner": "player",
+      "troops": 40,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "mid",
+      "x": 0.5,
+      "y": 0.5,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 1,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "enemy",
+      "x": 0.912,
+      "y": 0.25,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 40,
+      "hasGoldVein": false,
+      "building": null,
+      "capital": true
+    },
+    {
+      "id": "enemy2",
+      "x": 0.912,
+      "y": 0.75,
+      "size": "large",
+      "owner": "enemy",
+      "troops": 40,
+      "hasGoldVein": false,
+      "building": null
+    }
+  ],
+  "roads": [
+    [
+      "player",
+      "mid"
+    ],
+    [
+      "player2",
+      "mid"
+    ],
+    [
+      "mid",
+      "enemy"
+    ],
+    [
+      "mid",
+      "enemy2"
+    ]
+  ]
+}
