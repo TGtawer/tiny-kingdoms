@@ -4,6 +4,7 @@ import type { SaveStore } from '../save/SaveStore';
 
 const PLATFORM_KEY = 'platform';
 const STORE_KEY = 'saveStore';
+const MENU_FOCUS_KEY = 'menuFocusOverride';
 
 /** Stores services in the game registry so scenes can reach them without globals. */
 export function registerServices(game: Phaser.Game, platform: Platform, store: SaveStore): void {
@@ -15,6 +16,15 @@ export function getPlatform(scene: Phaser.Scene): Platform {
   const platform = scene.registry.get(PLATFORM_KEY) as Platform | undefined;
   if (!platform) throw new Error('Platform is not registered');
   return platform;
+}
+
+/** `?menuFocus=on|off` read at boot (PLAYTEST-1 F-1); null when the parameter is absent. */
+export function setMenuFocusOverride(scene: Phaser.Scene, value: boolean | null): void {
+  scene.registry.set(MENU_FOCUS_KEY, value);
+}
+
+export function getMenuFocusOverride(scene: Phaser.Scene): boolean | null {
+  return (scene.registry.get(MENU_FOCUS_KEY) as boolean | null | undefined) ?? null;
 }
 
 export function getStore(scene: Phaser.Scene): SaveStore {

@@ -37,6 +37,8 @@ export interface BannerSpec {
   dropDelayMs: number;
   /** Not opened yet (TUTORIAL.md T-3): darkened cloth, lock on the medallion; still pressable. */
   locked?: boolean;
+  /** Focus mode (PLAYTEST-1 F-1): darkened like a locked banner but without the lock, and not pressable. */
+  dimmed?: boolean;
 }
 
 type Pt = readonly [number, number];
@@ -99,7 +101,7 @@ export class MenuBanner {
         .setStroke(cssColor(COLORS.outline), (j ? B.labelSecondStroke : B.labelStroke) * frame.s)
         .setDepth(labelDepth);
     });
-    this.labelAlpha = spec.locked ? B.locked.labelAlpha : 1;
+    this.labelAlpha = spec.locked || spec.dimmed ? B.locked.labelAlpha : 1;
 
     // The whole cloth with its tip is the touch area (always far above 48 px).
     const left = frameX(frame, spec.x - spec.w / 2);
@@ -107,8 +109,8 @@ export class MenuBanner {
     this.zone = scene.add
       .zone(left, top, spec.w * frame.s, (spec.len + B.tipH) * frame.s)
       .setOrigin(0, 0)
-      .setDepth(labelDepth + 0.5)
-      .setInteractive({ useHandCursor: true });
+      .setDepth(labelDepth + 0.5);
+    if (!spec.dimmed) this.zone.setInteractive({ useHandCursor: true });
     this.zone.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
       this.imp = 1;
       this.flash = 1;
@@ -138,6 +140,18 @@ export class MenuBanner {
       const ly = cy + this.fontSize * 0.8 + j * this.fontSize * 1.05;
       label.setPosition(lx, frameY(this.frame, ly)).setAlpha(content * this.labelAlpha);
     });
+  }
+
+  get id(): MenuBannerId {
+    return this.spec.id;
+  }
+
+  /** Medallion center and radius on screen, game px (follows the sway). */
+  medalOnScreen(out: { x: number; y: number; r: number }): { x: number; y: number; r: number } {
+    out.x = frameX(this.frame, this.medal.x);
+    out.y = frameY(this.frame, this.medal.y);
+    out.r = this.medalR * this.frame.s;
+    return out;
   }
 
   destroy(): void {
@@ -180,9 +194,9 @@ export class MenuBanner {
     g.clear();
     if (drop <= 0) return;
     const { x, y, w } = this.spec;
-    const locked = this.spec.locked === true;
-    const color = locked ? shade(this.spec.color, B.locked.shade) : this.spec.color;
-    const trim = locked ? shade(this.spec.trim, B.locked.shade) : this.spec.trim;
+    const dark = this.spec.locked === true || this.spec.dimmed === true;
+    const color = dark ? shade(this.spec.color, B.locked.shade) : this.spec.color;
+    const trim = dark ? shade(this.spec.trim, B.locked.shade) : this.spec.trim;
     const len = this.spec.len * drop;
     const tipH = B.tipH * drop;
     const st = this.flat ? B.flat : B.rich;
@@ -316,6 +330,10 @@ export class MenuBanner {
       drawLock(g, 0, 0, r * B.locked.lockSize);
     } else {
       drawMenuIcon(g, this.spec.icon, 0, 0, r * B.iconScale);
+      if (this.spec.dimmed) {
+        g.fillStyle(COLORS.outline, B.locked.medalDim).fillCircle(0, 0, r);
+        g.lineStyle(B.outline, COLORS.outline, 1).strokeCircle(0, 0, r);
+      }
     }
   }
 }

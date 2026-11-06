@@ -28,6 +28,8 @@ export interface MenuScreenOptions {
   onPress: (id: MenuBannerId) => void;
   /** Banners not opened yet (TUTORIAL.md T-3). */
   locked?: Partial<Record<MenuBannerId, boolean>>;
+  /** Banners dimmed and not pressable in the focus mode (PLAYTEST-1 F-1). */
+  dimmed?: Partial<Record<MenuBannerId, boolean>>;
 }
 
 export interface MenuScreen {
@@ -35,6 +37,8 @@ export interface MenuScreen {
   /** Title center and font size, reference px. */
   readonly title: { x: number; y: number; size: number };
   update(t: number, dt: number, e: number): void;
+  /** The banner's medallion on screen, game px. */
+  medal(id: MenuBannerId, out: { x: number; y: number; r: number }): { x: number; y: number; r: number };
   destroy(): void;
 }
 
@@ -62,6 +66,10 @@ abstract class Screen implements MenuScreen {
   ) {}
 
   abstract update(t: number, dt: number, e: number): void;
+
+  medal(id: MenuBannerId, out: { x: number; y: number; r: number }): { x: number; y: number; r: number } {
+    return this.banners.find((b) => b.id === id)!.medalOnScreen(out);
+  }
 
   destroy(): void {
     for (const b of this.banners) b.destroy();
@@ -124,6 +132,7 @@ abstract class Screen implements MenuScreen {
             labels: o.labels[id],
             dropDelayMs: E.bannerDelaysMs[i] ?? 0,
             locked: o.locked?.[id] === true,
+            dimmed: o.dimmed?.[id] === true,
           },
           flat,
           depth + 0.2,
