@@ -141,10 +141,10 @@ describe('slow-down (TUTORIAL.md T-4)', () => {
   it('a slow step slows the battle down; the next step does not', () => {
     const world = freezeEconomy(lineWorld());
     const t = startTutorial(slowScript, world.tick);
-    expect(isTutorialSlow(t, world.tick)).toBe(true);
+    expect(isTutorialSlow(t)).toBe(true);
     advanceTutorial(t, world, step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N' }]));
-    expect(isTutorialSlow(t, world.tick)).toBe(false);
-    expect(isTutorialSlow(null, world.tick)).toBe(false);
+    expect(isTutorialSlow(t)).toBe(false);
+    expect(isTutorialSlow(null)).toBe(false);
   });
 
   it('while slowed the battle runs at SLOW_MO.speed (85% slower), the speed-up ignored', () => {

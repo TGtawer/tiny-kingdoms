@@ -9,6 +9,7 @@
         "slow": true
       },
       { "until": { "type": "capture", "node": "n1" } },
+      { "until": { "type": "time", "sec": 1 } },
       {
         "hint": "tut.swipeMany",
         "highlight": [{ "node": "player" }, { "node": "n1" }, { "node": "n2" }],
@@ -82,6 +83,7 @@
     "steps": [{ "hint": "tut.chest", "highlight": [{ "node": "a2" }], "until": { "type": "time", "sec": 4 } }]
   },
   "c01_l10": {
+    "gate": "step",
     "steps": [
       { "hint": "tut.mage", "highlight": [{ "node": "enemy" }], "until": { "type": "time", "sec": 4 } },
       { "until": { "type": "special", "event": "mageWarning" } },

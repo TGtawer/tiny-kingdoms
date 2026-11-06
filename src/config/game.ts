@@ -388,6 +388,17 @@ export const LEADER_CARD = {
 } as const;
 
 /** Guided-tour overlay outside battle (view/Spotlight.ts, TUTORIAL.md T-6), CSS px / ms. */
+/**
+ * Tutorial hint reactions (PLAYTEST-1 F-6): a refused action makes the hint plaque jump `bounce` CSS px up and back
+ * in `bounceMs`, and the finger starts its gesture again. No text pops up.
+ */
+export const TUTORIAL_FX = {
+  bounce: 10,
+  bounceMs: 260,
+  /** Refusals closer than this only restart the finger (no stacked jumps), ms. */
+  bounceEveryMs: 300,
+} as const;
+
 export const SPOTLIGHT = {
   depth: 500,
   dimAlpha: 0.62,
