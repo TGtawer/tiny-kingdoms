@@ -701,7 +701,37 @@ export const MENU_NIGHT = {
   stars: { count: 170, maxY: 470, seed: 77, color: 0xfff7d6 },
   windows: { seed: 3, color: 0xffcd6e },
   fireflies: { count: 24, fromY: 330, height: 360, glow: 9, color: [230, 255, 140] as const },
-  beam: { pad: 50, h: 22, color: 0x5b3a1f },
-  lantern: { glow: 140, body: 0xffd56b, cap: 0x374151 },
+  /**
+   * Outline of the beam and the lanterns, reference px. Both are drawn on whole screen pixels with this width
+   * rounded to an even number of screen pixels, so their edges are equally sharp at any frame scale.
+   */
+  outline: 2,
+  /** The beam: side overhang past the banners and lanterns, height, corner radius; the highlight band on top. */
+  beam: { pad: 50, h: 22, radius: 10, color: 0x5b3a1f, shine: { inset: 6, top: 3, h: 6, radius: 3, alpha: 0.12 } },
+  /**
+   * Lanterns under the beam (reference px from the beam center line): hook from `top` down `hook`, body w x h
+   * with corner radius r, caps capW x capH at `caps` offsets, glow radius `glow` centered `glowY` below `top`.
+   */
+  lantern: {
+    glow: 140,
+    glowY: 18,
+    body: 0xffd56b,
+    cap: 0x374151,
+    top: 9,
+    hook: 8,
+    w: 16,
+    h: 20,
+    r: 4,
+    capW: 20,
+    capH: 4,
+    caps: [6, 27],
+  },
+} as const;
+
+/** Main menu medallion icons (view/icons.ts drawMenuIcon). */
+export const MENU_ICON = {
+  /** Corner radius of the Play triangle, share of the icon box; each corner is drawn with `cornerSegments` steps. */
+  playCorner: 0.12,
+  cornerSegments: 6,
 } as const;
 

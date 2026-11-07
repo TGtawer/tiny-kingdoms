@@ -17,7 +17,10 @@ export const MENU_DEPTH = {
   /** Banners: map, upgrades, play (the main one on top); labels at +0.2, touch zones at +0.7. */
   banner: 5,
   framing: 9,
+  /** Night: lantern glows, then the beam above them (the glow would wash out its outline), then the lamps. */
   lanterns: 10,
+  beam: 10.05,
+  lanternBodies: 10.1,
   fireflies: 11,
   ui: 20,
 } as const;
@@ -440,17 +443,27 @@ export class NightScreen extends Screen {
       o,
     );
 
+    // Beam and lanterns are drawn on whole screen pixels with an even outline, so their edges are equally sharp.
+    const outline = this.crispWidth(N.outline);
+
     // The beam spans all banners and lanterns; it opens from the center during the entrance.
+    const B = N.beam;
     const xs = [...N.banners.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]), ...N.lanterns];
-    const x0 = Math.min(...xs) - N.beam.pad;
-    const x1 = Math.max(...xs) + N.beam.pad;
-    const cx = (x0 + x1) / 2;
+    const x0 = this.snapX(Math.min(...xs) - B.pad);
+    const x1 = this.snapX(Math.max(...xs) + B.pad);
+    const cx = this.snapX((x0 + x1) / 2);
+    const top = this.snapY(N.beamY - B.h / 2);
+    const bh = this.snapY(N.beamY + B.h / 2) - top;
     const beamG = scene.add.graphics();
-    beamG.fillStyle(N.beam.color, 1).fillRoundedRect(x0 - cx, -N.beam.h / 2, x1 - x0, N.beam.h, 10);
-    beamG.lineStyle(3, COLORS.outline, 1).strokeRoundedRect(x0 - cx, -N.beam.h / 2, x1 - x0, N.beam.h, 10);
-    beamG.fillStyle(0xffffff, 0.12).fillRoundedRect(x0 - cx + 6, -N.beam.h / 2 + 3, x1 - x0 - 12, 6, 3);
-    this.beam = scene.add.container(cx, N.beamY, [beamG]);
-    this.layer(MENU_DEPTH.framing).add(this.beam);
+    beamG.fillStyle(B.color, 1).fillRoundedRect(x0 - cx, top, x1 - x0, bh, B.radius);
+    beamG.lineStyle(outline, COLORS.outline, 1).strokeRoundedRect(x0 - cx, top, x1 - x0, bh, B.radius);
+    const inset = this.snapLength(B.shine.inset);
+    beamG
+      .fillStyle(0xffffff, B.shine.alpha)
+      .fillRoundedRect(x0 - cx + inset, top + this.snapLength(B.shine.top), x1 - x0 - 2 * inset, this.snapLength(B.shine.h), B.shine.radius);
+    // Scaled only along x around its center (the entrance); the y of the drawing is already absolute.
+    this.beam = scene.add.container(cx, 0, [beamG]);
+    this.layer(MENU_DEPTH.beam).add(this.beam);
 
     // Lanterns hang under the beam: a warm glow over everything around, then the lamp.
     const L = N.lantern;
@@ -462,20 +475,29 @@ export class NightScreen extends Screen {
       ctx.fillStyle = gr;
       ctx.fillRect(0, 0, glowR * 2, glowR * 2);
     });
-    const ly = N.beamY + 9;
-    for (const lx of N.lanterns) this.glows.push({ img: this.image(glow, frameX(f, lx), frameY(f, ly + 18), MENU_DEPTH.lanterns).setAlpha(0), x: lx });
+    const ly = N.beamY + L.top;
+    for (const lx of N.lanterns) this.glows.push({ img: this.image(glow, frameX(f, lx), frameY(f, ly + L.glowY), MENU_DEPTH.lanterns).setAlpha(0), x: lx });
     this.lanternBodies = scene.add.graphics().setAlpha(0);
     const g = this.lanternBodies;
+    // A box with its edges on whole screen pixels.
+    const box = (left: number, y: number, w: number, h: number): [number, number, number, number] => {
+      const bx = this.snapX(left);
+      const by = this.snapY(y);
+      return [bx, by, this.snapX(left + w) - bx, this.snapY(y + h) - by];
+    };
     for (const lx of N.lanterns) {
-      g.lineStyle(2, COLORS.outline, 1).lineBetween(lx, ly, lx, ly + 8);
-      g.fillStyle(L.body, 1).fillRoundedRect(lx - 8, ly + 8, 16, 20, 4);
-      g.strokeRoundedRect(lx - 8, ly + 8, 16, 20, 4);
-      for (const cy of [ly + 6, ly + 27]) {
-        g.fillStyle(L.cap, 1).fillRect(lx - 10, cy, 20, 4);
-        g.strokeRect(lx - 10, cy, 20, 4);
+      const hx = this.snapX(lx);
+      g.lineStyle(outline, COLORS.outline, 1).lineBetween(hx, this.snapY(ly), hx, this.snapY(ly + L.hook));
+      const body = box(lx - L.w / 2, ly + L.hook, L.w, L.h);
+      g.fillStyle(L.body, 1).fillRoundedRect(...body, L.r);
+      g.strokeRoundedRect(...body, L.r);
+      for (const cy of L.caps) {
+        const cap = box(lx - L.capW / 2, ly + cy, L.capW, L.capH);
+        g.fillStyle(L.cap, 1).fillRect(...cap);
+        g.strokeRect(...cap);
       }
     }
-    this.layer(MENU_DEPTH.lanterns + 0.1).add(g);
+    this.layer(MENU_DEPTH.lanternBodies).add(g);
 
     // Fireflies drift on small ellipses and blink.
     const FF = N.fireflies;
@@ -496,6 +518,30 @@ export class NightScreen extends Screen {
     }
   }
 
+  /** Reference x whose screen position is a whole pixel (the nearest to `x`). */
+  private snapX(x: number): number {
+    const f = this.frame;
+    return (Math.round(f.ox + x * f.s) - f.ox) / f.s;
+  }
+
+  private snapY(y: number): number {
+    const f = this.frame;
+    return (Math.round(f.oy + y * f.s) - f.oy) / f.s;
+  }
+
+  /** Reference length that is a whole number of screen pixels. */
+  private snapLength(v: number): number {
+    return Math.round(v * this.frame.s) / this.frame.s;
+  }
+
+  /**
+   * Reference line width that is an even number of screen pixels (at least 2): centered on an edge that lies on
+   * a whole pixel, it covers whole pixels on both sides, with no half-covered, blurred row.
+   */
+  private crispWidth(v: number): number {
+    return Math.max(2, 2 * Math.round((v * this.frame.s) / 2)) / this.frame.s;
+  }
+
   update(t: number, dt: number, e: number): void {
     for (const s of this.stars) s.img.setAlpha(0.45 + (0.55 * (Math.sin(t * 1.7 + s.phase) + 1)) / 2);
     for (const wnd of this.windows) wnd.img.setAlpha(0.75 + 0.25 * Math.sin(t * 2 + wnd.x));
@@ -503,7 +549,8 @@ export class NightScreen extends Screen {
 
     const E = MENU_FX.entrance;
     const bk = cubicOut(seg(e * 1000, E.framingFromMs, E.framingFromMs + E.nightBeamMs));
-    this.beam.setScale(Math.max(0.001, bk), 1);
+    // Exactly 1 once open (cubicOut(1) = 1), so the snapped edges stay on whole pixels.
+    this.beam.setScale(bk >= 1 ? 1 : Math.max(0.001, bk), 1);
     const lit = bk >= 1 ? 1 : 0;
     this.lanternBodies.setAlpha(lit);
     for (const gl of this.glows) gl.img.setAlpha(lit).setScale(0.9 + 0.1 * Math.sin(t * 13 + gl.x));
