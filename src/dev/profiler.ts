@@ -151,13 +151,21 @@ export function installProfiler(game: Phaser.Game, search: string): void {
   wrap(BattleScene.prototype, 'update', timed((ms) => (frameUpdate += ms)));
   wrap(NodeView.prototype, 'sync', timed((ms) => (frameSync += ms)));
   wrap(game.scene, 'render', timed((ms) => (framePhaser += ms)));
+  // Time per Graphics object while recording (for graphicsTop): a WeakMap, entries made once per object.
+  const gfxTime = new WeakMap<Phaser.GameObjects.Graphics, { ms: number }>();
   wrap(Phaser.GameObjects.Graphics.prototype, 'renderWebGL', (call, _self, args) => {
     const g = args[1] as Phaser.GameObjects.Graphics;
     if (g.commandBuffer.length > 0) {
       frameGfxDrawn++;
       frameGfxCommands += g.commandBuffer.length;
     }
-    return timed((ms) => (frameGfx += ms))(call);
+    return timed((ms) => {
+      frameGfx += ms;
+      if (!recording) return;
+      let entry = gfxTime.get(g);
+      if (!entry) gfxTime.set(g, (entry = { ms: 0 }));
+      entry.ms += ms;
+    })(call);
   });
   wrap(UnitsView.prototype, 'render', timed((ms) => (frameUnits += ms)));
 
@@ -255,20 +263,28 @@ export function installProfiler(game: Phaser.Game, search: string): void {
         firstFrames,
       };
     },
-    /** The heaviest Graphics of the battle by command count: who owns them (parent class) and their depth. */
-    graphicsTop(limit = 12): Array<{ owner: string; depth: number; commands: number; visible: boolean }> {
-      const out: Array<{ owner: string; depth: number; commands: number; visible: boolean }> = [];
+    /**
+     * The heaviest Graphics of the battle: who owns them (parent class), depth, command count and the render time
+     * per frame over the last measurement window (sorted by time if measured, else by commands).
+     */
+    graphicsTop(limit = 12): Array<{ owner: string; depth: number; commands: number; visible: boolean; msPerFrame: number }> {
+      const out: Array<{ owner: string; depth: number; commands: number; visible: boolean; msPerFrame: number }> = [];
       const walk = (list: Phaser.GameObjects.GameObject[], owner: string): void => {
         for (const obj of list) {
           if (obj instanceof Phaser.GameObjects.Graphics) {
-            out.push({ owner, depth: obj.depth, commands: obj.commandBuffer.length, visible: obj.visible });
+            const ms = (gfxTime.get(obj)?.ms ?? 0) / Math.max(1, frame);
+            out.push({ owner, depth: obj.depth, commands: obj.commandBuffer.length, visible: obj.visible, msPerFrame: Math.round(ms * 1000) / 1000 });
           } else if (obj instanceof Phaser.GameObjects.Container) {
             walk(obj.list, obj.constructor.name);
           }
         }
       };
       if (battle) walk(battle.children.list, 'scene');
-      return out.sort((x, y) => y.commands - x.commands).slice(0, limit);
+      return out.sort((x, y) => y.msPerFrame - x.msPerFrame || y.commands - x.commands).slice(0, limit);
+    },
+    /** A battle has rendered at least once. */
+    inBattle(): boolean {
+      return battle !== null;
     },
     /** The battle reached `stopAt` and everything shown has settled (display filter windows passed). */
     stopped(): boolean {

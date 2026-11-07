@@ -83,6 +83,7 @@ src/
     displayFilter.ts      # что показывает узел: число и цвет не чаще refreshMs (PLAYTEST-1 F-2)
     goldFill.ts           # заливка кнопки золотом по скруглённой грани (BUILD-BUTTON BB-5)
     roundedPolygon.ts     # многоугольник со скруглёнными углами: треугольник «Играть» в меню
+    BakedLayer.ts         # неизменные Graphics (луг, дороги) запечены в одну текстуру через canvas 2D (docs/PERF.md PF-G)
     Spotlight.ts          # затемнение с «дыркой» и палец для тура вне боя
     effects.ts            # твины, частицы, вспышки
     layout.ts             # адаптация под портрет/альбом

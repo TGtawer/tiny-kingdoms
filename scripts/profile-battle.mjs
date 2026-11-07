@@ -2,11 +2,12 @@
 // with the CPU slowed down, and prints frame times, draw calls, render-side counters and garbage collection.
 // Usage: npm run profile [-- --levels dev_stress,c01_l06,c01_l09 --seconds 30 --throttle 6 --size 1280x720]
 //        npm run profile -- --shots   (reference screenshots at a fixed tick into docs/perf/baseline/)
+//        npm run profile -- --shots --dir docs/perf/after --compare docs/perf/baseline   (shots elsewhere, compared)
 // Browser: CHROME_PATH, or Chrome / Edge found in the usual places. The page side is src/dev/profiler.ts (?profile).
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { createServer } from 'vite';
 
@@ -20,6 +21,8 @@ const { values } = parseArgs({
     shots: { type: 'boolean', default: false },
     stopAt: { type: 'string', default: '200' },
     out: { type: 'string' },
+    dir: { type: 'string', default: 'docs/perf/baseline' },
+    compare: { type: 'string' },
   },
 });
 
@@ -122,6 +125,8 @@ async function profileLevel(base, level, width, height) {
   try {
     await page.send('Emulation.setCPUThrottlingRate', { rate: Number(values.throttle) });
     await page.send('Page.navigate', { url: `${base}?level=${level}&profile` });
+    // The first load after a code change can take a while (Vite prepares dependencies, may reload once).
+    for (let i = 0; i < 300 && !(await page.evaluate('!!window.__profile && window.__profile.inBattle()')); i++) await sleep(100);
     await sleep(Number(values.warmup) * 1000);
     const gpu = await page.evaluate(`(() => { const gl = document.querySelector('canvas')?.getContext('webgl2') ?? document.querySelector('canvas')?.getContext('webgl'); const ext = gl?.getExtension('WEBGL_debug_renderer_info'); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'unknown'; })()`);
     const events = [];
@@ -131,6 +136,7 @@ async function profileLevel(base, level, width, height) {
     await page.evaluate('window.__profile.start()');
     await sleep(Number(values.seconds) * 1000);
     const report = await page.evaluate('window.__profile.report()');
+    report.graphicsTop = await page.evaluate('window.__profile.graphicsTop(8)');
     await page.send('Tracing.end');
     await done;
     return { level, size: `${width}x${height}`, gpu, ...report, gc: gcStats(events, report.seconds), errors: page.errors };
@@ -165,7 +171,7 @@ await server.listen();
 const base = server.resolvedUrls.local[0];
 try {
   if (values.shots) {
-    const dir = 'docs/perf/baseline';
+    const dir = values.dir;
     mkdirSync(dir, { recursive: true });
     for (const [w, h] of [
       [360, 640],
@@ -173,7 +179,12 @@ try {
     ]) {
       for (const level of values.levels.split(',')) {
         const { file, identical } = await shoot(base, level, w, h, dir);
-        console.log(`${file}  ${identical ? 'identical in two runs' : 'DIFFERS between runs'}`);
+        let vs = '';
+        if (values.compare) {
+          const ref = join(values.compare, basename(file));
+          vs = existsSync(ref) ? (readFileSync(ref).equals(readFileSync(file)) ? ', same as the reference' : ', DIFFERS from the reference') : ', no reference';
+        }
+        console.log(`${file}  ${identical ? 'identical in two runs' : 'DIFFERS between runs'}${vs}`);
       }
     }
   } else {
@@ -192,6 +203,9 @@ try {
         `| ${r.level} | ${r.interval.avg} / ${r.interval.p95} / ${r.interval.p99} | ${r.work.avg} / ${r.work.p95} | ${r.drawCalls.avg} / ${r.drawCalls.max} | ${r.updateMs} (${r.tickMs}, ×${r.ticksPerFrame}) / ${r.renderMs} / ${r.syncMs} / ${r.unitsMs} | ${r.phaserRenderMs} / ${r.graphicsMs} (${r.graphicsDrawn}, ${r.graphicsCommands}) | ${r.setText} / ${r.textRedraws} / ${r.graphicsClear} | ${r.gc.minorPerSec}, ${r.gc.freedKBps} | ${r.units} | ${r.firstFrames.slice(0, 5).join(', ')} |`,
       );
     }
+    console.log('');
+    console.log('Heaviest Graphics (ms per frame, commands, owner):');
+    for (const r of results) console.log(`${r.level}: ${r.graphicsTop.map((g) => `${g.msPerFrame} (${g.commands}, ${g.owner})`).join('; ')}`);
     if (values.out) {
       writeFileSync(values.out, JSON.stringify({ browser: browserPath, throttle: Number(values.throttle), seconds: Number(values.seconds), results }, null, 2));
       console.log(`\nSaved ${values.out}`);

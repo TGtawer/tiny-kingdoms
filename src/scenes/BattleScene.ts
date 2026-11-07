@@ -42,6 +42,7 @@ import { FieldLayout, fieldArea, px, textStyle } from '../view/layout';
 import { drawMagePicture, NodeView, type Highlight } from '../view/NodeView';
 import { showIntroCard } from '../view/introCard';
 import { SHOWN_OWNER_CHANGED } from '../view/displayFilter';
+import { BakedLayer } from '../view/BakedLayer';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
 import { audioFiles, canPlayJingle, playJingle, playMusic, setMusicDucked, stopMusic } from '../view/music';
@@ -88,7 +89,9 @@ export class BattleScene extends Phaser.Scene {
   private ai2: AiState | null = null;
   private layoutField!: FieldLayout;
 
+  /** The meadow, drawn off the display list and baked with the roads into `ground` (docs/PERF.md PF-G). */
   private background!: Phaser.GameObjects.Graphics;
+  private ground!: BakedLayer;
   private roads!: RoadView;
   private dragLines!: Phaser.GameObjects.Graphics;
   /** All units on the field, one batch (under the nodes, so a unit leaves and enters a node from its rim). */
@@ -186,7 +189,9 @@ export class BattleScene extends Phaser.Scene {
     const enemy2 = this.level.enemy2;
     this.ai2 = enemy2 && this.level.nodes.some((n) => n.owner === 'enemy2') ? createAi('enemy2', aiParamsFromLevel(enemy2)) : null;
 
-    this.background = this.add.graphics();
+    // Meadow and roads change only on relayout: one baked texture at the bottom of the display list.
+    this.ground = new BakedLayer(this, 'battle-ground');
+    this.background = this.make.graphics({}, false);
     this.roads = new RoadView(this);
     this.units = new UnitsView(this);
     this.capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
@@ -226,6 +231,9 @@ export class BattleScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.relayout, this);
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.onHidden, this);
       this.hud.destroy();
+      // Off the display list, so the scene doesn't destroy them itself.
+      this.background.destroy();
+      this.roads.destroy();
       this.tutorialView?.destroy();
       this.tutorialView = null;
       setMusicDucked(false);
@@ -615,6 +623,7 @@ export class BattleScene extends Phaser.Scene {
     this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom, top));
     drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
+    this.ground.bake(w, h, [this.background, this.roads.graphics]);
     this.units.layout(this.layoutField);
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
     // Bottom-left, above the bottom bar: clear of the top bar and the goal plaque.

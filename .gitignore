@@ -3,3 +3,4 @@ dist/
 build.zip
 *.log
 .DS_Store
+docs/perf/after/
