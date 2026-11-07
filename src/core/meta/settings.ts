@@ -18,3 +18,14 @@ export function clampVolume(v: unknown): number {
 export function resolveLangSetting(saved: Lang | null, platformLang: Lang): Lang {
   return saved ?? platformLang;
 }
+
+/**
+ * Volume for a point on a slider from `x0` (0) to `x1` (1): clamped to the ends and rounded to `step`
+ * (0.05 = 5%), so the slider moves in even steps.
+ */
+export function volumeAt(x: number, x0: number, x1: number, step: number): number {
+  const share = x1 > x0 ? (x - x0) / (x1 - x0) : 0;
+  const stepped = Math.round(Math.min(1, Math.max(0, share)) / step) * step;
+  // Rounding noise of the step (0.15000000000000002) never reaches the save.
+  return Math.round(stepped * 1000) / 1000;
+}

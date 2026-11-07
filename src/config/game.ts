@@ -710,5 +710,64 @@ export const MENU_ICON = {
   /** Corner radius of the Play triangle, share of the icon box; each corner is drawn with `cornerSegments` steps. */
   playCorner: 0.12,
   cornerSegments: 6,
+  /**
+   * Settings gear, shares of the icon box: teeth count, outer and inner (tooth root) radius, tooth top and root
+   * width (shares of one tooth step), corner rounding, hole radius, outline width.
+   */
+  gear: { teeth: 8, outer: 0.5, inner: 0.37, toothTop: 0.42, toothBase: 0.62, corner: 0.03, hole: 0.15, line: 0.09 },
+} as const;
+
+/**
+ * Settings panel (view/SettingsPanel.ts), shared by the main menu and the battle pause. CSS px, colors.
+ * Rows: a label, an on/off button and a volume slider; the language row has two buttons.
+ */
+export const SETTINGS_PANEL = {
+  /** Max panel width and the min gap to the screen sides. */
+  width: 340,
+  side: 16,
+  radius: 22,
+  edge: 4,
+  shadowX: 4,
+  shadowY: 6,
+  shadowAlpha: 0.4,
+  dimAlpha: 0.5,
+  padX: 20,
+  /** Title center from the panel top, font size. */
+  titleY: 44,
+  titleSize: 30,
+  /** First row top from the panel top; row height and the gap between rows. */
+  rowsTop: 84,
+  rowH: 56,
+  rowGap: 8,
+  labelW: 92,
+  labelSize: 18,
+  /** On/off button (drawn and touch size) and its icon box. */
+  toggle: 48,
+  toggleIcon: 24,
+  gap: 12,
+  slider: {
+    /** Track height and the knob radius; the touch area is at least `hit` high and covers the knob. */
+    trackH: 10,
+    knob: 13,
+    hit: 48,
+    /** Volume step: 5%. */
+    step: 0.05,
+    track: 0xe2cf9f,
+    fill: 0xffb53d,
+    knobColor: 0xffffff,
+    outline: 3,
+    /** A channel that is off: the slider dims. */
+    offAlpha: 0.45,
+  },
+  /** Language buttons: height, font size, gap; the chosen one is bright, the other one is the secondary color. */
+  langH: 48,
+  langSize: 16,
+  langGap: 10,
+  /** «Done» button: width, height, font size, gap above it and the panel padding under it. */
+  doneW: 200,
+  doneH: 56,
+  doneSize: 22,
+  doneGap: 16,
+  bottom: 20,
 } as const;
 
