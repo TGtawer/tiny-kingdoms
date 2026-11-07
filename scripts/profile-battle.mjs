@@ -7,6 +7,7 @@
 //          the battle result screen (PF-7): each variant ends the battle by a dev flag (?perf=win|lose|pause, see
 //          src/dev/perfFlags.ts), waits for the panel to settle, then records frames; medians over the runs.
 //        npm run profile -- --result --cpuprofile --variants victory,nostars   (+ where the frame time goes)
+//        --mobile: an Android user agent, so Phaser renders as on a phone (autoMobileTextures: one texture per batch)
 // Browser: CHROME_PATH, or Chrome / Edge found in the usual places. The page side is src/dev/profiler.ts (?profile).
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -35,6 +36,7 @@ const { values } = parseArgs({
     settle: { type: 'string', default: '6' },
     record: { type: 'string', default: '10' },
     cpuprofile: { type: 'boolean', default: false },
+    mobile: { type: 'boolean', default: false },
   },
 });
 
@@ -106,6 +108,10 @@ async function openPage(width, height) {
   await send('Runtime.enable');
   await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  // Phaser reads the user agent: as Android it batches one texture per draw call (autoMobileTextures), like a phone.
+  if (values.mobile) {
+    await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36' });
+  }
   const close = () => {
     ws.close();
     proc.kill();

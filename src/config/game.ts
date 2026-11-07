@@ -356,6 +356,19 @@ export const RESULT_PANEL = {
   starLabelSize: 13,
   /** Room under the stars for the captions, CSS px. */
   starLabelH: 18,
+  /**
+   * Stars and crystals are baked into textures (docs/PERF.md PF-7) at this scale and shown scaled back down: the same
+   * shapes, smooth edges; `bakeMargin` CSS px around each.
+   */
+  bakeSupersample: 2,
+  bakeMargin: 2,
+  /** Crystal sizes, CSS px: the reward line, the total counter, a flying crystal (it flies from 1.2× to 0.8×). */
+  rewardCrystal: 28,
+  counterCrystal: 24,
+  flyCrystal: 22,
+  /** The counter icon pulses on every landing: scale and time to it (and back). */
+  landPulse: 1.25,
+  landPulseMs: 70,
   /** Delay between stars appearing one by one. */
   starStaggerMs: 260,
 } as const;

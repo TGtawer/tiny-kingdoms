@@ -185,6 +185,16 @@ export function installProfiler(game: Phaser.Game, search: string): void {
     });
   }
 
+  // Texture counts of image batches (PF-7): Phaser 4 compiles a shader program per count on first use.
+  const textureCounts = new Set<number>();
+  const quad = (Phaser.Renderer.WebGL.RenderNodes as unknown as Record<string, { prototype: object }>).BatchHandlerQuad;
+  if (quad) {
+    wrap(quad.prototype, 'finalizeTextureCount', (call, _self, args) => {
+      textureCounts.add(args[0] as number);
+      return call();
+    });
+  }
+
   game.events.on(Phaser.Core.Events.PRE_STEP, () => {
     stepAt = performance.now();
     frameDraws = 0;
@@ -286,6 +296,10 @@ export function installProfiler(game: Phaser.Game, search: string): void {
     state(): { ended: boolean; paused: boolean } {
       const scene = battle as unknown as { ended: boolean; paused: boolean } | null;
       return { ended: scene?.ended ?? false, paused: scene?.paused ?? false };
+    },
+    /** Texture counts image batches have used since the page loaded (each compiles a shader variant once). */
+    textureCounts(): number[] {
+      return [...textureCounts].sort((a, b) => a - b);
     },
     /** A battle has rendered at least once. */
     inBattle(): boolean {

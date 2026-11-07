@@ -6,6 +6,7 @@ import { sideGoldRate } from '../core/sim/economy';
 import { spellCooldownMs } from '../core/sim/spells';
 import type { Side, World } from '../core/sim/World';
 import { t } from '../i18n/i18n';
+import { BakedGraphics } from '../view/BakedGraphics';
 import { Button } from '../view/Button';
 import { drawCoin, drawCrystal, drawLeader, drawPause, drawSpell, drawStar } from '../view/icons';
 import { drawHintPlaque } from '../view/hintPlaque';
@@ -458,9 +459,8 @@ export class BattleHUD {
       if (crystals !== null) {
         const ry = py0 + px(96) + starsH + rewardH / 2 - px(8);
         const label = scene.add.text(w / 2 + px(14), ry, `+${crystals}`, textStyle(28, COLORS.text)).setOrigin(0.5).setStroke('#1f2937', px(6));
-        const icon = scene.add.graphics();
         rewardAt = { x: label.x - label.width / 2 - px(20), y: ry };
-        drawCrystal(icon, rewardAt.x, rewardAt.y, px(28));
+        const icon = this.crystalImage(px(RESULT_PANEL.rewardCrystal)).setPosition(rewardAt.x, rewardAt.y);
         overlay.add([icon, label]);
       }
 
@@ -492,8 +492,8 @@ export class BattleHUD {
           .text(cx, cy, String(fly ? before : total), textStyle(24))
           .setOrigin(1, 0.5)
           .setStroke('#1f2937', px(5));
-        const icon = scene.add.graphics();
-        drawCrystal(icon, 0, 0, px(24));
+        // The counter icon sits in a holder, so its landing pulse scales from the center.
+        const icon = scene.add.container(0, 0, [this.crystalImage(px(RESULT_PANEL.counterCrystal))]);
         const iconAt = (): { x: number; y: number } => ({ x: cx - text.width - px(18), y: cy });
         icon.setPosition(iconAt().x, iconAt().y);
         overlay.add([icon, text]);
@@ -511,36 +511,87 @@ export class BattleHUD {
 
   /**
    * Row of three stars, each over the label of its condition; earned ones pop in one by one the first time,
-   * missed conditions are dimmed.
+   * missed conditions are dimmed. The stars are images of baked textures (docs/PERF.md PF-7): a star is two concave
+   * fills that Phaser 4 would triangulate again every frame, and six star Graphics between the labels broke the
+   * batch into extra draw calls. Each earned star is an image in a holder at its center (the pop scales from the
+   * center). Order for batching: all empty stars, then all earned ones, then the labels — on phones Phaser draws one
+   * texture per batch (autoMobileTextures), so alternating textures would cost a draw call each.
    */
   private drawStars(overlay: Phaser.GameObjects.Container, cx: number, cy: number, slot: number, row: StarRow, animate: boolean): void {
-    const size = px(RESULT_PANEL.starSize);
+    const P = RESULT_PANEL;
+    const size = px(P.starSize);
+    // On whole pixels: the baked texture is not resampled.
+    const at = (i: number): { x: number; y: number } => ({ x: Math.round(cx + (i - 1) * slot), y: Math.round(cy) });
+    row.earned.forEach((_, i) => overlay.add(this.starImage(size, false).setPosition(at(i).x, at(i).y)));
     let shown = 0;
     row.earned.forEach((earned, i) => {
-      const x = cx + (i - 1) * slot;
-      const empty = this.scene.add.graphics();
-      drawStar(empty, 0, 0, size, false);
-      empty.setPosition(x, cy);
-      const label = this.scene.add
-        .text(x, cy + size / 2 + px(4), row.labels[i] ?? '', textStyle(RESULT_PANEL.starLabelSize, COLORS.textDark))
-        .setOrigin(0.5, 0)
-        .setAlpha(earned ? 1 : 0.5);
-      if (label.width > slot - px(4)) label.setScale((slot - px(4)) / label.width);
-      overlay.add([empty, label]);
       if (!earned) return;
-      const star = this.scene.add.graphics();
-      drawStar(star, 0, 0, size, true);
-      star.setPosition(x, cy);
-      overlay.add(star);
+      const holder = this.scene.add.container(at(i).x, at(i).y, [this.starImage(size, true)]);
+      overlay.add(holder);
       if (animate) {
-        star.setScale(0);
-        this.scene.tweens.add({ targets: star, scale: 1, delay: 200 + shown * RESULT_PANEL.starStaggerMs, duration: 260, ease: 'Back.Out' });
+        holder.setScale(0);
+        this.scene.tweens.add({ targets: holder, scale: 1, delay: 200 + shown * P.starStaggerMs, duration: 260, ease: 'Back.Out' });
       }
       shown += 1;
     });
+
+    row.earned.forEach((earned, i) => {
+      const x = cx + (i - 1) * slot;
+      const label = this.scene.add
+        .text(x, cy + size / 2 + px(4), row.labels[i] ?? '', textStyle(P.starLabelSize, COLORS.textDark))
+        .setOrigin(0.5, 0)
+        .setAlpha(earned ? 1 : 0.5);
+      if (label.width > slot - px(4)) label.setScale((slot - px(4)) / label.width);
+      overlay.add(label);
+    });
   }
 
-  /** Reward crystals fly from the reward label to the counter, which counts up as they land. */
+  /**
+   * Bakes the result screen icons at battle start (docs/PERF.md PF-7): the first bake of a texture costs a long
+   * frame, which must not land on the moment the victory panel opens.
+   */
+  prebakeResultIcons(): void {
+    const P = RESULT_PANEL;
+    for (const earned of [false, true]) this.starImage(px(P.starSize), earned).destroy();
+    for (const size of [P.rewardCrystal, P.counterCrystal, P.flyCrystal]) this.crystalImage(px(size)).destroy();
+  }
+
+  private starImage(size: number, earned: boolean): Phaser.GameObjects.Image {
+    return this.bakedIcon(`star-${earned ? 'full' : 'empty'}-${Math.round(size * 100)}`, size, (g) => drawStar(g, 0, 0, size, earned));
+  }
+
+  /**
+   * A crystal of `size` game px as an Image of a baked texture, centered on its position. A Graphics crystal is
+   * rebuilt by Phaser 4 every frame, and the flight used to create and destroy up to 8 of them (the victory screen
+   * dipped to ~54 FPS on a phone while they flew).
+   */
+  private crystalImage(size: number): Phaser.GameObjects.Image {
+    return this.bakedIcon(`crystal-${Math.round(size * 100)}`, size, (g) => drawCrystal(g, 0, 0, size));
+  }
+
+  /**
+   * An icon drawn around (0, 0) within `size`, baked once per key (docs/PERF.md PF-7) and kept for later battles;
+   * returns an Image centered on its position, shown at its drawn size.
+   */
+  private bakedIcon(key: string, size: number, draw: (g: Phaser.GameObjects.Graphics) => void): Phaser.GameObjects.Image {
+    const P = RESULT_PANEL;
+    const ss = P.bakeSupersample;
+    if (!this.scene.textures.exists(key)) {
+      const baked = new BakedGraphics(this.scene, key, ss);
+      draw(baked.graphics);
+      // A whole-pixel box around the center, so the texture's middle is the icon's center.
+      const reach = Math.ceil(size / 2 + px(P.bakeMargin));
+      baked.bake(0, 0, { left: reach, right: reach, top: reach, bottom: reach });
+      baked.release();
+      baked.image.destroy();
+    }
+    return this.scene.add.image(0, 0, key).setScale(1 / ss);
+  }
+
+  /**
+   * Reward crystals fly from the reward label to the counter, which counts up as they land. Flying crystals are
+   * baked images; the counter text is redrawn only when its number changes; one landing pulse at a time.
+   */
   private flyCrystals(
     overlay: Phaser.GameObjects.Container,
     from: { x: number; y: number },
@@ -548,41 +599,54 @@ export class BattleHUD {
     before: number,
     total: number,
     text: Phaser.GameObjects.Text,
-    icon: Phaser.GameObjects.Graphics,
+    icon: Phaser.GameObjects.Container,
     iconAt: () => { x: number; y: number },
   ): void {
     const scene = this.scene;
-    const count = Math.min(RESULT_PANEL.flyingCrystals, total - before);
+    const P = RESULT_PANEL;
+    const base = 1 / P.bakeSupersample;
+    const count = Math.min(P.flyingCrystals, total - before);
+    let pulse: Phaser.Tweens.Tween | null = null;
     for (let i = 0; i < count; i++) {
-      const g = scene.add.graphics();
-      drawCrystal(g, 0, 0, px(22));
-      g.setPosition(from.x, from.y).setScale(1.2);
-      overlay.add(g);
+      const crystal = this.crystalImage(px(P.flyCrystal));
+      crystal.setPosition(from.x, from.y).setScale(1.2 * base);
+      overlay.add(crystal);
       scene.tweens.add({
-        targets: g,
+        targets: crystal,
         x: to.x,
         y: to.y,
-        scale: 0.8,
-        delay: RESULT_PANEL.flyDelayMs + i * RESULT_PANEL.flyStaggerMs,
-        duration: RESULT_PANEL.flyDurationMs,
+        scale: 0.8 * base,
+        delay: P.flyDelayMs + i * P.flyStaggerMs,
+        duration: P.flyDurationMs,
         ease: 'Cubic.In',
         onComplete: () => {
-          g.destroy();
-          if (icon.active) scene.tweens.add({ targets: icon, scale: 1.25, duration: 70, yoyo: true });
+          crystal.destroy();
+          if (!icon.active) return;
+          // Restart the pulse instead of stacking a new tween on every landing.
+          pulse?.stop();
+          icon.setScale(1);
+          pulse = scene.tweens.add({ targets: icon, scale: P.landPulse, duration: P.landPulseMs, yoyo: true });
         },
       });
     }
     const shown = { value: before };
+    let drawn = before;
     scene.tweens.add({
       targets: shown,
       value: total,
-      delay: RESULT_PANEL.flyDelayMs + RESULT_PANEL.flyDurationMs,
-      duration: Math.max(1, (count - 1) * RESULT_PANEL.flyStaggerMs),
+      delay: P.flyDelayMs + P.flyDurationMs,
+      duration: Math.max(1, (count - 1) * P.flyStaggerMs),
       onUpdate: () => {
-        if (!text.active) return;
-        text.setText(String(Math.round(shown.value)));
-        const p = iconAt();
-        icon.setPosition(p.x, p.y);
+        const value = Math.round(shown.value);
+        if (!text.active || value === drawn) return;
+        drawn = value;
+        // A Text redraw is a canvas paint and a GPU upload: only when the number changes.
+        const width = text.width;
+        text.setText(String(value));
+        if (text.width !== width) {
+          const p = iconAt();
+          icon.setPosition(p.x, p.y);
+        }
       },
     });
   }

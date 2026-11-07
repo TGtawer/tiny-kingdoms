@@ -215,6 +215,8 @@ export class BattleScene extends Phaser.Scene {
       onSpeed: () => this.toggleSpeed(),
       onSpell: (spell) => this.toggleSpell(spell),
     });
+    // The victory panel's star and crystal textures, baked now rather than on the frame the panel opens (PF-7).
+    this.hud.prebakeResultIcons();
     // Gold stays hidden until there is something to spend it on (TUTORIAL.md T-3); it is still earned.
     this.hud.setGoldVisible(isGoldVisible(this.level.id, getStore(this).progress, ALL_LEVELS));
     this.tutorialView = this.tutorial ? new TutorialView(this) : null;

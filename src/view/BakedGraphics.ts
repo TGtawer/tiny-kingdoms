@@ -60,6 +60,11 @@ export class BakedGraphics {
       .setVisible(true);
   }
 
+  /** Frees the drawing after the last bake; the image and its texture stay (a texture kept for reuse by key). */
+  release(): void {
+    this.graphics.destroy();
+  }
+
   destroy(): void {
     this.graphics.destroy();
     this.image.destroy();
