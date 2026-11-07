@@ -42,6 +42,7 @@ import { FieldLayout, fieldArea, px, textStyle } from '../view/layout';
 import { drawMagePicture, NodeView, type Highlight } from '../view/NodeView';
 import { showIntroCard } from '../view/introCard';
 import { SHOWN_OWNER_CHANGED } from '../view/displayFilter';
+import { PERF_AUTO_END_MS, perfFlag } from '../dev/perfFlags';
 import { BakedLayer } from '../view/BakedLayer';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
@@ -274,6 +275,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   override update(time: number, delta: number): void {
+    if (import.meta.env.DEV) this.perfAutoEnd();
     if (!this.paused && !this.ended) {
       // While the player is choosing, the whole battle runs slowed down (sim/clock.ts);
       // the choice can end mid-frame, so the speed is re-read every tick.
@@ -472,6 +474,14 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /** Dev only (docs/PERF.md PF-7): `?perf=win|lose|pause` ends or pauses the battle by itself, for profiling. */
+  private perfAutoEnd(): void {
+    if (this.ended || this.paused || this.world.tick * TICK_MS < PERF_AUTO_END_MS) return;
+    if (perfFlag('win')) this.endBattle('player', 'conquer');
+    else if (perfFlag('lose')) this.endBattle('enemy', 'capitalLost');
+    else if (perfFlag('pause')) this.pause();
+  }
+
   private endBattle(winner: Side, reason: OutcomeReason): void {
     this.ended = true;
     this.deselect();
@@ -498,9 +508,11 @@ export class BattleScene extends Phaser.Scene {
     const next = nextLevel(this.level.id);
     const chapterDone = won && next?.chapter !== this.level.chapter;
     const jingle: JingleId | null = resultJingle(won, starCount, chapterDone, audioFiles());
-    const withJingle = canPlayJingle(jingle);
+    // Dev `?perf=nojingle` (PF-7): no jingle and no result sound.
+    const silent = import.meta.env.DEV && perfFlag('nojingle');
+    const withJingle = !silent && canPlayJingle(jingle);
     stopMusic(MUSIC.endFadeMs);
-    if (!withJingle) playSfx(won ? 'victory' : 'defeat');
+    if (!withJingle && !silent) playSfx(won ? 'victory' : 'defeat');
     if (won) this.vibrate(HAPTICS.victory);
     this.time.delayedCall(RESULT_DELAY_MS, () => {
       if (withJingle) playJingle(jingle);
@@ -537,6 +549,11 @@ export class BattleScene extends Phaser.Scene {
       labels: [t('stars.won'), t('stars.fast', { time: clock }), t('stars.flawless')],
     };
     const winTip = [why, ...this.spellNews()].join('\n');
+    // Dev `?perf=nostars` / `?perf=notip` (PF-7): the victory panel without stars / without the tip.
+    const extras = {
+      ...(import.meta.env.DEV && perfFlag('nostars') ? {} : { stars }),
+      ...(import.meta.env.DEV && perfFlag('notip') ? {} : { tip: winTip }),
+    };
     const next = nextLevel(this.level.id);
     if (next) {
       this.hud.showResult(t('result.victory'), true, crystals, total, [
@@ -544,9 +561,9 @@ export class BattleScene extends Phaser.Scene {
         { label: t('result.next'), onClick: () => (tourStep(getStore(this).progress) !== null ? this.toMap() : this.scene.restart({ levelId: next.id })) },
         replay,
         toMap,
-      ], { stars, tip: winTip });
+      ], extras);
     } else {
-      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], { stars, tip: winTip });
+      this.hud.showResult(t('result.chapterDone'), true, crystals, total, [toMap, replay], extras);
     }
   }
 

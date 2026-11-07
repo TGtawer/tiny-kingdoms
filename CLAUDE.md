@@ -47,7 +47,7 @@ npm run lint       # ESLint
 npm run zip        # dist/ -> build.zip для загрузки в Консоль Яндекс Игр
 npm run gen-level -- --seed 3 --nodes 8 --id c01_l06 --index 6   # черновик уровня по seed (JSON в stdout)
 npm run bench      # бенчмарк симуляции: 600 юнитов, 10 000 тиков, бюджет ≤ 0.5 мс на тик
-npm run profile    # замер рендера боя в headless Chrome/Edge, CPU ×6 (docs/PERF.md PF-0); -- --shots — эталонные скриншоты
+npm run profile    # замер рендера боя в headless Chrome/Edge, CPU ×6 (docs/PERF.md PF-0); -- --shots — эталонные скриншоты; -- --result — экран результата (PF-7)
 ```
 
 ## Жёсткие правила

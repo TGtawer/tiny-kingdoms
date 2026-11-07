@@ -11,6 +11,7 @@ import { drawCoin, drawCrystal, drawLeader, drawPause, drawSpell, drawStar } fro
 import { drawHintPlaque } from '../view/hintPlaque';
 import { showIntroCard } from '../view/introCard';
 import { px, textStyle } from '../view/layout';
+import { perfFlag } from '../dev/perfFlags';
 
 export interface HudCallbacks {
   onPause(): void;
@@ -484,7 +485,8 @@ export class BattleHUD {
         const before = total - (crystals ?? 0);
         const cx = w - px(14);
         const cy = px(HUD.topBar) / 2;
-        const fly = !animated && options.celebrate === true && (crystals ?? 0) > 0;
+        // Dev `?perf=nofly` (PF-7): no flight, the counter shows the total at once.
+        const fly = !animated && options.celebrate === true && (crystals ?? 0) > 0 && !(import.meta.env.DEV && perfFlag('nofly'));
         animated = true;
         const text = scene.add
           .text(cx, cy, String(fly ? before : total), textStyle(24))

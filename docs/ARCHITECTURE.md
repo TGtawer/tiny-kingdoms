@@ -56,6 +56,7 @@ src/
       SaveData.ts         # схема сохранения + версия + миграции (v10: громкости и язык в settings)
   dev/
     profiler.ts           # замер рендера боя (?profile, только dev-сервер; npm run profile, docs/PERF.md)
+    perfFlags.ts          # ?perf=nostars,nofly,notip,nojingle,win,lose,pause — экран результата (PF-7), только dev
   platform/
     Platform.ts           # интерфейс: init, ready, gameplayStart/Stop,
                           #   showInterstitial, showRewarded, purchase,

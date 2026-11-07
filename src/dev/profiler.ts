@@ -282,6 +282,11 @@ export function installProfiler(game: Phaser.Game, search: string): void {
       if (battle) walk(battle.children.list, 'scene');
       return out.sort((x, y) => y.msPerFrame - x.msPerFrame || y.commands - x.commands).slice(0, limit);
     },
+    /** The battle's end and pause flags (PF-7: the result screen is measured once the battle has ended). */
+    state(): { ended: boolean; paused: boolean } {
+      const scene = battle as unknown as { ended: boolean; paused: boolean } | null;
+      return { ended: scene?.ended ?? false, paused: scene?.paused ?? false };
+    },
     /** A battle has rendered at least once. */
     inBattle(): boolean {
       return battle !== null;

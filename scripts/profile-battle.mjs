@@ -3,6 +3,10 @@
 // Usage: npm run profile [-- --levels dev_stress,c01_l06,c01_l09 --seconds 30 --throttle 6 --size 1280x720]
 //        npm run profile -- --shots   (reference screenshots at a fixed tick into docs/perf/baseline/)
 //        npm run profile -- --shots --dir docs/perf/after --compare docs/perf/baseline   (shots elsewhere, compared)
+//        npm run profile -- --result [--throttles 4,6 --runs 3 --level c01_l06 --variants victory,nostars,...]
+//          the battle result screen (PF-7): each variant ends the battle by a dev flag (?perf=win|lose|pause, see
+//          src/dev/perfFlags.ts), waits for the panel to settle, then records frames; medians over the runs.
+//        npm run profile -- --result --cpuprofile --variants victory,nostars   (+ where the frame time goes)
 // Browser: CHROME_PATH, or Chrome / Edge found in the usual places. The page side is src/dev/profiler.ts (?profile).
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -23,6 +27,14 @@ const { values } = parseArgs({
     out: { type: 'string' },
     dir: { type: 'string', default: 'docs/perf/baseline' },
     compare: { type: 'string' },
+    result: { type: 'boolean', default: false },
+    throttles: { type: 'string', default: '4,6' },
+    runs: { type: 'string', default: '3' },
+    level: { type: 'string', default: 'c01_l06' },
+    variants: { type: 'string', default: 'victory,nostars,nofly,nostars+nofly,notip,nojingle,defeat,pause' },
+    settle: { type: 'string', default: '6' },
+    record: { type: 'string', default: '10' },
+    cpuprofile: { type: 'boolean', default: false },
   },
 });
 
@@ -166,11 +178,110 @@ async function shoot(base, level, width, height, dir) {
   return { file, identical: shots[0].equals(shots[1]) };
 }
 
+/** Result-screen variants (PF-7): the `?perf=` flags of each. */
+const VARIANTS = {
+  victory: 'win',
+  nostars: 'win,nostars',
+  nofly: 'win,nofly',
+  'nostars+nofly': 'win,nostars,nofly',
+  notip: 'win,notip',
+  nojingle: 'win,nojingle',
+  defeat: 'lose',
+  pause: 'pause',
+};
+
+/** Self time per function from a CDP CPU profile, ms, the heaviest first. */
+function cpuTop(profile, limit = 14) {
+  const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  const self = new Map();
+  profile.samples.forEach((id, i) => {
+    const node = byId.get(id);
+    const f = node.callFrame;
+    const file = f.url ? f.url.split('/').pop().split('?')[0] : '';
+    const key = `${f.functionName || '(anonymous)'}${file ? ` ${file}:${f.lineNumber + 1}` : ''}`;
+    self.set(key, (self.get(key) ?? 0) + (profile.timeDeltas[i] ?? 0) / 1000);
+  });
+  const total = [...self.values()].reduce((a, b) => a + b, 0);
+  return { totalMs: Math.round(total), top: [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([k, ms]) => [k, Math.round(ms)]) };
+}
+
+/** One result-screen measurement: battle → the dev flag ends it → panel settles → frames recorded. */
+async function profileResult(base, variant, throttle, cpu) {
+  const page = await openPage(1280, 720);
+  try {
+    await page.send('Emulation.setCPUThrottlingRate', { rate: throttle });
+    await page.send('Page.navigate', { url: `${base}?level=${values.level}&profile&perf=${VARIANTS[variant]}` });
+    for (let i = 0; i < 300 && !(await page.evaluate('!!window.__profile && window.__profile.inBattle()')); i++) await sleep(100);
+    for (let i = 0; i < 300; i++) {
+      const st = await page.evaluate('window.__profile.state()');
+      if (st.ended || st.paused) break;
+      await sleep(100);
+    }
+    // Result delay, crystal flight and count, then 3 s more (the panel is still).
+    await sleep(Number(values.settle) * 1000);
+    if (cpu) {
+      await page.send('Profiler.enable');
+      await page.send('Profiler.setSamplingInterval', { interval: 200 });
+      await page.send('Profiler.start');
+    }
+    await page.evaluate('window.__profile.start()');
+    await sleep(Number(values.record) * 1000);
+    const report = await page.evaluate('window.__profile.report()');
+    if (cpu) report.cpu = cpuTop((await page.send('Profiler.stop')).result.profile);
+    return report;
+  } finally {
+    page.close();
+  }
+}
+
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length % 2 ? s[(s.length - 1) / 2] : Math.round(((s[s.length / 2 - 1] + s[s.length / 2]) / 2) * 100) / 100;
+};
+
 const server = await createServer({ server: { port: 5310, strictPort: false }, logLevel: 'error' });
 await server.listen();
 const base = server.resolvedUrls.local[0];
 try {
-  if (values.shots) {
+  if (values.result) {
+    const variants = values.variants.split(',');
+    const throttles = values.throttles.split(',').map(Number);
+    const runs = values.cpuprofile ? 1 : Number(values.runs);
+    const rows = [];
+    for (const throttle of throttles) {
+      for (const variant of variants) {
+        const reports = [];
+        for (let r = 0; r < runs; r++) {
+          const rep = await profileResult(base, variant, throttle, values.cpuprofile);
+          reports.push(rep);
+          console.log(`×${throttle} ${variant} run ${r + 1}: frame ${rep.interval.avg} / ${rep.interval.p95} / ${rep.interval.p99} ms, draws ${rep.drawCalls.avg}, Graphics ${rep.graphicsMs} ms (${rep.graphicsDrawn})`);
+          if (rep.cpu) {
+            console.log(`  CPU profile, ${values.record} s, self time total ${rep.cpu.totalMs} ms:`);
+            for (const [k, ms] of rep.cpu.top) console.log(`    ${String(ms).padStart(6)} ms  ${k}`);
+          }
+        }
+        const m = (f) => median(reports.map(f));
+        rows.push({
+          throttle,
+          variant,
+          avg: m((r) => r.interval.avg),
+          p95: m((r) => r.interval.p95),
+          p99: m((r) => r.interval.p99),
+          work: m((r) => r.work.avg),
+          draws: m((r) => r.drawCalls.avg),
+          gfxMs: m((r) => r.graphicsMs),
+          gfx: m((r) => r.graphicsDrawn),
+          phaser: m((r) => r.phaserRenderMs),
+          update: m((r) => r.updateMs),
+        });
+      }
+    }
+    console.log(`\nResult screen, ${values.level}, 1280x720, medians of ${runs} run(s); recorded ${values.record} s after ${values.settle} s of settling\n`);
+    console.log('| CPU | variant | frame avg / p95 / p99, ms | work avg, ms | draw calls | Phaser render / of it Graphics, ms (Graphics drawn) | battle update, ms |');
+    console.log('|---|---|---|---|---|---|---|');
+    for (const r of rows) console.log(`| ×${r.throttle} | ${r.variant} | ${r.avg} / ${r.p95} / ${r.p99} | ${r.work} | ${r.draws} | ${r.phaser} / ${r.gfxMs} (${r.gfx}) | ${r.update} |`);
+    if (values.out) writeFileSync(values.out, JSON.stringify({ level: values.level, runs, rows }, null, 2));
+  } else if (values.shots) {
     const dir = values.dir;
     mkdirSync(dir, { recursive: true });
     for (const [w, h] of [
