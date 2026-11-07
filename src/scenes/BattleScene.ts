@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DRAGON, ECONOMY, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { BUILD_BUTTON, COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
+import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -50,7 +50,7 @@ import { hintLabel } from '../view/hintPlaque';
 import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
 import type { ChapterMapData, MapReveal } from './ChapterMapScene';
-import { getBuildButtonStyleOverride, getPlatform, getStore } from './registry';
+import { getPlatform, getStore } from './registry';
 
 /** Units the stress driver keeps on the field on dev_stress (ARCHITECTURE.md «Производительность»). */
 const STRESS_UNITS = 600;
@@ -902,7 +902,6 @@ export class BattleScene extends Phaser.Scene {
       this.world.nodes[nodeId]!,
       (choice) => this.onBuild(nodeId, choice),
       (type) => this.buildingLock(type),
-      getBuildButtonStyleOverride(this) ?? BUILD_BUTTON.style,
     ).setDepth(90);
     this.menu.refresh(this.world.sides.player.gold);
     this.hud.setSpellBarVisible(false);

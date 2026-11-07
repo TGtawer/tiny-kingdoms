@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import { BUILDINGS, type BuildingType } from '../config/balance';
 import { BUILD_BUTTON, BUILD_MENU, COLORS, HUD, cssColor } from '../config/game';
-import type { BuildButtonStyle } from '../core/meta/buildButtonStyle';
 import { buildCost } from '../core/sim/commands';
 import type { NodeState } from '../core/sim/World';
 import { t } from '../i18n/i18n';
@@ -30,7 +29,7 @@ interface Entry {
   baseX: number;
   /** null until the first refresh, so opening the menu with enough gold doesn't pop. */
   affordable: boolean | null;
-  /** `fill` look: the gold share drawn on the face, and the whole gold it was drawn for. */
+  /** The gold share drawn on the face, and the whole gold it was drawn for. */
   fillShare: number;
   shownGold: number;
   face: ButtonFace | null;
@@ -52,14 +51,13 @@ function keyframe(keys: readonly number[], v: number): number {
  * The field never extends into that bar, so the menu never covers nodes.
  * Build options on an empty slot, a single upgrade button on an existing building.
  * Buildings not taught yet (TUTORIAL.md T-3) stay in the row, dark with a lock; a tap says when they open.
- * A button always shows its price (docs/BUILD-BUTTON.md BB-3). Without enough gold it looks unaffordable
- * (`style`: grey, or filling with gold), a tap shakes it and builds nothing; when the gold first covers the
- * price it pops with a sound.
+ * A button always shows its price (docs/BUILD-BUTTON.md BB-3). Without enough gold it is light grey and fills with
+ * gold from the left as it is earned, showing «gold / price» (BB-5); a tap shakes it and builds nothing; when the
+ * gold first covers the price it turns bright and pops with a sound.
  */
 export class BuildMenu extends Phaser.GameObjects.Container {
   readonly nodeId: string;
   private readonly entries: Entry[] = [];
-  private readonly style: BuildButtonStyle;
   private gold = 0;
 
   /** `lockHint`: null if the building can be built, otherwise the "opens at level N" text. */
@@ -68,14 +66,12 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     node: NodeState,
     onChoose: (choice: BuildChoice) => void,
     lockHint: (type: BuildingType) => string | null = () => null,
-    style: BuildButtonStyle = BUILD_BUTTON.style,
   ) {
     const w = scene.scale.width;
     const h = scene.scale.height;
     const barH = px(HUD.bottomBar);
     super(scene, w / 2, h - barH / 2);
     this.nodeId = node.id;
-    this.style = style;
 
     const items: Array<{
       choice: BuildChoice | null;
@@ -217,7 +213,7 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     return entry ? { x: this.x + entry.baseX, y: this.y + entry.button.y } : null;
   }
 
-  /** Follows the player's gold: the affordability look, the `fill` share, and a pop when a price is reached. */
+  /** Follows the player's gold: the affordability look, the gold share, and a pop when a price is reached. */
   refresh(gold: number): void {
     this.gold = gold;
     for (const entry of this.entries) {
@@ -230,7 +226,7 @@ export class BuildMenu extends Phaser.GameObjects.Container {
         this.applyLook(entry);
         if (reached) this.pop(entry);
       }
-      if (this.style === 'fill' && !affordable) {
+      if (!affordable) {
         const whole = Math.floor(gold);
         if (whole !== entry.shownGold) {
           entry.shownGold = whole;
@@ -256,30 +252,19 @@ export class BuildMenu extends Phaser.GameObjects.Container {
   private applyLook(entry: Entry): void {
     const can = entry.affordable !== false;
     const dark = cssColor(COLORS.textDark);
-    if (this.style === 'grey') {
-      const G = BUILD_BUTTON.grey;
-      entry.face = can ? null : { color: COLORS.buttonDisabled, shine: false };
-      entry.icon.setAlpha(can ? 1 : G.iconAlpha);
-      entry.coin?.setAlpha(can ? 1 : G.coinAlpha);
-      const text = can ? dark : cssColor(G.text);
-      entry.label.setColor(text);
-      entry.desc?.setColor(text);
-      entry.costText?.setColor(can ? dark : cssColor(G.price));
-    } else {
-      const F = BUILD_BUTTON.fill;
-      entry.face = can
-        ? null
-        : {
-            color: F.face,
-            shine: false,
-            decor: (g, left, top, w, h, r) => drawGoldFill(g, left, top, w, h, r, entry.fillShare, F),
-          };
-      // Name, effect and price share one color, readable on the gold and on the empty part alike.
-      const text = can ? dark : cssColor(F.text);
-      entry.label.setColor(text);
-      entry.desc?.setColor(text);
-      entry.costText?.setColor(text);
-    }
+    const F = BUILD_BUTTON.fill;
+    entry.face = can
+      ? null
+      : {
+          color: F.face,
+          shine: false,
+          decor: (g, left, top, w, h, r) => drawGoldFill(g, left, top, w, h, r, entry.fillShare, F),
+        };
+    // Name, effect and price share one color, readable on the gold and on the empty part alike.
+    const text = can ? dark : cssColor(F.text);
+    entry.label.setColor(text);
+    entry.desc?.setColor(text);
+    entry.costText?.setColor(text);
     entry.button.setFace(entry.face);
   }
 

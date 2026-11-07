@@ -60,7 +60,6 @@
   "build.next.mine": "+{gold} золота/с",
   "build.next.barracks": "×{mult} войск, +{cap} мест",
   "build.next.tower": "{shots} выстр./с",
-  "build.needMore": "ещё {n}",
   "hud.goldRate": "+{rate}/с",
   "pause.soundOn": "Звук: вкл",
   "pause.soundOff": "Звук: выкл",
