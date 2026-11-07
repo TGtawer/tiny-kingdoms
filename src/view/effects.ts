@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import { COLORS, INFO_LABEL_MS } from '../config/game';
+import { COLORS, HINT_PLAQUE, INFO_LABEL_MS, TOAST } from '../config/game';
 import { hintLabel } from './hintPlaque';
 import { drawCoin } from './icons';
 import { px, textStyle } from './layout';
@@ -23,15 +23,35 @@ export function pop(scene: Phaser.Scene, target: Phaser.GameObjects.Components.T
   scene.tweens.add({ targets: target, scale: 1.18, duration: 110, yoyo: true, ease: 'Quad.Out' });
 }
 
+/** The toast on screen in each scene: a new one replaces it (docs/BUILD-BUTTON.md BB-2). */
+const toasts = new WeakMap<Phaser.Scene, Phaser.GameObjects.Container>();
+
 /**
  * Short label on a panel that fades after INFO_LABEL_MS (e.g. "Opens at level 3" on a locked button).
  * Screen coordinates (does not scroll with the camera), kept inside the screen; `y` is the bottom edge.
+ * One per scene: a new toast removes the previous one at once. Text wider than the screen wraps.
  */
 export function toast(scene: Phaser.Scene, x: number, y: number, text: string, depth = 300): Phaser.GameObjects.Container {
-  const label = hintLabel(scene, text, 15).setScrollFactor(0, 0, true).setDepth(depth);
+  const prev = toasts.get(scene);
+  if (prev) {
+    scene.tweens.killTweensOf(prev);
+    prev.destroy();
+  }
   const w = scene.scale.width;
-  label.setPosition(Math.min(Math.max(x, label.width / 2 + px(6)), w - label.width / 2 - px(6)), y - label.height / 2);
-  scene.tweens.add({ targets: label, alpha: 0, delay: INFO_LABEL_MS, duration: 300, onComplete: () => label.destroy() });
+  const margin = px(TOAST.margin);
+  const label = hintLabel(scene, text, 15, w - 2 * margin - 2 * px(HINT_PLAQUE.padX)).setScrollFactor(0, 0, true).setDepth(depth);
+  label.setPosition(Math.min(Math.max(x, label.width / 2 + margin), w - label.width / 2 - margin), y - label.height / 2);
+  toasts.set(scene, label);
+  scene.tweens.add({
+    targets: label,
+    alpha: 0,
+    delay: INFO_LABEL_MS,
+    duration: 300,
+    onComplete: () => {
+      if (toasts.get(scene) === label) toasts.delete(scene);
+      label.destroy();
+    },
+  });
   return label;
 }
 

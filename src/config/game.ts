@@ -1,6 +1,7 @@
 // Render-side constants: sizes, colors, input thresholds. No gameplay numbers here (see balance.ts).
 // Sizes marked "CSS px" are multiplied by the device pixel ratio at runtime (see view/layout.ts).
 
+import type { BuildButtonStyle } from '../core/meta/buildButtonStyle';
 import type { NodeSize } from './balance';
 
 /** Reference viewports every scene must be checked in. */
@@ -305,6 +306,35 @@ export const BUILD_MENU = {
   barInset: 6,
 } as const;
 
+/**
+ * Build menu buttons the player can't afford yet (docs/BUILD-BUTTON.md BB-3…BB-5). CSS px, ms, colors.
+ * Starting numbers, tuned in the game.
+ */
+export const BUILD_BUTTON = {
+  /** Look of an unaffordable button; `?buildBtn=grey|fill` overrides it. TODO(design): pick one after the playtest (BB-6). */
+  style: 'grey' as BuildButtonStyle,
+  /** A tap on an unaffordable button shakes it: x offsets (shares of `distance`) evenly over `ms`, back to 0. */
+  shake: { distance: 5, ms: 360, keys: [0, -1, 1, -0.6, 0.6, 0] },
+  /** When the gold first covers the price: the button grows to `popScale` at `peakAt` of `popMs` and back. */
+  ready: { popScale: 1.08, popMs: 420, peakAt: 0.35 },
+  /** BB-4: grey face (COLORS.buttonDisabled), no highlight. */
+  grey: { iconAlpha: 0.55, text: 0x5d564c, price: 0xa82020, coinAlpha: 0.6 },
+  /**
+   * BB-5: a light grey face filling with gold from the left (share = floor(gold) / price), top to bottom gradient
+   * in `bands` steps, rounded corners sampled with `arcSegments` points. Dark text with no stroke and the icon
+   * as is: the dark text reads on both the gold and the grey (after the playtest review, 2026-11-07).
+   */
+  fill: {
+    face: COLORS.buttonDisabled,
+    top: 0xffc84d,
+    bottom: 0xff9f1c,
+    bands: 8,
+    arcSegments: 6,
+    /** Name, effect and price. */
+    text: COLORS.textDark,
+  },
+} as const;
+
 /** Victory/defeat panel, CSS px and ms. */
 export const RESULT_PANEL = {
   primaryButtonHeight: 68,
@@ -441,6 +471,9 @@ export const HINT_PLAQUE = {
 
 /** How long the special node info label stays, ms. */
 export const INFO_LABEL_MS = 2500;
+
+/** Toast labels (view/effects.ts): min gap to the screen edges, CSS px. */
+export const TOAST = { margin: 6 } as const;
 
 /** Pointer travel (CSS px) after which a press becomes a swipe. */
 export const DRAG_THRESHOLD_PX = 12;

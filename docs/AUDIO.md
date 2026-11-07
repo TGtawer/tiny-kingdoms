@@ -47,6 +47,7 @@
 | ID (`SfxId`) | Где | Статус | Трек / автор | Источник | Лицензия | Content ID | Файл |
 |---|---|---|---|---|---|---|---|
 | `click` | Нажатие любой кнопки (`Button.ts`): меню, панели, HUD | 🔍 файл есть, ждёт ссылку | «Click Button» / Universfield (Pixabay, id 140881) | TODO: ссылка | Pixabay Content License (предположительно) | ? | `public/audio/sfx_click.mp3` |
+| `ready` | Золота стало хватать на кнопку открытого меню построек (`BuildMenu.ts`, `docs/BUILD-BUTTON.md` BB-3) | синтез, файла нет | две короткие ноты вверх (`sound.ts`) | — | — | — | — |
 
 ### Титры (обязательны для CC BY)
 
