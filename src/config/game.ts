@@ -673,7 +673,6 @@ export const MENU_NIGHT = {
     { id: 'play', x: 640, y: 290, w: 150, len: 300 },
   ],
   colors: { main: 0xb91c1c, mainTrim: 0xffc83d, side: 0x1e3a8a, sideTrim: 0xfcd34d },
-  lanterns: [300, 520, 760, 980],
   moon: { x: 1060, y: 120, r: 36, halo: 110, color: '#fff4cf' },
   sky: ['#0f1b3d', '#22356b', '#2d4a7a'],
   castle: '#16233f',
@@ -701,37 +700,13 @@ export const MENU_NIGHT = {
   stars: { count: 170, maxY: 470, seed: 77, color: 0xfff7d6 },
   windows: { seed: 3, color: 0xffcd6e },
   fireflies: { count: 24, fromY: 330, height: 360, glow: 9, color: [230, 255, 140] as const },
-  /**
-   * Outline of the beam and the lanterns, reference px. The beam lies under the lantern glow, which softens it;
-   * the lamps lie above it, with their dark parts blended toward the glow color by `lantern.haze`, so they look
-   * as soft as the beam and still read as lanterns (the soft look was liked in the review, 2026-11-07).
-   */
+  /** Outline of the beam, reference px. */
   outline: 3,
-  /** The beam: side overhang past the banners and lanterns, height, corner radius; the highlight band on top. */
-  beam: { pad: 50, h: 22, radius: 10, color: 0x5b3a1f, shine: { inset: 6, top: 3, h: 6, radius: 3, alpha: 0.12 } },
   /**
-   * Lanterns under the beam (reference px from the beam center line): hook from `top` down `hook`, body w x h
-   * with corner radius r, caps capW x capH with radius capR at `caps` offsets, glow radius `glow` centered `glowY`
-   * below `top`.
+   * The beam: side overhang past the outer banners (as long as it was with the lanterns, removed 2026-11-07),
+   * height, corner radius; the highlight band on top.
    */
-  lantern: {
-    glow: 140,
-    glowY: 18,
-    /** Warm light the outline and caps are blended toward, and by how much. */
-    glowColor: 0xffc86e,
-    haze: 0.3,
-    body: 0xffd56b,
-    cap: 0x374151,
-    top: 9,
-    hook: 8,
-    w: 16,
-    h: 20,
-    r: 7,
-    capW: 20,
-    capH: 4,
-    capR: 2,
-    caps: [6, 27],
-  },
+  beam: { pad: 88, h: 22, radius: 10, color: 0x5b3a1f, shine: { inset: 6, top: 3, h: 6, radius: 3, alpha: 0.12 } },
 } as const;
 
 /** Main menu medallion icons (view/icons.ts drawMenuIcon). */

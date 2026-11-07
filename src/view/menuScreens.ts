@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, cssColor, MENU_FX, MENU_NIGHT, MENU_TOURNAMENT, type MenuBannerId } from '../config/game';
-import { mixColor, type MenuIcon } from './icons';
+import type { MenuIcon } from './icons';
 import { cubicOut, frameX, frameY, MenuBanner, seg, type MenuFrame } from './MenuBanner';
 
 // The two main menu screens of docs/VISUALS.md V-4: «Tournament» (portrait) and «Night castle» (landscape).
@@ -17,9 +17,6 @@ export const MENU_DEPTH = {
   /** Banners: map, upgrades, play (the main one on top); labels at +0.2, touch zones at +0.7. */
   banner: 5,
   framing: 9,
-  /** Night: the beam under the lantern glows (they soften it), the lamps above them, hazed to match. */
-  lanterns: 10,
-  lanternBodies: 10.1,
   fireflies: 11,
   ui: 20,
 } as const;
@@ -385,8 +382,6 @@ export class NightScreen extends Screen {
   private readonly windows: Twinkle[] = [];
   private readonly flies: Firefly[] = [];
   private readonly beam: Phaser.GameObjects.Container;
-  private readonly lanternBodies: Phaser.GameObjects.Graphics;
-  private readonly glows: Array<{ img: Phaser.GameObjects.Image; x: number }> = [];
 
   constructor(scene: Phaser.Scene, w: number, h: number, o: MenuScreenOptions) {
     const N = MENU_NIGHT;
@@ -442,9 +437,9 @@ export class NightScreen extends Screen {
       o,
     );
 
-    // The beam spans all banners and lanterns; it opens from the center during the entrance.
+    // The beam spans all banners; it opens from the center during the entrance.
     const B = N.beam;
-    const xs = [...N.banners.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]), ...N.lanterns];
+    const xs = N.banners.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]);
     const x0 = Math.min(...xs) - B.pad;
     const x1 = Math.max(...xs) + B.pad;
     const cx = (x0 + x1) / 2;
@@ -456,33 +451,6 @@ export class NightScreen extends Screen {
       .fillRoundedRect(x0 - cx + B.shine.inset, -B.h / 2 + B.shine.top, x1 - x0 - 2 * B.shine.inset, B.shine.h, B.shine.radius);
     this.beam = scene.add.container(cx, N.beamY, [beamG]);
     this.layer(MENU_DEPTH.framing).add(this.beam);
-
-    // Lanterns hang under the beam; their warm glow lies over everything around, the lamps and the beam too.
-    const L = N.lantern;
-    const glowR = L.glow * f.s;
-    const glow = this.canvas(glowR * 2, glowR * 2, (ctx) => {
-      const gr = ctx.createRadialGradient(glowR, glowR, 3 * f.s, glowR, glowR, glowR);
-      gr.addColorStop(0, 'rgba(255,200,110,.5)');
-      gr.addColorStop(1, 'rgba(255,170,80,0)');
-      ctx.fillStyle = gr;
-      ctx.fillRect(0, 0, glowR * 2, glowR * 2);
-    });
-    const ly = N.beamY + L.top;
-    for (const lx of N.lanterns) this.glows.push({ img: this.image(glow, frameX(f, lx), frameY(f, ly + L.glowY), MENU_DEPTH.lanterns).setAlpha(0), x: lx });
-    this.lanternBodies = scene.add.graphics().setAlpha(0);
-    const g = this.lanternBodies;
-    const line = mixColor(COLORS.outline, L.glowColor, L.haze);
-    const cap = mixColor(L.cap, L.glowColor, L.haze);
-    for (const lx of N.lanterns) {
-      g.lineStyle(N.outline, line, 1).lineBetween(lx, ly, lx, ly + L.hook);
-      g.fillStyle(L.body, 1).fillRoundedRect(lx - L.w / 2, ly + L.hook, L.w, L.h, L.r);
-      g.strokeRoundedRect(lx - L.w / 2, ly + L.hook, L.w, L.h, L.r);
-      for (const cy of L.caps) {
-        g.fillStyle(cap, 1).fillRoundedRect(lx - L.capW / 2, ly + cy, L.capW, L.capH, L.capR);
-        g.strokeRoundedRect(lx - L.capW / 2, ly + cy, L.capW, L.capH, L.capR);
-      }
-    }
-    this.layer(MENU_DEPTH.lanternBodies).add(g);
 
     // Fireflies drift on small ellipses and blink.
     const FF = N.fireflies;
@@ -511,9 +479,6 @@ export class NightScreen extends Screen {
     const E = MENU_FX.entrance;
     const bk = cubicOut(seg(e * 1000, E.framingFromMs, E.framingFromMs + E.nightBeamMs));
     this.beam.setScale(Math.max(0.001, bk), 1);
-    const lit = bk >= 1 ? 1 : 0;
-    this.lanternBodies.setAlpha(lit);
-    for (const gl of this.glows) gl.img.setAlpha(lit).setScale(0.9 + 0.1 * Math.sin(t * 13 + gl.x));
 
     const f = this.frame;
     for (const fl of this.flies) {
