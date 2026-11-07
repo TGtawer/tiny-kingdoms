@@ -1,4 +1,5 @@
 import type * as Phaser from 'phaser';
+import { mixColor } from './icons';
 
 /** A point of a polygon, game px. */
 export interface Point {
@@ -52,11 +53,6 @@ export function polygonArea(points: readonly Point[]): number {
   return Math.abs(sum) / 2;
 }
 
-function mix(a: number, b: number, k: number): number {
-  const ch = (shift: number): number => Math.round(((a >> shift) & 0xff) * (1 - k) + ((b >> shift) & 0xff) * k) << shift;
-  return ch(16) | ch(8) | ch(0);
-}
-
 export interface GoldFillStyle {
   top: number;
   bottom: number;
@@ -86,6 +82,6 @@ export function drawGoldFill(
     const k = style.bands === 1 ? 0 : i / (style.bands - 1);
     const band = i === 0 ? shape : clipPolygon(shape, 'y', top + h * (1 - i / style.bands), 'below');
     // fillPoints only reads x and y; the typings ask for full Vector2s.
-    if (band.length >= 3) g.fillStyle(mix(style.bottom, style.top, k), 1).fillPoints(band as Phaser.Math.Vector2[], true);
+    if (band.length >= 3) g.fillStyle(mixColor(style.bottom, style.top, k), 1).fillPoints(band as Phaser.Math.Vector2[], true);
   }
 }

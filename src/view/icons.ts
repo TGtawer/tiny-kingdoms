@@ -484,6 +484,12 @@ export function drawMenuIcon(g: Phaser.GameObjects.Graphics, kind: MenuIcon, x: 
   strokePolygon(g, head);
 }
 
+/** `a` blended toward `b` by k (0 = a, 1 = b). */
+export function mixColor(a: number, b: number, k: number): number {
+  const ch = (shift: number): number => Math.round(((a >> shift) & 0xff) * (1 - k) + ((b >> shift) & 0xff) * k) << shift;
+  return ch(16) | ch(8) | ch(0);
+}
+
 /** Lighter (f > 0) or darker (f < 0) version of a color, as in the prototypes' `shade`. */
 export function shade(color: number, f: number): number {
   const m = (c: number): number => Math.max(0, Math.min(255, Math.round(f < 0 ? c * (1 + f) : c + (255 - c) * f)));

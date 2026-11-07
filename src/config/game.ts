@@ -702,28 +702,34 @@ export const MENU_NIGHT = {
   windows: { seed: 3, color: 0xffcd6e },
   fireflies: { count: 24, fromY: 330, height: 360, glow: 9, color: [230, 255, 140] as const },
   /**
-   * Outline of the beam and the lanterns, reference px. Both are drawn on whole screen pixels with this width
-   * rounded to an even number of screen pixels, so their edges are equally sharp at any frame scale.
+   * Outline of the beam and the lanterns, reference px. The beam lies under the lantern glow, which softens it;
+   * the lamps lie above it, with their dark parts blended toward the glow color by `lantern.haze`, so they look
+   * as soft as the beam and still read as lanterns (the soft look was liked in the review, 2026-11-07).
    */
-  outline: 2,
+  outline: 3,
   /** The beam: side overhang past the banners and lanterns, height, corner radius; the highlight band on top. */
   beam: { pad: 50, h: 22, radius: 10, color: 0x5b3a1f, shine: { inset: 6, top: 3, h: 6, radius: 3, alpha: 0.12 } },
   /**
    * Lanterns under the beam (reference px from the beam center line): hook from `top` down `hook`, body w x h
-   * with corner radius r, caps capW x capH at `caps` offsets, glow radius `glow` centered `glowY` below `top`.
+   * with corner radius r, caps capW x capH with radius capR at `caps` offsets, glow radius `glow` centered `glowY`
+   * below `top`.
    */
   lantern: {
     glow: 140,
     glowY: 18,
+    /** Warm light the outline and caps are blended toward, and by how much. */
+    glowColor: 0xffc86e,
+    haze: 0.3,
     body: 0xffd56b,
     cap: 0x374151,
     top: 9,
     hook: 8,
     w: 16,
     h: 20,
-    r: 4,
+    r: 7,
     capW: 20,
     capH: 4,
+    capR: 2,
     caps: [6, 27],
   },
 } as const;
