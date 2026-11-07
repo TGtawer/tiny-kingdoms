@@ -80,6 +80,16 @@ export const SQUAD_LIP = 0.1;
 export const NODE_VIEW = {
   refreshMs: 250,
   ownerStableMs: 300,
+  /**
+   * The node body is baked into a texture (docs/PERF.md PF-5); its box around the center, in node radii plus `pad`
+   * CSS px (badges have a minimum size): sides, top (`mageTop` with the evil mage's tower), bottom.
+   */
+  bodyBox: { side: 1.5, top: 1.5, mageTop: 2.9, bottom: 1.5, pad: 16 },
+  /**
+   * The body is drawn by the same WebGL Graphics at this scale into its texture and shown scaled back down: the same
+   * shapes and line widths as before, edges smoothed by the extra resolution (render textures get no MSAA).
+   */
+  bodySupersample: 2,
 } as const;
 
 /** Node radius in field units (fraction of field width), clamped to CSS px bounds. */

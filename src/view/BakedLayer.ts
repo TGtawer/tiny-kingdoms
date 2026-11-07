@@ -26,6 +26,8 @@ export class BakedLayer {
     const h = Math.max(1, Math.ceil(height));
     if (t.width !== w || t.height !== h) t.setSize(w, h);
     t.context.clearRect(0, 0, w, h);
+    // Joins as the WebGL Graphics draws them (canvas defaults to sharp miters).
+    t.context.lineJoin = 'round';
     for (const g of sources) g.generateTexture(t.canvas, w, h);
     t.refresh();
     // The texture may have changed size: the Image picks up the new frame.

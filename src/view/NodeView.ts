@@ -22,6 +22,9 @@ const HIGHLIGHT_COLOR: Record<Exclude<Highlight, 'none'>, number> = {
 /**
  * A node drawn with Graphics: faction circle, building badge, gold vein, troop count. Redraws only on change.
  * The owner and the count go through a DisplayFilter (PLAYTEST-1 F-2): they don't flicker while units pour in.
+ * The body is drawn off the display list and baked into the node's own canvas texture (docs/PERF.md PF-5): Phaser 4
+ * rebuilds every Graphics each frame, an Image costs nothing. The image sits on whole screen pixels, so the texture
+ * is not resampled.
  */
 export class NodeView extends Phaser.GameObjects.Container {
   readonly nodeId: string;
@@ -32,7 +35,10 @@ export class NodeView extends Phaser.GameObjects.Container {
   radius = 0;
   hitRadius = 0;
 
+  /** Drawn off the display list, then baked into `bodyImage` (WebGL, supersampled: NODE_VIEW.bodySupersample). */
   private readonly bodyGfx: Phaser.GameObjects.Graphics;
+  private readonly bodyImage: Phaser.GameObjects.Image;
+  private readonly bodyKey: string;
   private readonly ring: Phaser.GameObjects.Graphics;
   /** Capacity arc around the circle: how full the node is. */
   private readonly capGfx: Phaser.GameObjects.Graphics;
@@ -58,11 +64,14 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.shown = new DisplayFilter(node.owner, visibleTroops(node.troops), NODE_VIEW.refreshMs, NODE_VIEW.ownerStableMs);
     this.ring = scene.add.graphics();
     this.capGfx = scene.add.graphics();
-    this.bodyGfx = scene.add.graphics();
+    this.bodyGfx = scene.make.graphics({}, false);
+    this.bodyKey = `node-body-${node.id}`;
+    if (!scene.textures.exists(this.bodyKey)) scene.textures.addDynamicTexture(this.bodyKey, 2, 2, false);
+    this.bodyImage = scene.add.image(0, 0, this.bodyKey).setOrigin(0, 0);
     this.countText = scene.add.text(0, 0, '', textStyle(18)).setOrigin(0.5);
     this.capText = scene.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setVisible(false);
     this.shieldGfx = scene.add.graphics();
-    this.add([this.ring, this.capGfx, this.bodyGfx, this.countText, this.capText, this.shieldGfx]);
+    this.add([this.ring, this.capGfx, this.bodyImage, this.countText, this.capText, this.shieldGfx]);
     scene.add.existing(this);
   }
 
@@ -168,6 +177,13 @@ export class NodeView extends Phaser.GameObjects.Container {
     const g = this.bodyGfx;
     const r = this.radius;
     g.clear();
+    // The texture's box on whole screen pixels; the drawing is shifted so the node center lands where it is.
+    const B = NODE_VIEW.bodyBox;
+    const pad = px(B.pad);
+    const left = Math.floor(this.x - r * B.side - pad);
+    const top = Math.floor(this.y - r * (this.mageTower ? B.mageTop : B.top) - pad);
+    const width = Math.ceil(this.x + r * B.side + pad) - left;
+    const height = Math.ceil(this.y + r * B.bottom + pad) - top;
 
     // Shadow, rim, face, highlight crescent.
     g.fillStyle(0x000000, 0.18).fillEllipse(0, r * 0.82, r * 1.9, r * 0.6);
@@ -231,6 +247,19 @@ export class NodeView extends Phaser.GameObjects.Container {
         g.lineStyle(Math.max(1, pip * 0.4), COLORS.outline, 1).strokeCircle(px0, by + br + pip * 0.6, pip);
       }
     }
+
+    // Drawn at `ss` times the size, so the texture's pixels average back to smooth edges when shown at 1 / ss.
+    const ss = NODE_VIEW.bodySupersample;
+    const texture = this.scene.textures.get(this.bodyKey) as Phaser.Textures.DynamicTexture;
+    texture.setSize(width * ss, height * ss, false);
+    texture.clear();
+    g.setScale(ss).setPosition((this.x - left) * ss, (this.y - top) * ss);
+    texture.draw(g);
+    texture.render();
+    this.bodyImage
+      .setTexture(this.bodyKey)
+      .setScale(1 / ss)
+      .setPosition(left - this.x, top - this.y);
   }
 
   private drawHighlight(): void {
@@ -251,7 +280,11 @@ export class NodeView extends Phaser.GameObjects.Container {
 
   override destroy(fromScene?: boolean): void {
     this.ringTween?.stop();
+    this.bodyGfx.destroy();
+    const textures = this.scene?.textures;
     super.destroy(fromScene);
+    // The image is gone with the container; the texture is the node's own.
+    if (textures?.exists(this.bodyKey)) textures.remove(this.bodyKey);
   }
 }
 
