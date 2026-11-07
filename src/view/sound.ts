@@ -76,6 +76,8 @@ const EFFECTS: Record<SfxId, { notes: Note[]; noise?: { dur: number; gain: numbe
 let master: GainNode | null = null;
 let noiseBuffer: AudioBuffer | null = null;
 let enabled = true;
+/** Player volume, 0..1, on top of SFX.volume. */
+let volume = 1;
 /** Decoded effect files by id. */
 const files = new Map<SfxId, AudioBuffer>();
 
@@ -84,7 +86,7 @@ function output(): { ctx: AudioContext; master: GainNode } | null {
   if (!ctx) return null;
   if (!master) {
     master = ctx.createGain();
-    master.gain.value = SFX.volume;
+    master.gain.value = SFX.volume * volume;
     master.connect(ctx.destination);
   }
   return { ctx, master };
@@ -97,6 +99,16 @@ export function setSoundEnabled(on: boolean): void {
 
 export function isSoundEnabled(): boolean {
   return enabled;
+}
+
+/** Player setting: effects volume 0..1 (a multiplier on SFX.volume); applies to the next effects at once. */
+export function setSoundVolume(v: number): void {
+  volume = v;
+  if (master) master.gain.value = SFX.volume * volume;
+}
+
+export function getSoundVolume(): number {
+  return volume;
 }
 
 /** Tab hidden or ad shown: stop all audio (effects and music share the context) until resumed. */

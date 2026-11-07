@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, MAX_DPR } from './config/game';
+import { resolveLangSetting } from './core/meta/settings';
 import { initI18n } from './i18n/i18n';
 import { MockPlatform } from './platform/MockPlatform';
 import type { Platform } from './platform/Platform';
@@ -11,8 +12,8 @@ import { registerServices } from './scenes/registry';
 import { UpgradesScene } from './scenes/UpgradesScene';
 import { SaveStore } from './save/SaveStore';
 import { display } from './view/layout';
-import { preloadMusic, setMusicEnabled, setMusicSuspended } from './view/music';
-import { preloadSfx, setSoundEnabled, setSoundSuspended } from './view/sound';
+import { preloadMusic, setMusicEnabled, setMusicSuspended, setMusicVolume } from './view/music';
+import { preloadSfx, setSoundEnabled, setSoundSuspended, setSoundVolume } from './view/sound';
 
 // No browser context menu or long-press menu anywhere in the game.
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -31,9 +32,12 @@ async function main(): Promise<void> {
   const platform: Platform = new MockPlatform();
   await platform.init();
   const store = await SaveStore.load(platform);
-  initI18n(platform.lang());
+  // The player's language choice wins over the platform's.
+  initI18n(resolveLangSetting(store.settings.lang, platform.lang()));
   setSoundEnabled(store.settings.sound);
   setMusicEnabled(store.settings.music);
+  setSoundVolume(store.settings.soundVolume);
+  setMusicVolume(store.settings.musicVolume);
 
   const host = document.getElementById('game')!;
   display.dpr = currentDpr();

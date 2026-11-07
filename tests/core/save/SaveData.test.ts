@@ -48,7 +48,7 @@ describe('settings (v2)', () => {
   it('a v1 save gets default settings', () => {
     const save = parseSave({ version: 1, updatedAt: 1, progress: { crystals: 5 } });
     expect(save.version).toBe(SAVE_VERSION);
-    expect(save.settings).toEqual({ sound: true, music: true });
+    expect(save.settings).toEqual({ sound: true, music: true, soundVolume: 1, musicVolume: 1, lang: null });
     expect(save.progress.crystals).toBe(5);
   });
 
@@ -121,7 +121,7 @@ describe('music setting (v6)', () => {
   it('a v5 save gets music on and keeps its sound setting', () => {
     const save = parseSave({ version: 5, settings: { sound: false } });
     expect(save.version).toBe(SAVE_VERSION);
-    expect(save.settings).toEqual({ sound: false, music: true });
+    expect(save.settings).toEqual({ sound: false, music: true, soundVolume: 1, musicVolume: 1, lang: null });
   });
 
   it('keeps a stored music setting and drops bad values', () => {
@@ -135,11 +135,41 @@ describe('buildings learned by use (v9, PLAYTEST-1 F-5)', () => {
     expect(parseSave({ version: 8, progress: { completed: ['c01_l01', 'c01_l02'] } }).progress.learned).toEqual([]);
     expect(parseSave({ version: 8, progress: { completed: ['c01_l01', 'c01_l02', 'c01_l03', 'c01_l04'] } }).progress.learned).toEqual(['barracks']);
     const all = parseSave({ version: 8, progress: { completed: ['c01_l03', 'c01_l05', 'c01_l06'] } });
-    expect(all.version).toBe(9);
+    expect(all.version).toBe(SAVE_VERSION);
     expect(all.progress.learned).toEqual(['barracks', 'tower']);
   });
 
   it('keeps only known buildings, once each', () => {
     expect(parseSave({ version: 9, progress: { learned: ['tower', 'tower', 'castle', 3] } }).progress.learned).toEqual(['tower']);
+  });
+});
+
+describe('volumes and language (v10, settings panel)', () => {
+  it('a v9 save keeps its sound and music switches and gets full volumes and the platform language', () => {
+    const save = parseSave({ version: 9, settings: { sound: false, music: false } });
+    expect(save.version).toBe(SAVE_VERSION);
+    expect(save.settings).toEqual({ sound: false, music: false, soundVolume: 1, musicVolume: 1, lang: null });
+  });
+
+  it('keeps stored volumes and language', () => {
+    const save = parseSave({ version: 10, settings: { sound: true, music: false, soundVolume: 0.25, musicVolume: 0.6, lang: 'en' } });
+    expect(save.settings).toEqual({ sound: true, music: false, soundVolume: 0.25, musicVolume: 0.6, lang: 'en' });
+  });
+
+  it('clamps bad volumes and drops an unknown language', () => {
+    const save = parseSave({ version: 10, settings: { soundVolume: 3, musicVolume: 'loud', lang: 'de' } });
+    expect(save.settings.soundVolume).toBe(1);
+    expect(save.settings.musicVolume).toBe(1);
+    expect(save.settings.lang).toBeNull();
+    expect(parseSave({ version: 10, settings: { soundVolume: -1 } }).settings.soundVolume).toBe(0);
+  });
+
+  it('the volumes and the language survive a save round trip', () => {
+    const save = defaultSave(5);
+    save.settings.soundVolume = 0.4;
+    save.settings.lang = 'ru';
+    const back = parseSave(serializeSave(save));
+    expect(back.settings.soundVolume).toBe(0.4);
+    expect(back.settings.lang).toBe('ru');
   });
 });

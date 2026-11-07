@@ -1,10 +1,12 @@
+import type { Lang } from '../../i18n/i18n';
 import { BONUSES, BUILDING_TYPES, SPELL_IDS, SPELL_UPGRADES, STARS, type BuildingType, type SpellId } from '../../config/balance';
 import { BONUS_IDS, defaultProgress, type BonusId, type Progress } from '../meta/Progress';
 import { TOUR_STEPS, type TourState, type TourStep } from '../meta/onboarding';
+import { clampVolume, DEFAULT_VOLUME } from '../meta/settings';
 import { totalStars } from '../meta/stars';
 
 /** Bump when the shape changes, and add a migration from the previous version. */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 export interface SaveData {
   version: number;
@@ -12,7 +14,7 @@ export interface SaveData {
   updatedAt: number;
   progress: Progress;
   settings: Settings;
-  // TODO(stage-6): purchases (remove_ads); TODO(stage-7): language setting.
+  // TODO(stage-6): purchases (remove_ads).
 }
 
 /** Player settings kept between sessions. */
@@ -21,10 +23,16 @@ export interface Settings {
   sound: boolean;
   /** Music and jingles. */
   music: boolean;
+  /** Effects volume, 0..1: a multiplier on SFX.volume. Kept while the sound is off. */
+  soundVolume: number;
+  /** Music and jingle volume, 0..1: a multiplier on MUSIC.volume. Kept while the music is off. */
+  musicVolume: number;
+  /** The player's language; null = the platform's language. */
+  lang: Lang | null;
 }
 
 export function defaultSettings(): Settings {
-  return { sound: true, music: true };
+  return { sound: true, music: true, soundVolume: DEFAULT_VOLUME, musicVolume: DEFAULT_VOLUME, lang: null };
 }
 
 export function defaultSave(now = 0): SaveData {
@@ -76,6 +84,9 @@ export const MIGRATIONS: Record<number, Migration> = {
     progress.learned = [...(completed.includes('c01_l03') ? ['barracks'] : []), ...(completed.includes('c01_l05') ? ['tower'] : [])];
     return { ...d, version: 9, progress };
   },
+  // v10 (settings panel): volumes start full and the language follows the platform (sanitizeSettings fills them);
+  // the sound and music switches are kept as they were.
+  9: (d) => ({ ...d, version: 10 }),
 };
 
 /**
@@ -113,6 +124,11 @@ function sanitizeSettings(raw: unknown): Settings {
   const settings = defaultSettings();
   if (isObject(raw) && typeof raw.sound === 'boolean') settings.sound = raw.sound;
   if (isObject(raw) && typeof raw.music === 'boolean') settings.music = raw.music;
+  if (isObject(raw)) {
+    settings.soundVolume = clampVolume(raw.soundVolume);
+    settings.musicVolume = clampVolume(raw.musicVolume);
+    if (raw.lang === 'ru' || raw.lang === 'en') settings.lang = raw.lang;
+  }
   return settings;
 }
 

@@ -47,12 +47,13 @@ src/
       unlocks.ts          # какие постройки и экраны открыты (обучение)
       onboarding.ts       # тур «Прокачки» после уровня 6
       tips.ts             # совет на экране поражения
+      settings.ts         # громкость (clampVolume) и язык (выбор игрока главнее платформы)
     map/
       decor.ts            # расстановка декора на карте глав (детерминированная, по seed главы)
     audio/
       playlist.ts         # какой трек/джингл где играет (ротация боевых, запасные варианты)
     save/
-      SaveData.ts         # схема сохранения + версия + миграции
+      SaveData.ts         # схема сохранения + версия + миграции (v10: громкости и язык в settings)
   platform/
     Platform.ts           # интерфейс: init, ready, gameplayStart/Stop,
                           #   showInterstitial, showRewarded, purchase,
@@ -62,6 +63,7 @@ src/
   scenes/
     BootScene.ts
     MenuScene.ts
+    settings.ts           # применить и сохранить настройку в одном месте (setLang)
     ChapterMapScene.ts
     BattleScene.ts        # рендер World + ввод
     BattleHUD.ts          # золото, кнопки приёмов, пауза

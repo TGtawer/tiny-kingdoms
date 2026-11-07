@@ -26,6 +26,8 @@ let jingle: AudioBufferSourceNode | null = null;
 let enabled = true;
 let suspended = false;
 let ducked = false;
+/** Player volume, 0..1, on top of MUSIC.volume and MUSIC.jingleVolume. */
+let volume = 1;
 
 /** IDs that have a file in public/audio/ (playlist fallbacks are decided by this set). */
 export function audioFiles(): ReadonlySet<MusicId | JingleId> {
@@ -79,7 +81,7 @@ export function playJingle(id: JingleId | null): boolean {
   const src = ctx.createBufferSource();
   src.buffer = jingleBuffers.get(id) ?? null;
   const gain = ctx.createGain();
-  gain.gain.value = MUSIC.jingleVolume;
+  gain.gain.value = MUSIC.jingleVolume * volume;
   src.connect(gain).connect(ctx.destination);
   src.onended = () => {
     if (jingle === src) jingle = null;
@@ -100,6 +102,25 @@ export function setMusicEnabled(on: boolean): void {
 
 export function isMusicEnabled(): boolean {
   return enabled;
+}
+
+/**
+ * Player setting: music volume 0..1 (a multiplier on MUSIC.volume). Applies at once, without restarting the track:
+ * it scales the shared bus, so the pause duck and the crossfades between tracks keep working on top of it.
+ */
+export function setMusicVolume(v: number): void {
+  volume = v;
+  const ctx = audioContext();
+  if (bus && ctx) {
+    bus.gain.cancelScheduledValues(ctx.currentTime);
+    bus.gain.setValueAtTime(busLevel(), ctx.currentTime);
+  } else if (current && !current.track.gain && !current.track.el.paused) {
+    current.track.el.volume = busLevel();
+  }
+}
+
+export function getMusicVolume(): number {
+  return volume;
 }
 
 /** Tab hidden or ad shown: a full stop, the track continues from the same place on resume. */
@@ -131,7 +152,7 @@ onAudioUnlock(() => {
 });
 
 function busLevel(): number {
-  return MUSIC.volume * (ducked ? MUSIC.pauseDuck : 1);
+  return MUSIC.volume * volume * (ducked ? MUSIC.pauseDuck : 1);
 }
 
 function getTrack(id: MusicId): Track {
