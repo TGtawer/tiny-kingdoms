@@ -54,6 +54,8 @@ src/
       playlist.ts         # какой трек/джингл где играет (ротация боевых, запасные варианты)
     save/
       SaveData.ts         # схема сохранения + версия + миграции (v10: громкости и язык в settings)
+  dev/
+    profiler.ts           # замер рендера боя (?profile, только dev-сервер; npm run profile, docs/PERF.md)
   platform/
     Platform.ts           # интерфейс: init, ready, gameplayStart/Stop,
                           #   showInterstitial, showRewarded, purchase,
