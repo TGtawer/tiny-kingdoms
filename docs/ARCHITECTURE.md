@@ -63,7 +63,7 @@ src/
   scenes/
     BootScene.ts
     MenuScene.ts
-    settings.ts           # применить и сохранить настройку в одном месте (setLang)
+    settings.ts           # применить и сохранить настройку в одном месте (setLang, settingsModel для панели)
     ChapterMapScene.ts
     BattleScene.ts        # рендер World + ввод
     BattleHUD.ts          # золото, кнопки приёмов, пауза
@@ -77,6 +77,7 @@ src/
     BuildMenu.ts          # меню построек; закрытые — тёмные с замком
     TutorialView.ts       # палец, подсветка, подсказка в бою
     introCard.ts          # карточка перед боем: лидер (выключена), злой маг (PLAYTEST-1 F-8)
+    SettingsPanel.ts      # панель настроек (звук, музыка, громкость, язык): меню и пауза боя
     displayFilter.ts      # что показывает узел: число и цвет не чаще refreshMs (PLAYTEST-1 F-2)
     goldFill.ts           # заливка кнопки золотом по скруглённой грани (BUILD-BUTTON BB-5)
     roundedPolygon.ts     # многоугольник со скруглёнными углами: треугольник «Играть» в меню

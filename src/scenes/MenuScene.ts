@@ -7,27 +7,34 @@ import { isUpgradesOpen } from '../core/meta/unlocks';
 import { t } from '../i18n/i18n';
 import { ALL_LEVELS, FIRST_LEVEL, getLevel } from '../levels';
 import { toast } from '../view/effects';
-import { drawFinger, drawNote, drawOff, drawSpeaker } from '../view/icons';
+import { drawFinger, drawGear } from '../view/icons';
 import { px } from '../view/layout';
 import { backOut, frameX, frameY, seg } from '../view/MenuBanner';
 import { MENU_DEPTH, NightScreen, TournamentScreen, type MenuScreen } from '../view/menuScreens';
-import { isMusicEnabled, playMusic, setMusicEnabled } from '../view/music';
+import { playMusic } from '../view/music';
 import { ShinyTitle } from '../view/ShinyTitle';
-import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
+import { SettingsPanel } from '../view/SettingsPanel';
+import { playSfx } from '../view/sound';
 import { crystalCounter } from '../view/ui';
 import type { BattleSceneData } from './BattleScene';
 import { getMenuFocusOverride, getStore } from './registry';
+import { setLang, settingsModel } from './settings';
+
+export interface MenuSceneData {
+  /** Reopen the settings panel (after a language change), without the entrance. */
+  settingsOpen?: boolean;
+}
 
 /**
  * Main menu (docs/VISUALS.md V-4): three banners that are the buttons — Map, Play (→ the next level right
- * away), Upgrades. Portrait shows «Tournament», landscape «Night castle». The title, the sound and music
- * toggles and the crystal counter are shared. The entrance plays on every visit, not on resize.
+ * away), Upgrades. Portrait shows «Tournament», landscape «Night castle». The title, the settings gear and the
+ * crystal counter are shared. The entrance plays on every visit, not on resize.
  * Focus mode on the first launch (PLAYTEST-1 F-1): Map dimmed and not pressable, a finger taps «Play».
  */
 export class MenuScene extends Phaser.Scene {
   private screen: MenuScreen | null = null;
   private title: ShinyTitle | null = null;
-  /** Toggles and crystals: rebuilt when a toggle flips. */
+  /** The settings gear and the crystals (rebuilt on resize). */
   private corner: Phaser.GameObjects.GameObject[] = [];
   /** Scene time when the entrance started, ms. */
   private enteredAt = 0;
@@ -35,15 +42,20 @@ export class MenuScene extends Phaser.Scene {
   /** Focus mode finger over the Play medallion (null outside the focus mode). */
   private finger: Phaser.GameObjects.Graphics | null = null;
   private readonly medal = { x: 0, y: 0, r: 0 };
+  /** The open settings panel, if any. */
+  private settings: SettingsPanel | null = null;
 
   constructor() {
     super('MenuScene');
   }
 
-  create(): void {
+  create(data: MenuSceneData = {}): void {
     playMusic('music_menu');
     this.leaving = false;
-    this.build(true);
+    this.settings = null;
+    // Back from a language change: everything in place at once, the panel open again.
+    this.build(data.settingsOpen !== true);
+    if (data.settingsOpen === true) this.openSettings();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
@@ -53,6 +65,7 @@ export class MenuScene extends Phaser.Scene {
       this.title = null;
       this.finger = null;
       this.corner = [];
+      this.settings = null;
     });
   }
 
@@ -151,76 +164,66 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
-  /** Crystals in the top-right corner, sound and music toggles in the top-left one. */
+  /** Crystals in the top-right corner, the settings gear in the top-left one. */
   private buildCorner(): void {
     for (const obj of this.corner) obj.destroy();
     const before = new Set(this.children.list);
     crystalCounter(this, this.scale.width - px(14), px(30), getStore(this).progress.crystals);
-    this.settingsToggles();
+    this.settingsButton();
     this.corner = this.children.list.filter((obj) => !before.has(obj));
     for (const obj of this.corner) (obj as unknown as Phaser.GameObjects.Components.Depth).setDepth(MENU_DEPTH.ui);
   }
 
-  /** Sound and music on/off (the battle pause panel has the same toggles). */
-  private settingsToggles(): void {
-    const store = getStore(this);
+  /** The settings gear (the battle pause opens the same panel): round, in the Button look; opens the panel. */
+  private settingsButton(): void {
     const L = MENU_LAYOUT;
     const r = px(L.toggleSize) / 2;
-    const y = px(L.toggleMargin) + r;
-    const toggles = [
-      {
-        on: isSoundEnabled(),
-        icon: drawSpeaker,
-        flip: () => {
-          store.settings.sound = !store.settings.sound;
-          setSoundEnabled(store.settings.sound);
-        },
-      },
-      {
-        on: isMusicEnabled(),
-        icon: drawNote,
-        flip: () => {
-          store.settings.music = !store.settings.music;
-          setMusicEnabled(store.settings.music);
-        },
-      },
-    ];
-    toggles.forEach((toggle, i) => {
-      const x = px(L.toggleMargin) + r + i * (r * 2 + px(L.toggleGap));
-      // Round version of the Button look: soft shadow, face, highlight on top, outline; the face sinks when pressed.
-      const g = this.add.graphics();
-      const draw = (pressed: boolean): void => {
-        const B = BUTTON_STYLE;
-        const dy = pressed ? px(B.pressDrop) : 0;
-        g.clear();
-        g.fillStyle(COLORS.outline, B.shadowAlpha).fillCircle(0, px(L.toggleShadow), r);
-        g.fillStyle(pressed ? COLORS.buttonPressed : COLORS.button, 1).fillCircle(0, dy, r);
-        g.fillStyle(0xffffff, B.shineAlpha).fillEllipse(0, dy - r * L.toggleShineY, r * L.toggleShineW * 2, r * L.toggleShineH * 2);
-        g.lineStyle(px(B.outline), COLORS.outline, 1).strokeCircle(0, dy, r);
-        toggle.icon(g, 0, dy - px(1), px(L.toggleIcon));
-        if (!toggle.on) drawOff(g, 0, dy - px(1), px(L.toggleIcon));
-      };
-      draw(false);
-      const hit = px(L.toggleHit);
-      let pressed = false;
-      const button = this.add.container(x, y, [g]).setSize(hit, hit);
-      button.setInteractive(new Phaser.Geom.Circle(hit / 2, hit / 2, hit / 2), Phaser.Geom.Circle.Contains);
-      button.input!.cursor = 'pointer';
-      button.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
-        pressed = true;
-        draw(true);
-      });
-      button.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, () => {
-        pressed = false;
-        draw(false);
-      });
-      button.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
-        if (!pressed) return;
-        playSfx('click');
-        toggle.flip();
-        store.commit();
-        this.buildCorner();
-      });
+    const at = px(L.toggleMargin) + r;
+    // Round version of the Button look: soft shadow, face, highlight on top, outline; the face sinks when pressed.
+    const g = this.add.graphics();
+    const draw = (pressed: boolean): void => {
+      const B = BUTTON_STYLE;
+      const dy = pressed ? px(B.pressDrop) : 0;
+      const face = pressed ? COLORS.buttonPressed : COLORS.button;
+      g.clear();
+      g.fillStyle(COLORS.outline, B.shadowAlpha).fillCircle(0, px(L.toggleShadow), r);
+      g.fillStyle(face, 1).fillCircle(0, dy, r);
+      g.fillStyle(0xffffff, B.shineAlpha).fillEllipse(0, dy - r * L.toggleShineY, r * L.toggleShineW * 2, r * L.toggleShineH * 2);
+      g.lineStyle(px(B.outline), COLORS.outline, 1).strokeCircle(0, dy, r);
+      drawGear(g, 0, dy, px(L.toggleIcon), face);
+    };
+    draw(false);
+    const hit = px(L.toggleHit);
+    let pressed = false;
+    const button = this.add.container(at, at, [g]).setSize(hit, hit);
+    button.setInteractive(new Phaser.Geom.Circle(hit / 2, hit / 2, hit / 2), Phaser.Geom.Circle.Contains);
+    button.input!.cursor = 'pointer';
+    button.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
+      pressed = true;
+      draw(true);
     });
+    button.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, () => {
+      pressed = false;
+      draw(false);
+    });
+    button.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () => {
+      if (!pressed) return;
+      pressed = false;
+      draw(false);
+      playSfx('click');
+      this.openSettings();
+    });
+  }
+
+  /** The settings panel over the menu. A new language restarts the menu in it, with the panel open again. */
+  private openSettings(): void {
+    if (this.settings || this.leaving) return;
+    const store = getStore(this);
+    const model = settingsModel(store, (lang) => {
+      setLang(store, lang);
+      const data: MenuSceneData = { settingsOpen: true };
+      this.scene.restart(data);
+    });
+    this.settings = new SettingsPanel(this, model, { depth: MENU_DEPTH.ui + 5, onClose: () => (this.settings = null) });
   }
 }

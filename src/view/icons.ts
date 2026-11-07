@@ -387,6 +387,36 @@ export function drawNote(g: Phaser.GameObjects.Graphics, x: number, y: number, s
   g.fillCircle(x + s * 0.03, y - s * 0.35, w / 2);
 }
 
+/**
+ * Gear (main menu settings button): white teeth with an outline and a hole showing `holeColor` (the face under it).
+ * Proportions in MENU_ICON.gear.
+ */
+export function drawGear(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number, holeColor: number): void {
+  const G = MENU_ICON.gear;
+  const outer = size * G.outer;
+  const inner = size * G.inner;
+  const step = (Math.PI * 2) / G.teeth;
+  const points: Array<[number, number]> = [];
+  for (let i = 0; i < G.teeth; i++) {
+    const a = i * step - Math.PI / 2;
+    // Each tooth: a flat top of `toothTop` of the step, sloped sides, the gap on the inner circle.
+    const half = (step * G.toothTop) / 2;
+    const base = (step * G.toothBase) / 2;
+    points.push([x + Math.cos(a - base) * inner, y + Math.sin(a - base) * inner]);
+    points.push([x + Math.cos(a - half) * outer, y + Math.sin(a - half) * outer]);
+    points.push([x + Math.cos(a + half) * outer, y + Math.sin(a + half) * outer]);
+    points.push([x + Math.cos(a + base) * inner, y + Math.sin(a + base) * inner]);
+  }
+  const shape = roundedPolygon(points, size * G.corner, 2);
+  const line = Math.max(1.5, size * G.line);
+  g.fillStyle(0xffffff, 1);
+  fillPolygon(g, shape);
+  g.lineStyle(line, COLORS.outline, 1);
+  strokePolygon(g, shape);
+  g.fillStyle(holeColor, 1).fillCircle(x, y, size * G.hole);
+  g.strokeCircle(x, y, size * G.hole);
+}
+
 /** Red strike-through over an icon: the setting is off. */
 export function drawOff(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number): void {
   const s = size / 2;

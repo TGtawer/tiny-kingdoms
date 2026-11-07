@@ -44,16 +44,21 @@ import { showIntroCard } from '../view/introCard';
 import { SHOWN_OWNER_CHANGED } from '../view/displayFilter';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
-import { audioFiles, canPlayJingle, isMusicEnabled, playJingle, playMusic, setMusicDucked, setMusicEnabled, stopMusic } from '../view/music';
-import { isSoundEnabled, playSfx, setSoundEnabled } from '../view/sound';
+import { audioFiles, canPlayJingle, playJingle, playMusic, setMusicDucked, stopMusic } from '../view/music';
+import { SettingsPanel } from '../view/SettingsPanel';
+import { isSoundEnabled, playSfx } from '../view/sound';
 import { hintLabel } from '../view/hintPlaque';
 import { drawMeadow } from '../view/ui';
 import { BattleHUD } from './BattleHUD';
 import type { ChapterMapData, MapReveal } from './ChapterMapScene';
 import { getPlatform, getStore } from './registry';
+import { settingsModel } from './settings';
 
 /** Units the stress driver keeps on the field on dev_stress (ARCHITECTURE.md «Производительность»). */
 const STRESS_UNITS = 600;
+
+/** The settings panel opens over the pause panel (the HUD overlay is at 200). */
+const SETTINGS_DEPTH = 210;
 
 /** Delay before the result panel, so the final capture is visible. */
 const RESULT_DELAY_MS = 700;
@@ -124,6 +129,8 @@ export class BattleScene extends Phaser.Scene {
   /** Own node whose build menu is open (sends are swipe-only, there is no tap-to-send selection). */
   private selected: string | null = null;
   private menu: BuildMenu | null = null;
+  /** The settings panel over the pause panel, if open. */
+  private settingsPanel: SettingsPanel | null = null;
   private drag: DragState | null = null;
   private armed: SpellId | null = null;
   private tutorial: TutorialState | null = null;
@@ -151,6 +158,7 @@ export class BattleScene extends Phaser.Scene {
     this.ended = false;
     this.selected = null;
     this.menu = null;
+    this.settingsPanel = null;
     this.drag = null;
     this.armed = null;
     this.uiEvents = [];
@@ -964,18 +972,16 @@ export class BattleScene extends Phaser.Scene {
     if (isSoundEnabled()) this.platform.vibrate(pattern);
   }
 
-  private toggleSound(): void {
-    const store = getStore(this);
-    store.settings.sound = !store.settings.sound;
-    setSoundEnabled(store.settings.sound);
-    store.commit();
-  }
-
-  private toggleMusic(): void {
-    const store = getStore(this);
-    store.settings.music = !store.settings.music;
-    setMusicEnabled(store.settings.music);
-    store.commit();
+  /**
+   * The shared settings panel over the pause panel. No language row here: a new language would need the HUD
+   * rebuilt mid-battle; the menu has it.
+   */
+  private openSettings(): void {
+    if (this.settingsPanel) return;
+    this.settingsPanel = new SettingsPanel(this, settingsModel(getStore(this)), {
+      depth: SETTINGS_DEPTH,
+      onClose: () => (this.settingsPanel = null),
+    });
   }
 
   // ---- Speed-up ---------------------------------------------------------------------------------
@@ -1027,10 +1033,7 @@ export class BattleScene extends Phaser.Scene {
       () => this.resume(),
       () => this.scene.restart({ levelId: this.level.id }),
       () => this.toMap(),
-      {
-        sound: { on: isSoundEnabled(), toggle: () => this.toggleSound() },
-        music: { on: isMusicEnabled(), toggle: () => this.toggleMusic() },
-      },
+      () => this.openSettings(),
     );
     setMusicDucked(true);
   }
