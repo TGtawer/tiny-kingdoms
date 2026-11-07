@@ -1,13 +1,15 @@
 import * as Phaser from 'phaser';
 import { BUILDINGS, type BuildingType } from '../config/balance';
-import { BUILD_MENU, COLORS, HUD } from '../config/game';
+import { BUILD_BUTTON, BUILD_MENU, COLORS, HUD, cssColor } from '../config/game';
 import { buildCost } from '../core/sim/commands';
 import type { NodeState } from '../core/sim/World';
 import { t } from '../i18n/i18n';
-import { Button } from './Button';
+import { Button, type ButtonFace } from './Button';
 import { toast } from './effects';
+import { drawGoldFill } from './goldFill';
 import { drawBuilding, drawCoin, drawLock } from './icons';
 import { px, textStyle } from './layout';
+import { playSfx } from './sound';
 
 export type BuildChoice = { kind: 'build'; building: BuildingType } | { kind: 'upgrade' };
 
@@ -15,18 +17,43 @@ interface Entry {
   button: Button;
   /** The building this button builds (null for the upgrade button). */
   building: BuildingType | null;
+  /** Price of a button that can be chosen (null: locked or max level — no price, no affordability look). */
   cost: number | null;
+  label: Phaser.GameObjects.Text;
+  icon: Phaser.GameObjects.Graphics;
+  desc: Phaser.GameObjects.Text | null;
+  coin: Phaser.GameObjects.Graphics | null;
   costText: Phaser.GameObjects.Text | null;
   shownCost: string;
+  /** Position in the row; a shake moves the button around it. */
+  baseX: number;
+  /** null until the first refresh, so opening the menu with enough gold doesn't pop. */
+  affordable: boolean | null;
+  /** The gold share drawn on the face, and the whole gold it was drawn for. */
+  fillShare: number;
+  shownGold: number;
+  face: ButtonFace | null;
+  shake: Phaser.Tweens.Tween | null;
+  pop: Phaser.Tweens.Tween | null;
 }
 
 const BUILDING_ORDER: readonly BuildingType[] = ['mine', 'barracks', 'tower'];
+
+/** Value at `v` (0..1) of keys spread evenly over 0..1, linear in between. */
+function keyframe(keys: readonly number[], v: number): number {
+  const at = Math.min(Math.max(v, 0), 1) * (keys.length - 1);
+  const i = Math.min(Math.floor(at), keys.length - 2);
+  return keys[i]! + (keys[i + 1]! - keys[i]!) * (at - i);
+}
 
 /**
  * Build options for the selected own node, shown as a strip in the bottom HUD bar.
  * The field never extends into that bar, so the menu never covers nodes.
  * Build options on an empty slot, a single upgrade button on an existing building.
  * Buildings not taught yet (TUTORIAL.md T-3) stay in the row, dark with a lock; a tap says when they open.
+ * A button always shows its price (docs/BUILD-BUTTON.md BB-3). Without enough gold it is light grey and fills with
+ * gold from the left as it is earned, showing «gold / price» (BB-5); a tap shakes it and builds nothing; when the
+ * gold first covers the price it turns bright and pops with a sound.
  */
 export class BuildMenu extends Phaser.GameObjects.Container {
   readonly nodeId: string;
@@ -95,17 +122,20 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     items.forEach((item, i) => {
       const x = -rowW / 2 + bw / 2 + i * (bw + gap);
       const locked = item.locked;
+      let entry: Entry | null = null;
       const button = new Button(scene, x, 0, {
         width: bw,
         height: bh,
         ...(locked !== undefined ? { color: COLORS.locked } : {}),
         onClick: () => {
           if (locked !== undefined) {
-            toast(scene, this.x + x, this.y - bh / 2 - px(8), locked);
+            // One hint at a time, centered: hints are wider than the buttons (BB-2).
+            toast(scene, scene.scale.width / 2, this.y - bh / 2 - px(8), locked);
             return;
           }
-          // Not affordable: the button stays bright and says how much is missing, but does nothing.
-          if (item.choice && item.cost !== null && this.gold >= item.cost) onChoose(item.choice);
+          if (!item.choice || item.cost === null) return;
+          if (this.gold >= item.cost) onChoose(item.choice);
+          else if (entry) this.shake(entry);
         },
       });
 
@@ -131,12 +161,14 @@ export class BuildMenu extends Phaser.GameObjects.Container {
       }
 
       let costText: Phaser.GameObjects.Text | null = null;
+      let desc: Phaser.GameObjects.Text | null = null;
+      let coin: Phaser.GameObjects.Graphics | null = null;
       if (item.cost !== null) {
-        const desc = scene.add.text(0, 0, item.desc, textStyle(12, COLORS.textDark)).setOrigin(0.5).setAlpha(0.8);
+        desc = scene.add.text(0, 0, item.desc, textStyle(12, COLORS.textDark)).setOrigin(0.5).setAlpha(0.8);
         const costY = bh * 0.25;
         const coinSize = px(14);
         costText = scene.add.text(0, costY, String(item.cost), textStyle(14, COLORS.textDark)).setOrigin(0.5);
-        const coin = scene.add.graphics();
+        coin = scene.add.graphics();
         drawCoin(coin, 0, 0, coinSize);
         coin.setPosition(0, costY).setName('coin');
         button.add([desc, coin, costText]);
@@ -145,7 +177,24 @@ export class BuildMenu extends Phaser.GameObjects.Container {
       // Max level: nothing to do. Locked buttons stay enabled so a tap can explain when they open.
       if (!item.choice && locked === undefined) button.setEnabled(false);
       this.add(button);
-      const entry: Entry = { button, building: node.building ? null : item.icon, cost: item.choice ? item.cost : null, costText, shownCost: '' };
+      entry = {
+        button,
+        building: node.building ? null : item.icon,
+        cost: item.choice ? item.cost : null,
+        label,
+        icon,
+        desc,
+        coin,
+        costText,
+        shownCost: '',
+        baseX: x,
+        affordable: null,
+        fillShare: 0,
+        shownGold: -1,
+        face: null,
+        shake: null,
+        pop: null,
+      };
       this.entries.push(entry);
       this.placeCost(entry, String(item.cost ?? ''));
     });
@@ -160,17 +209,111 @@ export class BuildMenu extends Phaser.GameObjects.Container {
   /** Screen position of the button that builds `type` (for tutorial highlights); null if it is not in the menu. */
   buttonPosition(type: BuildingType): { x: number; y: number } | null {
     const entry = this.entries.find((e) => e.building === type);
-    return entry ? { x: this.x + entry.button.x, y: this.y + entry.button.y } : null;
+    // The row position, not the shaken one.
+    return entry ? { x: this.x + entry.baseX, y: this.y + entry.button.y } : null;
   }
 
-  /** Shows the price of affordable options and "N more" for the others. */
+  /** Follows the player's gold: the affordability look, the gold share, and a pop when a price is reached. */
   refresh(gold: number): void {
     this.gold = gold;
     for (const entry of this.entries) {
       if (entry.cost === null) continue;
-      const missing = Math.ceil(entry.cost - gold);
-      this.placeCost(entry, missing > 0 ? t('build.needMore', { n: missing }) : String(entry.cost));
+      const affordable = gold >= entry.cost;
+      if (affordable !== entry.affordable) {
+        const reached = entry.affordable === false && affordable;
+        entry.affordable = affordable;
+        entry.shownGold = -1;
+        this.applyLook(entry);
+        if (reached) this.pop(entry);
+      }
+      if (!affordable) {
+        const whole = Math.floor(gold);
+        if (whole !== entry.shownGold) {
+          entry.shownGold = whole;
+          entry.fillShare = Math.max(0, whole / entry.cost);
+          entry.button.setFace(entry.face);
+          this.placeCost(entry, `${whole} / ${entry.cost}`);
+        }
+      } else {
+        this.placeCost(entry, String(entry.cost));
+      }
     }
+  }
+
+  override destroy(fromScene?: boolean): void {
+    for (const entry of this.entries) {
+      entry.shake?.stop();
+      entry.pop?.stop();
+    }
+    super.destroy(fromScene);
+  }
+
+  /** Redraws an entry for its affordability (only when it changes, not every frame). */
+  private applyLook(entry: Entry): void {
+    const can = entry.affordable !== false;
+    const dark = cssColor(COLORS.textDark);
+    const F = BUILD_BUTTON.fill;
+    entry.face = can
+      ? null
+      : {
+          color: F.face,
+          shine: false,
+          decor: (g, left, top, w, h, r) => drawGoldFill(g, left, top, w, h, r, entry.fillShare, F),
+        };
+    // Name, effect and price share one color, readable on the gold and on the empty part alike.
+    const text = can ? dark : cssColor(F.text);
+    entry.label.setColor(text);
+    entry.desc?.setColor(text);
+    entry.costText?.setColor(text);
+    entry.button.setFace(entry.face);
+  }
+
+  /** Shakes an unaffordable button around its row position; a new tap restarts the shake. */
+  private shake(entry: Entry): void {
+    const S = BUILD_BUTTON.shake;
+    const button = entry.button;
+    entry.shake?.stop();
+    button.x = entry.baseX;
+    entry.shake = this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: S.ms,
+      onUpdate: (tween) => {
+        button.x = entry.baseX + keyframe(S.keys, tween.getValue() ?? 1) * px(S.distance);
+      },
+      onComplete: () => {
+        button.x = entry.baseX;
+        entry.shake = null;
+      },
+      onStop: () => {
+        button.x = entry.baseX;
+      },
+    });
+  }
+
+  /** The gold just reached the price: a short grow-and-back and a sound. */
+  private pop(entry: Entry): void {
+    const R = BUILD_BUTTON.ready;
+    const button = entry.button;
+    entry.pop?.stop();
+    entry.pop = this.scene.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: R.popMs,
+      onUpdate: (tween) => {
+        const v = tween.getValue() ?? 1;
+        const k = v < R.peakAt ? v / R.peakAt : (1 - v) / (1 - R.peakAt);
+        button.setScale(1 + (R.popScale - 1) * Math.sin((k * Math.PI) / 2));
+      },
+      onComplete: () => {
+        button.setScale(1);
+        entry.pop = null;
+      },
+      onStop: () => {
+        button.setScale(1);
+      },
+    });
+    playSfx('ready');
   }
 
   /** Sets the cost label and centers the coin + label pair. */
@@ -179,10 +322,9 @@ export class BuildMenu extends Phaser.GameObjects.Container {
     if (!label || entry.shownCost === text) return;
     entry.shownCost = text;
     label.setText(text);
-    const coin = entry.button.getByName('coin') as Phaser.GameObjects.Graphics | null;
     const coinSize = px(14);
     const total = coinSize + px(4) + label.width;
-    coin?.setX(-total / 2 + coinSize / 2);
+    entry.coin?.setX(-total / 2 + coinSize / 2);
     label.setX(-total / 2 + coinSize + px(4) + label.width / 2);
   }
 }

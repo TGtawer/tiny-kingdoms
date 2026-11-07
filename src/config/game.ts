@@ -305,6 +305,32 @@ export const BUILD_MENU = {
   barInset: 6,
 } as const;
 
+/**
+ * Build menu buttons the player can't afford yet (docs/BUILD-BUTTON.md BB-3, BB-5; the gold-fill look won, BB-6).
+ * CSS px, ms, colors.
+ * Starting numbers, tuned in the game.
+ */
+export const BUILD_BUTTON = {
+  /** A tap on an unaffordable button shakes it: x offsets (shares of `distance`) evenly over `ms`, back to 0. */
+  shake: { distance: 5, ms: 360, keys: [0, -1, 1, -0.6, 0.6, 0] },
+  /** When the gold first covers the price: the button grows to `popScale` at `peakAt` of `popMs` and back. */
+  ready: { popScale: 1.08, popMs: 420, peakAt: 0.35 },
+  /**
+   * BB-5: a light grey face filling with gold from the left (share = floor(gold) / price), top to bottom gradient
+   * in `bands` steps, rounded corners sampled with `arcSegments` points. Dark text with no stroke and the icon
+   * as is: the dark text reads on both the gold and the grey (after the playtest review, 2026-11-07).
+   */
+  fill: {
+    face: COLORS.buttonDisabled,
+    top: 0xffc84d,
+    bottom: 0xff9f1c,
+    bands: 8,
+    arcSegments: 6,
+    /** Name, effect and price. */
+    text: COLORS.textDark,
+  },
+} as const;
+
 /** Victory/defeat panel, CSS px and ms. */
 export const RESULT_PANEL = {
   primaryButtonHeight: 68,
@@ -441,6 +467,9 @@ export const HINT_PLAQUE = {
 
 /** How long the special node info label stays, ms. */
 export const INFO_LABEL_MS = 2500;
+
+/** Toast labels (view/effects.ts): min gap to the screen edges, CSS px. */
+export const TOAST = { margin: 6 } as const;
 
 /** Pointer travel (CSS px) after which a press becomes a swipe. */
 export const DRAG_THRESHOLD_PX = 12;
@@ -640,7 +669,6 @@ export const MENU_NIGHT = {
     { id: 'play', x: 640, y: 290, w: 150, len: 300 },
   ],
   colors: { main: 0xb91c1c, mainTrim: 0xffc83d, side: 0x1e3a8a, sideTrim: 0xfcd34d },
-  lanterns: [300, 520, 760, 980],
   moon: { x: 1060, y: 120, r: 36, halo: 110, color: '#fff4cf' },
   sky: ['#0f1b3d', '#22356b', '#2d4a7a'],
   castle: '#16233f',
@@ -668,7 +696,19 @@ export const MENU_NIGHT = {
   stars: { count: 170, maxY: 470, seed: 77, color: 0xfff7d6 },
   windows: { seed: 3, color: 0xffcd6e },
   fireflies: { count: 24, fromY: 330, height: 360, glow: 9, color: [230, 255, 140] as const },
-  beam: { pad: 50, h: 22, color: 0x5b3a1f },
-  lantern: { glow: 140, body: 0xffd56b, cap: 0x374151 },
+  /** Outline of the beam, reference px. */
+  outline: 3,
+  /**
+   * The beam: side overhang past the outer banners (as long as it was with the lanterns, removed 2026-11-07),
+   * height, corner radius; the highlight band on top.
+   */
+  beam: { pad: 88, h: 22, radius: 10, color: 0x5b3a1f, shine: { inset: 6, top: 3, h: 6, radius: 3, alpha: 0.12 } },
+} as const;
+
+/** Main menu medallion icons (view/icons.ts drawMenuIcon). */
+export const MENU_ICON = {
+  /** Corner radius of the Play triangle, share of the icon box; each corner is drawn with `cornerSegments` steps. */
+  playCorner: 0.12,
+  cornerSegments: 6,
 } as const;
 

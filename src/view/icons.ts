@@ -1,6 +1,7 @@
 import type * as Phaser from 'phaser';
 import type { BuildingType, LeaderId, NodeKind, SpellId } from '../config/balance';
-import { COLORS, STAR_ROUNDING } from '../config/game';
+import { COLORS, MENU_ICON, STAR_ROUNDING } from '../config/game';
+import { roundedPolygon } from './roundedPolygon';
 
 // Simple cartoon icons drawn with Graphics, centered at (x, y), fitting in a box of `size`.
 
@@ -427,11 +428,16 @@ export type MenuIcon = 'play' | 'map' | 'hammer';
 export function drawMenuIcon(g: Phaser.GameObjects.Graphics, kind: MenuIcon, x: number, y: number, s: number): void {
   const line = 2.5;
   if (kind === 'play') {
-    const tri = [
-      [x - s * 0.28, y - s * 0.42],
-      [x + s * 0.44, y],
-      [x - s * 0.28, y + s * 0.42],
-    ] as const;
+    // Rounded corners: the fill and the outline follow the same contour.
+    const tri = roundedPolygon(
+      [
+        [x - s * 0.28, y - s * 0.42],
+        [x + s * 0.44, y],
+        [x - s * 0.28, y + s * 0.42],
+      ],
+      s * MENU_ICON.playCorner,
+      MENU_ICON.cornerSegments,
+    );
     g.fillStyle(0xffffff, 1);
     fillPolygon(g, tri);
     g.lineStyle(line, COLORS.outline, 1);
@@ -476,6 +482,12 @@ export function drawMenuIcon(g: Phaser.GameObjects.Graphics, kind: MenuIcon, x: 
   g.fillStyle(0xcbd5e1, 1);
   fillPolygon(g, head);
   strokePolygon(g, head);
+}
+
+/** `a` blended toward `b` by k (0 = a, 1 = b). */
+export function mixColor(a: number, b: number, k: number): number {
+  const ch = (shift: number): number => Math.round(((a >> shift) & 0xff) * (1 - k) + ((b >> shift) & 0xff) * k) << shift;
+  return ch(16) | ch(8) | ch(0);
 }
 
 /** Lighter (f > 0) or darker (f < 0) version of a color, as in the prototypes' `shade`. */

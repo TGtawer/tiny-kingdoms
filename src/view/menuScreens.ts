@@ -17,7 +17,6 @@ export const MENU_DEPTH = {
   /** Banners: map, upgrades, play (the main one on top); labels at +0.2, touch zones at +0.7. */
   banner: 5,
   framing: 9,
-  lanterns: 10,
   fireflies: 11,
   ui: 20,
 } as const;
@@ -383,8 +382,6 @@ export class NightScreen extends Screen {
   private readonly windows: Twinkle[] = [];
   private readonly flies: Firefly[] = [];
   private readonly beam: Phaser.GameObjects.Container;
-  private readonly lanternBodies: Phaser.GameObjects.Graphics;
-  private readonly glows: Array<{ img: Phaser.GameObjects.Image; x: number }> = [];
 
   constructor(scene: Phaser.Scene, w: number, h: number, o: MenuScreenOptions) {
     const N = MENU_NIGHT;
@@ -440,42 +437,20 @@ export class NightScreen extends Screen {
       o,
     );
 
-    // The beam spans all banners and lanterns; it opens from the center during the entrance.
-    const xs = [...N.banners.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]), ...N.lanterns];
-    const x0 = Math.min(...xs) - N.beam.pad;
-    const x1 = Math.max(...xs) + N.beam.pad;
+    // The beam spans all banners; it opens from the center during the entrance.
+    const B = N.beam;
+    const xs = N.banners.flatMap((b) => [b.x - b.w / 2, b.x + b.w / 2]);
+    const x0 = Math.min(...xs) - B.pad;
+    const x1 = Math.max(...xs) + B.pad;
     const cx = (x0 + x1) / 2;
     const beamG = scene.add.graphics();
-    beamG.fillStyle(N.beam.color, 1).fillRoundedRect(x0 - cx, -N.beam.h / 2, x1 - x0, N.beam.h, 10);
-    beamG.lineStyle(3, COLORS.outline, 1).strokeRoundedRect(x0 - cx, -N.beam.h / 2, x1 - x0, N.beam.h, 10);
-    beamG.fillStyle(0xffffff, 0.12).fillRoundedRect(x0 - cx + 6, -N.beam.h / 2 + 3, x1 - x0 - 12, 6, 3);
+    beamG.fillStyle(B.color, 1).fillRoundedRect(x0 - cx, -B.h / 2, x1 - x0, B.h, B.radius);
+    beamG.lineStyle(N.outline, COLORS.outline, 1).strokeRoundedRect(x0 - cx, -B.h / 2, x1 - x0, B.h, B.radius);
+    beamG
+      .fillStyle(0xffffff, B.shine.alpha)
+      .fillRoundedRect(x0 - cx + B.shine.inset, -B.h / 2 + B.shine.top, x1 - x0 - 2 * B.shine.inset, B.shine.h, B.shine.radius);
     this.beam = scene.add.container(cx, N.beamY, [beamG]);
     this.layer(MENU_DEPTH.framing).add(this.beam);
-
-    // Lanterns hang under the beam: a warm glow over everything around, then the lamp.
-    const L = N.lantern;
-    const glowR = L.glow * f.s;
-    const glow = this.canvas(glowR * 2, glowR * 2, (ctx) => {
-      const gr = ctx.createRadialGradient(glowR, glowR, 3 * f.s, glowR, glowR, glowR);
-      gr.addColorStop(0, 'rgba(255,200,110,.5)');
-      gr.addColorStop(1, 'rgba(255,170,80,0)');
-      ctx.fillStyle = gr;
-      ctx.fillRect(0, 0, glowR * 2, glowR * 2);
-    });
-    const ly = N.beamY + 9;
-    for (const lx of N.lanterns) this.glows.push({ img: this.image(glow, frameX(f, lx), frameY(f, ly + 18), MENU_DEPTH.lanterns).setAlpha(0), x: lx });
-    this.lanternBodies = scene.add.graphics().setAlpha(0);
-    const g = this.lanternBodies;
-    for (const lx of N.lanterns) {
-      g.lineStyle(2, COLORS.outline, 1).lineBetween(lx, ly, lx, ly + 8);
-      g.fillStyle(L.body, 1).fillRoundedRect(lx - 8, ly + 8, 16, 20, 4);
-      g.strokeRoundedRect(lx - 8, ly + 8, 16, 20, 4);
-      for (const cy of [ly + 6, ly + 27]) {
-        g.fillStyle(L.cap, 1).fillRect(lx - 10, cy, 20, 4);
-        g.strokeRect(lx - 10, cy, 20, 4);
-      }
-    }
-    this.layer(MENU_DEPTH.lanterns + 0.1).add(g);
 
     // Fireflies drift on small ellipses and blink.
     const FF = N.fireflies;
@@ -504,9 +479,6 @@ export class NightScreen extends Screen {
     const E = MENU_FX.entrance;
     const bk = cubicOut(seg(e * 1000, E.framingFromMs, E.framingFromMs + E.nightBeamMs));
     this.beam.setScale(Math.max(0.001, bk), 1);
-    const lit = bk >= 1 ? 1 : 0;
-    this.lanternBodies.setAlpha(lit);
-    for (const gl of this.glows) gl.img.setAlpha(lit).setScale(0.9 + 0.1 * Math.sin(t * 13 + gl.x));
 
     const f = this.frame;
     for (const fl of this.flies) {
