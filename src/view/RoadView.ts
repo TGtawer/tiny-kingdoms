@@ -3,16 +3,19 @@ import { COLORS } from '../config/game';
 import type { World } from '../core/sim/World';
 import { px, type ScreenLayout } from './layout';
 
-/** All roads in a single Graphics object; redrawn only on layout change. */
+/**
+ * All roads in a single Graphics object; redrawn only on layout change. It is not on the display list: the battle
+ * bakes it with the meadow into one texture (view/BakedLayer.ts, docs/PERF.md PF-G).
+ */
 export class RoadView {
-  private readonly g: Phaser.GameObjects.Graphics;
+  readonly graphics: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene) {
-    this.g = scene.add.graphics();
+    this.graphics = scene.make.graphics({}, false);
   }
 
   draw(world: World, layout: ScreenLayout): void {
-    const g = this.g;
+    const g = this.graphics;
     g.clear();
     const width = Math.max(px(8), layout.scale * 0.016);
     const segments = world.roads.map(([a, b]) => {
@@ -42,6 +45,6 @@ export class RoadView {
   }
 
   destroy(): void {
-    this.g.destroy();
+    this.graphics.destroy();
   }
 }

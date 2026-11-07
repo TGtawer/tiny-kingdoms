@@ -4,6 +4,7 @@ import { COLORS, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
 import type { NodeState, Owner } from '../core/sim/World';
+import { BakedGraphics } from './BakedGraphics';
 import { DisplayFilter } from './displayFilter';
 import { drawBuilding, drawCrown, drawKind } from './icons';
 import { px, textStyle, type ScreenLayout } from './layout';
@@ -22,6 +23,9 @@ const HIGHLIGHT_COLOR: Record<Exclude<Highlight, 'none'>, number> = {
 /**
  * A node drawn with Graphics: faction circle, building badge, gold vein, troop count. Redraws only on change.
  * The owner and the count go through a DisplayFilter (PLAYTEST-1 F-2): they don't flicker while units pour in.
+ * The body and the capacity arc are drawn off the display list and baked into the node's own textures
+ * (view/BakedGraphics.ts, docs/PERF.md PF-5, PF-3): Phaser 4 rebuilds every Graphics each frame, an Image costs
+ * nothing. They are re-baked only when they change.
  */
 export class NodeView extends Phaser.GameObjects.Container {
   readonly nodeId: string;
@@ -32,10 +36,11 @@ export class NodeView extends Phaser.GameObjects.Container {
   radius = 0;
   hitRadius = 0;
 
-  private readonly bodyGfx: Phaser.GameObjects.Graphics;
+  /** Circle, badges, crown: baked (PF-5). */
+  private readonly bodyArt: BakedGraphics;
   private readonly ring: Phaser.GameObjects.Graphics;
-  /** Capacity arc around the circle: how full the node is. */
-  private readonly capGfx: Phaser.GameObjects.Graphics;
+  /** Capacity arc around the circle: how full the node is. Baked at each of its 48 steps (PF-3). */
+  private readonly cap: BakedGraphics;
   private readonly countText: Phaser.GameObjects.Text;
   /** "/35" under the circle: capacity, shown only on the selected node. */
   private readonly capText: Phaser.GameObjects.Text;
@@ -57,12 +62,12 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.mageTower = mageTower;
     this.shown = new DisplayFilter(node.owner, visibleTroops(node.troops), NODE_VIEW.refreshMs, NODE_VIEW.ownerStableMs);
     this.ring = scene.add.graphics();
-    this.capGfx = scene.add.graphics();
-    this.bodyGfx = scene.add.graphics();
+    this.cap = new BakedGraphics(scene, `node-cap-${node.id}`, NODE_VIEW.bakeSupersample);
+    this.bodyArt = new BakedGraphics(scene, `node-body-${node.id}`, NODE_VIEW.bakeSupersample);
     this.countText = scene.add.text(0, 0, '', textStyle(18)).setOrigin(0.5);
     this.capText = scene.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setVisible(false);
     this.shieldGfx = scene.add.graphics();
-    this.add([this.ring, this.capGfx, this.bodyGfx, this.countText, this.capText, this.shieldGfx]);
+    this.add([this.ring, this.cap.image, this.bodyArt.image, this.countText, this.capText, this.shieldGfx]);
     scene.add.existing(this);
   }
 
@@ -141,10 +146,13 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.drawnCapKey = key;
 
     const r = this.radius;
-    const g = this.capGfx;
+    const g = this.cap.graphics;
     g.clear();
     this.capText.setVisible(showCap);
-    if (!owned) return;
+    if (!owned) {
+      this.cap.bake(this.x, this.y, { left: 0, right: 0, top: 0, bottom: 0 });
+      return;
+    }
 
     this.capText.setText(`/${capacity}`).setY(r * 1.13 + px(12));
     const arcR = r * 1.13;
@@ -156,6 +164,9 @@ export class NodeView extends Phaser.GameObjects.Container {
       g.lineStyle(width, over ? COLORS.gold : COLORS.select, 0.95);
       g.beginPath().arc(0, 0, arcR, start, start + fill * Math.PI * 2).strokePath();
     }
+    // The ring and a line width of margin around it.
+    const reach = arcR + width;
+    this.cap.bake(this.x, this.y, { left: reach, right: reach, top: reach, bottom: reach });
   }
 
   setHighlight(highlight: Highlight): void {
@@ -165,7 +176,7 @@ export class NodeView extends Phaser.GameObjects.Container {
   }
 
   private drawBody(node: NodeState, owner: Owner): void {
-    const g = this.bodyGfx;
+    const g = this.bodyArt.graphics;
     const r = this.radius;
     g.clear();
 
@@ -231,6 +242,11 @@ export class NodeView extends Phaser.GameObjects.Container {
         g.lineStyle(Math.max(1, pip * 0.4), COLORS.outline, 1).strokeCircle(px0, by + br + pip * 0.6, pip);
       }
     }
+
+    const B = NODE_VIEW.bodyBox;
+    const pad = px(B.pad);
+    const side = r * B.side + pad;
+    this.bodyArt.bake(this.x, this.y, { left: side, right: side, top: r * (this.mageTower ? B.mageTop : B.top) + pad, bottom: r * B.bottom + pad });
   }
 
   private drawHighlight(): void {
@@ -252,6 +268,9 @@ export class NodeView extends Phaser.GameObjects.Container {
   override destroy(fromScene?: boolean): void {
     this.ringTween?.stop();
     super.destroy(fromScene);
+    // The images went with the container; the drawings and textures are the node's own.
+    this.bodyArt.destroy();
+    this.cap.destroy();
   }
 }
 

@@ -16,7 +16,8 @@
     "lint": "eslint .",
     "zip": "node scripts/zip.mjs",
     "gen-level": "node scripts/gen-level.mjs",
-    "bench": "node scripts/bench.mjs"
+    "bench": "node scripts/bench.mjs",
+    "profile": "node scripts/profile-battle.mjs"
   },
   "dependencies": {
     "phaser": "^4.2.1"

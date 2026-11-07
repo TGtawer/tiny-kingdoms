@@ -39,6 +39,10 @@ async function main(): Promise<void> {
   setSoundVolume(store.settings.soundVolume);
   setMusicVolume(store.settings.musicVolume);
 
+  // Dev profiler (docs/PERF.md PF-0, `npm run profile`): only with ?profile on the dev server, never in a build.
+  // Loaded before the game starts, so its wrappers are in place before the first scene runs.
+  const profiler = import.meta.env.DEV && new URLSearchParams(window.location.search).has('profile') ? await import('./dev/profiler') : null;
+
   const host = document.getElementById('game')!;
   display.dpr = currentDpr();
   const size = hostSize(host);
@@ -60,6 +64,7 @@ async function main(): Promise<void> {
     callbacks: { preBoot: (g) => registerServices(g, platform, store) },
     scene: [BootScene, MenuScene, ChapterMapScene, UpgradesScene, BattleScene],
   });
+  profiler?.installProfiler(game, window.location.search);
 
   const resize = (): void => {
     const dpr = currentDpr();

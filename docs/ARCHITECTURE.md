@@ -54,6 +54,9 @@ src/
       playlist.ts         # какой трек/джингл где играет (ротация боевых, запасные варианты)
     save/
       SaveData.ts         # схема сохранения + версия + миграции (v10: громкости и язык в settings)
+  dev/
+    profiler.ts           # замер рендера боя (?profile, только dev-сервер; npm run profile, docs/PERF.md)
+    perfFlags.ts          # ?perf=nostars,nofly,notip,nojingle,win,lose,pause — экран результата (PF-7), только dev
   platform/
     Platform.ts           # интерфейс: init, ready, gameplayStart/Stop,
                           #   showInterstitial, showRewarded, purchase,
@@ -71,7 +74,7 @@ src/
     UpgradesScene.ts
     ShopScene.ts
   view/
-    NodeView.ts           # отрисовка узла кодом (Graphics); показ через фильтр частоты (displayFilter.ts, PLAYTEST-1 F-2)
+    NodeView.ts           # отрисовка узла кодом (Graphics); тело и дуга вместимости запекаются в текстуры узла (docs/PERF.md PF-5, PF-3); показ через фильтр частоты (displayFilter.ts, PLAYTEST-1 F-2)
     UnitsView.ts          # все юниты одним батчем: пул изображений из одной запечённой текстуры
     RoadView.ts
     BuildMenu.ts          # меню построек; закрытые — тёмные с замком
@@ -81,6 +84,8 @@ src/
     displayFilter.ts      # что показывает узел: число и цвет не чаще refreshMs (PLAYTEST-1 F-2)
     goldFill.ts           # заливка кнопки золотом по скруглённой грани (BUILD-BUTTON BB-5)
     roundedPolygon.ts     # многоугольник со скруглёнными углами: треугольник «Играть» в меню
+    BakedLayer.ts         # неизменные Graphics (луг, дороги) запечены в одну текстуру через canvas 2D (docs/PERF.md PF-G)
+    BakedGraphics.ts      # Graphics → текстура ×2 → Image (тело узла и дуга вместимости, docs/PERF.md PF-5, PF-3)
     Spotlight.ts          # затемнение с «дыркой» и палец для тура вне боя
     effects.ts            # твины, частицы, вспышки
     layout.ts             # адаптация под портрет/альбом

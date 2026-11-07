@@ -80,6 +80,17 @@ export const SQUAD_LIP = 0.1;
 export const NODE_VIEW = {
   refreshMs: 250,
   ownerStableMs: 300,
+  /**
+   * The node body is baked into a texture (docs/PERF.md PF-5); its box around the center, in node radii plus `pad`
+   * CSS px (badges have a minimum size): sides, top (`mageTop` with the evil mage's tower), bottom.
+   */
+  bodyBox: { side: 1.5, top: 1.5, mageTop: 2.9, bottom: 1.5, pad: 16 },
+  /**
+   * The body and the capacity arc (PF-3) are drawn by the same WebGL Graphics at this scale into their textures and
+   * shown scaled back down: the same shapes and line widths as before, edges smoothed by the extra resolution
+   * (render textures get no MSAA).
+   */
+  bakeSupersample: 2,
 } as const;
 
 /** Node radius in field units (fraction of field width), clamped to CSS px bounds. */
@@ -345,6 +356,19 @@ export const RESULT_PANEL = {
   starLabelSize: 13,
   /** Room under the stars for the captions, CSS px. */
   starLabelH: 18,
+  /**
+   * Stars and crystals are baked into textures (docs/PERF.md PF-7) at this scale and shown scaled back down: the same
+   * shapes, smooth edges; `bakeMargin` CSS px around each.
+   */
+  bakeSupersample: 2,
+  bakeMargin: 2,
+  /** Crystal sizes, CSS px: the reward line, the total counter, a flying crystal (it flies from 1.2× to 0.8×). */
+  rewardCrystal: 28,
+  counterCrystal: 24,
+  flyCrystal: 22,
+  /** The counter icon pulses on every landing: scale and time to it (and back). */
+  landPulse: 1.25,
+  landPulseMs: 70,
   /** Delay between stars appearing one by one. */
   starStaggerMs: 260,
 } as const;

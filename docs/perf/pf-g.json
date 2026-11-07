@@ -1,0 +1,175 @@
+{
+  "browser": "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  "throttle": 6,
+  "seconds": 30,
+  "results": [
+    {
+      "level": "dev_stress",
+      "size": "1280x720",
+      "gpu": "ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "frames": 64,
+      "seconds": 30,
+      "interval": {
+        "avg": 203.87,
+        "p95": 265,
+        "p99": 276.6,
+        "max": 276.6
+      },
+      "work": {
+        "avg": 195.42,
+        "p95": 257.2,
+        "p99": 270.4,
+        "max": 270.4
+      },
+      "drawCalls": {
+        "avg": 85,
+        "max": 85
+      },
+      "updateMs": 12.009,
+      "tickMs": 1.48,
+      "ticksPerFrame": 0.172,
+      "renderMs": 10.425,
+      "phaserRenderMs": 182.511,
+      "graphicsMs": 161.508,
+      "graphicsDrawn": 64,
+      "graphicsCommands": 9190,
+      "syncMs": 5.784,
+      "unitsMs": 1.691,
+      "setText": 8,
+      "textRedraws": 8,
+      "graphicsClear": 5,
+      "units": 515,
+      "tick": 14,
+      "firstFrames": [
+        0,
+        288.3,
+        224.2,
+        181.5,
+        297.9,
+        246.1,
+        539.1,
+        206.5,
+        179.5,
+        161.9
+      ],
+      "gc": {
+        "minorPerSec": 5.37,
+        "majorPerSec": 0.07,
+        "freedKBps": 25848
+      },
+      "errors": []
+    },
+    {
+      "level": "c01_l06",
+      "size": "1280x720",
+      "gpu": "ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "frames": 484,
+      "seconds": 30.1,
+      "interval": {
+        "avg": 54.41,
+        "p95": 75.5,
+        "p99": 117.7,
+        "max": 1165
+      },
+      "work": {
+        "avg": 46.61,
+        "p95": 68.4,
+        "p99": 100.1,
+        "max": 158.7
+      },
+      "drawCalls": {
+        "avg": 19.033,
+        "max": 21
+      },
+      "updateMs": 2.948,
+      "tickMs": 0.622,
+      "ticksPerFrame": 0.502,
+      "renderMs": 2.224,
+      "phaserRenderMs": 42.801,
+      "graphicsMs": 34.609,
+      "graphicsDrawn": 21.612,
+      "graphicsCommands": 3008.835,
+      "syncMs": 1.267,
+      "unitsMs": 0.173,
+      "setText": 11,
+      "textRedraws": 7,
+      "graphicsClear": 37,
+      "units": 0,
+      "tick": 259,
+      "firstFrames": [
+        0,
+        158.9,
+        80.9,
+        70.1,
+        87.3,
+        88,
+        91.7,
+        54.9,
+        57.6,
+        66.5
+      ],
+      "gc": {
+        "minorPerSec": 8.5,
+        "majorPerSec": 0.03,
+        "freedKBps": 44312
+      },
+      "errors": []
+    },
+    {
+      "level": "c01_l09",
+      "size": "1280x720",
+      "gpu": "ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "frames": 299,
+      "seconds": 30,
+      "interval": {
+        "avg": 83.16,
+        "p95": 116.4,
+        "p99": 153.5,
+        "max": 246.6
+      },
+      "work": {
+        "avg": 74.11,
+        "p95": 100.6,
+        "p99": 128,
+        "max": 237.3
+      },
+      "drawCalls": {
+        "avg": 23.074,
+        "max": 25
+      },
+      "updateMs": 6.018,
+      "tickMs": 1.375,
+      "ticksPerFrame": 0.662,
+      "renderMs": 4.458,
+      "phaserRenderMs": 66.891,
+      "graphicsMs": 52.757,
+      "graphicsDrawn": 25.13,
+      "graphicsCommands": 3242.953,
+      "syncMs": 2.622,
+      "unitsMs": 0.319,
+      "setText": 11,
+      "textRedraws": 7,
+      "graphicsClear": 25,
+      "units": 11,
+      "tick": 205,
+      "firstFrames": [
+        0,
+        270.8,
+        145.4,
+        156.5,
+        157.8,
+        123.3,
+        130.8,
+        80.5,
+        65.1,
+        128.8
+      ],
+      "gc": {
+        "minorPerSec": 6.73,
+        "majorPerSec": 0.07,
+        "freedKBps": 28255
+      },
+      "errors": []
+    }
+  ]
+}
