@@ -86,10 +86,11 @@ export const NODE_VIEW = {
    */
   bodyBox: { side: 1.5, top: 1.5, mageTop: 2.9, bottom: 1.5, pad: 16 },
   /**
-   * The body is drawn by the same WebGL Graphics at this scale into its texture and shown scaled back down: the same
-   * shapes and line widths as before, edges smoothed by the extra resolution (render textures get no MSAA).
+   * The body and the capacity arc (PF-3) are drawn by the same WebGL Graphics at this scale into their textures and
+   * shown scaled back down: the same shapes and line widths as before, edges smoothed by the extra resolution
+   * (render textures get no MSAA).
    */
-  bodySupersample: 2,
+  bakeSupersample: 2,
 } as const;
 
 /** Node radius in field units (fraction of field width), clamped to CSS px bounds. */
