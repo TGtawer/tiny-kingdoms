@@ -3,7 +3,7 @@ import { towerRate } from '../sim/combat';
 import { buildCost, sendAmount, validate, type Command, type SendMode } from '../sim/commands';
 import { nodeCapacity, troopRate } from '../sim/economy';
 import { armyPath, routeLength } from '../sim/pathfinding';
-import { towerKillsEstimate } from '../sim/preview';
+import { towerKillsEstimate, towerZoneSec } from '../sim/preview';
 import { pendingTo } from '../sim/stream';
 import { routeTarget, unitTarget } from '../sim/units';
 import { defenseMult, isAttacked, isRival, random, type NodeState, type Owner, type Side, type World } from '../sim/World';
@@ -437,9 +437,10 @@ function requiredForce(world: World, target: NodeState, eta: number, margin: num
     defenders = Math.min(nodeCapacity(target), defenders + troopRate(target, world.sides[target.owner].modifiers) * eta);
   }
   const hits = defenders * defenseMult(target);
-  // The tower shoots while the column arrives: about rate x its release time, plus the shot in reserve.
+  // The tower shoots from when the head of the column enters its zone until the tail reaches the node (docs/TOWER.md):
+  // about rate x (its release time + the walk through the zone), plus the shot in reserve.
   const rate = towerRate(target);
-  const tower = rate > 0 ? 1 + (rate * hits) / (STREAM.releasePerSec * STREAM.width) : 0;
+  const tower = rate > 0 ? 1 + rate * (hits / (STREAM.releasePerSec * STREAM.width) + towerZoneSec(target)) : 0;
   return hits * (1 + margin) + tower + AI.flatMargin;
 }
 

@@ -441,19 +441,26 @@ export class BattleScene extends Phaser.Scene {
           }
           // Later arrivals in the same tick compare against the new owner.
           this.ownersBefore.set(event.nodeId, owner);
-        } else if (event.outcome === 'destroyedByTower' || event.outcome === 'repelled') {
-          // A tower shot or a 1:1 trade: a capped flash on the rim, on the side the unit came from.
+        } else if (event.outcome === 'repelled') {
+          // A 1:1 trade: a capped flash on the rim, on the side the unit came from.
           const from = this.nodeViews.get(event.fromId)!;
           const dx = from.x - view.x;
           const dy = from.y - view.y;
           const len = Math.hypot(dx, dy) || 1;
-          const color = event.outcome === 'destroyedByTower' ? COLORS.fireball : COLORS.faction[event.owner];
+          const color = COLORS.faction[event.owner];
           const rimX = view.x + (dx / len) * view.radius;
           const rimY = view.y + (dy / len) * view.radius;
           // TODO(design): FX-2 — keep the rim flash next to the sparks or drop it; compare with `?perf=norimflash`.
           if (!(import.meta.env.DEV && perfFlag('norimflash'))) this.flashes.flash(rimX, rimY, color, this.time.now);
           if (this.sparks) this.showHit(view, event.owner, rimX, rimY, Math.atan2(dy, dx));
         }
+        break;
+      }
+      case 'towerShot': {
+        // A tower shot a unit on its road (docs/TOWER.md): a fire flash where it died.
+        // TODO(design): TW-4 — the arrow from the tower badge and the "ghost" figure replace this flash.
+        const p = this.units.screenAt(this.world, this.layoutField, event.lane, event.progress, { x: 0, y: 0 });
+        this.flashes.flash(p.x, p.y, COLORS.fireball, this.time.now);
         break;
       }
       case 'clash': {

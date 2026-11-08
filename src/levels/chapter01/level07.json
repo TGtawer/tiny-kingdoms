@@ -7,7 +7,7 @@
     "productionMult": 0.7,
     "aiThinkMs": 1000,
     "aggression": 0.75,
-    "startGold": 90
+    "startGold": 88
   },
   "tutorial": "c01_l07",
   "nodes": [
