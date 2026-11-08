@@ -1,10 +1,17 @@
 import type * as Phaser from 'phaser';
 import { ARMY, STREAM, TICK_MS } from '../config/balance';
-import { COLORS, UNITS_FX } from '../config/game';
+import { COLORS, STEP_FX, UNITS_FX } from '../config/game';
 import type { Lane, Owner, World } from '../core/sim/World';
 import { px, type FieldLayout, type Point } from './layout';
 
 const OWNERS: readonly Owner[] = ['player', 'enemy', 'enemy2', 'neutral'];
+/** Walk frames per side (docs/FX.md FX-4): round, middle, stretched. */
+const STEP_FRAMES = 3;
+/** Atlas frame name of each side's walk frame k: index OWNER_INDEX[owner] * STEP_FRAMES + k. */
+const FRAME_NAMES: readonly string[] = OWNERS.flatMap((owner) => [owner, `${owner}-1`, `${owner}-2`]);
+const OWNER_INDEX: Record<Owner, number> = { player: 0, enemy: 1, enemy2: 2, neutral: 3 };
+/** Phase of the step per field unit walked: π per step, STEP_FX.stepsPerSec steps per second at ARMY.speed. */
+const STEP_PHASE = (Math.PI * STEP_FX.stepsPerSec) / ARMY.speed;
 /** Off-screen spot for pool figures that are not in use (keeps the Blitter's render list unchanged). */
 const PARKED = -10000;
 /** Distance a unit walks in one tick, field units: the interpolation step. */
@@ -22,15 +29,21 @@ const TICK_STEP = (ARMY.speed * TICK_MS) / 1000;
 export class UnitsView {
   private readonly blitter: Phaser.GameObjects.Blitter;
   private readonly bobs: Phaser.GameObjects.Bob[] = [];
-  /** Owner shown by each pool figure (frame changes only when it changes). */
-  private readonly bobOwner: Array<Owner | null> = [];
+  /** Atlas frame shown by each pool figure (an index into FRAME_NAMES; setFrame only when it changes). */
+  private readonly bobFrame: number[] = [];
   private used = 0;
   private half = 0;
+  /** Hop height for this layout, game px. */
+  private hop = 0;
   private readonly at: Point = { x: 0, y: 0 };
   /** Per lane: start x, y and end x, y of its visible part on screen. */
   private laneGeo = new Float64Array(0);
 
-  constructor(private readonly scene: Phaser.Scene) {
+  /** `fx`: the walk of docs/FX.md (off with the dev flag `?perf=nofx`). */
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly fx = true,
+  ) {
     this.blitter = scene.add.blitter(0, 0, '__DEFAULT');
   }
 
@@ -40,31 +53,37 @@ export class UnitsView {
     return Math.min(px(UNITS_FX.maxRadiusPx), Math.max(px(UNITS_FX.minRadiusPx), step * UNITS_FX.radiusOfStep));
   }
 
-  /** Bakes the figures for the layout's size (once per size) and points every pool figure at the new frames. */
+  /**
+   * Bakes the figures for the layout's size (once per size) and points every pool figure at the new frames. Each side
+   * has three walk frames (FX-4): round, middle and stretched, all standing on the same feet; the cell is tall enough
+   * for the stretched one, the round one sits at its center as before.
+   */
   layout(field: FieldLayout): void {
     const r = Math.round(UnitsView.radius(field) * 2) / 2;
-    const cell = Math.ceil(r * 2 + 2);
+    const cell = Math.ceil(r * 2 * STEP_FX.stretch.h + 2);
     const key = `units-${r}`;
     if (!this.scene.textures.exists(key)) {
       const g = this.scene.make.graphics({}, false);
-      OWNERS.forEach((owner, i) => {
+      const shapes = [{ w: 1, h: 1 }, STEP_FX.mid, STEP_FX.stretch];
+      FRAME_NAMES.forEach((_, i) => {
+        const owner = OWNERS[Math.floor(i / STEP_FRAMES)]!;
+        const { w, h } = shapes[i % STEP_FRAMES]!;
         const cx = i * cell + cell / 2;
-        const cy = cell / 2;
+        // Feet at the round figure's bottom; a stretched figure grows upwards.
+        const cy = cell / 2 + r - r * h;
         // Dark rim, the face a bit higher inside it (as on the nodes), no outline: tiny figures stay crisp.
-        g.fillStyle(COLORS.factionDark[owner], 1).fillCircle(cx, cy, r);
-        g.fillStyle(COLORS.faction[owner], 1).fillCircle(cx, cy - r * 0.18, r * 0.78);
+        g.fillStyle(COLORS.factionDark[owner], 1).fillEllipse(cx, cy, 2 * r * w, 2 * r * h);
+        g.fillStyle(COLORS.faction[owner], 1).fillEllipse(cx, cy - r * h * 0.18, 2 * r * w * 0.78, 2 * r * h * 0.78);
       });
-      g.generateTexture(key, cell * OWNERS.length, cell);
+      g.generateTexture(key, cell * FRAME_NAMES.length, cell);
       g.destroy();
       const texture = this.scene.textures.get(key);
-      OWNERS.forEach((owner, i) => texture.add(owner, 0, i * cell, 0, cell, cell));
+      FRAME_NAMES.forEach((name, i) => texture.add(name, 0, i * cell, 0, cell, cell));
     }
     this.half = cell / 2;
+    this.hop = this.fx ? r * STEP_FX.hopOfRadius : 0;
     this.blitter.setTexture(key);
-    for (let i = 0; i < this.bobs.length; i++) {
-      const owner = this.bobOwner[i];
-      if (owner) this.bobs[i]!.setFrame(owner);
-    }
+    for (let i = 0; i < this.bobs.length; i++) this.bobs[i]!.setFrame(FRAME_NAMES[this.bobFrame[i]!]!);
   }
 
   setDepth(depth: number): this {
@@ -137,17 +156,24 @@ export class UnitsView {
       const p = Math.max(lane.startP, unit.progress - (back * TICK_STEP) / lane.length);
       this.place(lane, l, p, this.at);
 
+      // Walk (FX-4): a hop per step and a frame by its height; no memory, from the distance walked on this road.
+      let lift = 0;
+      let frame = OWNER_INDEX[unit.owner] * STEP_FRAMES;
+      if (this.fx) {
+        lift = Math.abs(Math.sin((p - lane.startP) * lane.length * STEP_PHASE + unit.id));
+        frame += lift < STEP_FX.midFrom ? 0 : lift < STEP_FX.stretchFrom ? 1 : 2;
+      }
       let bob = this.bobs[n];
       if (!bob) {
-        bob = this.blitter.create(0, 0, unit.owner);
+        bob = this.blitter.create(0, 0, FRAME_NAMES[frame]);
         this.bobs.push(bob);
-        this.bobOwner.push(unit.owner);
-      } else if (this.bobOwner[n] !== unit.owner) {
-        bob.setFrame(unit.owner);
-        this.bobOwner[n] = unit.owner;
+        this.bobFrame.push(frame);
+      } else if (this.bobFrame[n] !== frame) {
+        bob.setFrame(FRAME_NAMES[frame]!);
+        this.bobFrame[n] = frame;
       }
       bob.x = this.at.x - this.half;
-      bob.y = this.at.y - this.half;
+      bob.y = this.at.y - this.half - this.hop * lift;
       n++;
     }
     for (let i = n; i < this.used; i++) {

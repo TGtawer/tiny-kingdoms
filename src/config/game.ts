@@ -147,6 +147,23 @@ export const NODE_FX = {
   trembleMs: 300,
 } as const;
 
+/**
+ * Units walk (docs/FX.md FX-4): each hops |sin φ| high, φ = π · s / stepLen + unit id, s the distance walked; the
+ * figure stretches in the air by switching atlas frames (a Bob neither scales nor rotates).
+ */
+export const STEP_FX = {
+  /** Hop height, share of the figure radius (≈ 2.4 CSS px at the largest figures). */
+  hopOfRadius: 0.4,
+  /** Steps per second at ARMY.speed (one hop per step). */
+  stepsPerSec: 4.5,
+  /** Frames by |sin φ|: below `midFrom` the round figure, below `stretchFrom` the middle one, then the stretched one. */
+  midFrom: 0.33,
+  stretchFrom: 0.66,
+  /** Width and height of the middle and the stretched figure, shares of the round one (they keep its feet). */
+  mid: { w: 0.96, h: 1.06 },
+  stretch: { w: 0.92, h: 1.12 },
+} as const;
+
 /** Textures of the battle effects (docs/FX.md), baked in BootScene. */
 export const FX_TEXTURES = {
   /** A white square every particle is drawn with (tinted), game px. */

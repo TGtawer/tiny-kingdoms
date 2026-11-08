@@ -213,7 +213,7 @@ export class BattleScene extends Phaser.Scene {
     this.ground = new BakedLayer(this, 'battle-ground');
     this.background = this.make.graphics({}, false);
     this.roads = new RoadView(this);
-    this.units = new UnitsView(this);
+    this.units = new UnitsView(this, this.fx);
     this.capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
     for (const node of Object.values(this.world.nodes)) {
       const mageTower = this.world.boss?.type === 'mage' && this.world.boss.towerId === node.id;
