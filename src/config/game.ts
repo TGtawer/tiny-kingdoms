@@ -164,6 +164,32 @@ export const STEP_FX = {
   stretch: { w: 0.92, h: 1.12 },
 } as const;
 
+/**
+ * Dust from under the units' feet (docs/FX.md FX-5): a separate Blitter under the units with a fixed pool of puffs.
+ * A puff grows by switching frames and fades by alpha. Times ms, speeds CSS px/s.
+ */
+export const DUST_FX = {
+  /** Puffs on the field at most; when all are busy a new puff just doesn't appear. */
+  pool: 120,
+  /** Frames of a growing puff, radius from r0 to r1 (shares of the figure radius: 2 → 4.7 CSS px at the largest). */
+  frames: 4,
+  r0OfRadius: 0.33,
+  r1OfRadius: 0.78,
+  color: 0xb4b2a9,
+  /** Each unit puffs every everyMinMs…everyMaxMs (fixed per unit, from its id). */
+  everyMinMs: 280,
+  everyMaxMs: 580,
+  lifeMs: 450,
+  alpha: 0.6,
+  /** A puff drifts back along the road and up. */
+  driftBack: 14,
+  rise: 6,
+  /** Above this many units only every N-th unit puffs (N = units / fullUntilUnits, rounded up)… */
+  fullUntilUnits: 150,
+  /** …and above this many there is no dust at all. */
+  offAboveUnits: 400,
+} as const;
+
 /** Textures of the battle effects (docs/FX.md), baked in BootScene. */
 export const FX_TEXTURES = {
   /** A white square every particle is drawn with (tinted), game px. */
