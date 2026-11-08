@@ -7,6 +7,7 @@
 //          the battle result screen (PF-7): each variant ends the battle by a dev flag (?perf=win|lose|pause, see
 //          src/dev/perfFlags.ts), waits for the panel to settle, then records frames; medians over the runs.
 //        npm run profile -- --result --cpuprofile --variants victory,nostars   (+ where the frame time goes)
+//        --perf nofx: extra dev flags for the battle page (?perf=..., src/dev/perfFlags.ts), e.g. A/B of docs/FX.md effects
 //        --mobile: an Android user agent, so Phaser renders as on a phone (autoMobileTextures: one texture per batch)
 // Browser: CHROME_PATH, or Chrome / Edge found in the usual places. The page side is src/dev/profiler.ts (?profile).
 import { spawn } from 'node:child_process';
@@ -37,6 +38,7 @@ const { values } = parseArgs({
     record: { type: 'string', default: '10' },
     cpuprofile: { type: 'boolean', default: false },
     mobile: { type: 'boolean', default: false },
+    perf: { type: 'string', default: '' },
   },
 });
 
@@ -142,7 +144,7 @@ async function profileLevel(base, level, width, height) {
   const page = await openPage(width, height);
   try {
     await page.send('Emulation.setCPUThrottlingRate', { rate: Number(values.throttle) });
-    await page.send('Page.navigate', { url: `${base}?level=${level}&profile` });
+    await page.send('Page.navigate', { url: `${base}?level=${level}&profile${values.perf ? `&perf=${values.perf}` : ''}` });
     // The first load after a code change can take a while (Vite prepares dependencies, may reload once).
     for (let i = 0; i < 300 && !(await page.evaluate('!!window.__profile && window.__profile.inBattle()')); i++) await sleep(100);
     await sleep(Number(values.warmup) * 1000);
@@ -169,7 +171,7 @@ async function shoot(base, level, width, height, dir) {
   for (let run = 0; run < 2; run++) {
     const page = await openPage(width, height);
     try {
-      await page.send('Page.navigate', { url: `${base}?level=${level}&profile&stopAt=${values.stopAt}` });
+      await page.send('Page.navigate', { url: `${base}?level=${level}&profile&stopAt=${values.stopAt}${values.perf ? `&perf=${values.perf}` : ''}` });
       for (let i = 0; i < 300 && !(await page.evaluate('!!window.__profile && window.__profile.stopped()')); i++) await sleep(100);
       // Let the node display filter and short tweens settle on the frozen state.
       await sleep(1500);
@@ -312,7 +314,7 @@ try {
       results.push(r);
       console.log(`${level}: done (${r.frames} frames)${r.errors.length ? ` errors: ${r.errors.join(' | ')}` : ''}`);
     }
-    console.log(`\nBrowser: ${browserPath}\nGPU: ${results[0]?.gpu}\nCPU throttling ×${values.throttle}, ${values.seconds} s per level after ${values.warmup} s warm-up, ${values.size}\n`);
+    console.log(`\nBrowser: ${browserPath}\nGPU: ${results[0]?.gpu}\nCPU throttling ×${values.throttle}, ${values.seconds} s per level after ${values.warmup} s warm-up, ${values.size}${values.perf ? `, perf=${values.perf}` : ''}\n`);
     console.log('| level | frame avg / p95 / p99, ms | work avg / p95, ms | draw calls avg / max | update (sim ticks, ×per frame) / render / sync / units, ms per frame | Phaser render / of it Graphics, ms (Graphics drawn, commands) | setText / redraws / Graphics.clear per s | minor GC/s, freed KB/s | units | first frames, ms |');
     console.log('|---|---|---|---|---|---|---|---|---|---|');
     for (const r of results) {

@@ -1,0 +1,235 @@
+{
+  "browser": "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  "throttle": 6,
+  "seconds": 30,
+  "results": [
+    {
+      "level": "dev_stress",
+      "size": "1280x720",
+      "gpu": "ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "frames": 740,
+      "seconds": 30.4,
+      "interval": {
+        "avg": 39.85,
+        "p95": 68.6,
+        "p99": 78.4,
+        "max": 102.4
+      },
+      "work": {
+        "avg": 33.67,
+        "p95": 60,
+        "p99": 70,
+        "max": 84.9
+      },
+      "drawCalls": {
+        "avg": 8,
+        "max": 8
+      },
+      "updateMs": 10.118,
+      "tickMs": 1.58,
+      "ticksPerFrame": 0.389,
+      "renderMs": 8.37,
+      "phaserRenderMs": 22.673,
+      "graphicsMs": 11.714,
+      "graphicsDrawn": 24,
+      "graphicsCommands": 530,
+      "syncMs": 5.108,
+      "unitsMs": 1.566,
+      "setText": 82,
+      "textRedraws": 82,
+      "graphicsClear": 56,
+      "units": 522,
+      "tick": 302,
+      "firstFrames": [
+        0,
+        152.2,
+        99.5,
+        81.4,
+        77,
+        67.7,
+        430.6,
+        49,
+        52.2,
+        46
+      ],
+      "graphicsTop": [
+        {
+          "owner": "Button",
+          "depth": 0,
+          "commands": 221,
+          "visible": true,
+          "msPerFrame": 5.469
+        },
+        {
+          "owner": "Container",
+          "depth": 0,
+          "commands": 8,
+          "visible": true,
+          "msPerFrame": 2.376
+        },
+        {
+          "owner": "Container",
+          "depth": 0,
+          "commands": 53,
+          "visible": true,
+          "msPerFrame": 1.922
+        },
+        {
+          "owner": "Container",
+          "depth": 0,
+          "commands": 108,
+          "visible": true,
+          "msPerFrame": 1.412
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.04
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.023
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.023
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.022
+        }
+      ],
+      "gc": {
+        "minorPerSec": 2.6,
+        "majorPerSec": 0,
+        "freedKBps": 15970
+      },
+      "errors": []
+    },
+    {
+      "level": "c01_l06",
+      "size": "1280x720",
+      "gpu": "ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "frames": 1002,
+      "seconds": 30,
+      "interval": {
+        "avg": 22.88,
+        "p95": 36.9,
+        "p99": 53.6,
+        "max": 105.1
+      },
+      "work": {
+        "avg": 17.11,
+        "p95": 29.7,
+        "p99": 46.2,
+        "max": 97.4
+      },
+      "drawCalls": {
+        "avg": 6.153,
+        "max": 11
+      },
+      "updateMs": 2.667,
+      "tickMs": 0.281,
+      "ticksPerFrame": 0.229,
+      "renderMs": 2.253,
+      "phaserRenderMs": 13.581,
+      "graphicsMs": 9.202,
+      "graphicsDrawn": 10.27,
+      "graphicsCommands": 395.325,
+      "syncMs": 1.405,
+      "unitsMs": 0.186,
+      "setText": 10,
+      "textRedraws": 6,
+      "graphicsClear": 71,
+      "units": 0,
+      "tick": 257,
+      "firstFrames": [
+        0,
+        100.1,
+        79.8,
+        69.6,
+        51.3,
+        68.3,
+        48.6,
+        31.1,
+        31.5,
+        26.5
+      ],
+      "graphicsTop": [
+        {
+          "owner": "Button",
+          "depth": 0,
+          "commands": 221,
+          "visible": true,
+          "msPerFrame": 5.661
+        },
+        {
+          "owner": "Container",
+          "depth": 0,
+          "commands": 108,
+          "visible": true,
+          "msPerFrame": 1.415
+        },
+        {
+          "owner": "Container",
+          "depth": 0,
+          "commands": 8,
+          "visible": true,
+          "msPerFrame": 1.193
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.04
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.024
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.023
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.022
+        },
+        {
+          "owner": "NodeView",
+          "depth": 0,
+          "commands": 7,
+          "visible": true,
+          "msPerFrame": 0.02
+        }
+      ],
+      "gc": {
+        "minorPerSec": 3.33,
+        "majorPerSec": 0.07,
+        "freedKBps": 13935
+      },
+      "errors": []
+    }
+  ]
+}
