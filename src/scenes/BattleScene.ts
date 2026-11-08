@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DRAGON, ECONOMY, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, FX_COLORS, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, SPARK_FX, UNITS_FX, type JingleId } from '../config/game';
+import { CAPTURE_FX, COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, FX_COLORS, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, SPARK_FX, UNITS_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -47,6 +47,7 @@ import { BakedLayer } from '../view/BakedLayer';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
 import { ParticleBursts } from '../view/ParticleBursts';
+import { CaptureRings } from '../view/CaptureRings';
 import { audioFiles, canPlayJingle, playJingle, playMusic, setMusicDucked, stopMusic } from '../view/music';
 import { SettingsPanel } from '../view/SettingsPanel';
 import { isSoundEnabled, playSfx } from '../view/sound';
@@ -115,6 +116,9 @@ export class BattleScene extends Phaser.Scene {
   private flashes!: FlashPool;
   /** Sparks of hits and releases (docs/FX.md FX-2, FX-3); null with `?perf=nofx`. */
   private sparks: ParticleBursts | null = null;
+  /** Rings and confetti of a capture by the player (FX-7); null with `?perf=nofx`. */
+  private captureRings: CaptureRings | null = null;
+  private confetti: ParticleBursts | null = null;
   /** Last time the clash sound played (rate-limited). */
   private lastClashSoundAt = -Infinity;
   /** Dev only: FPS and unit counter. */
@@ -221,6 +225,11 @@ export class BattleScene extends Phaser.Scene {
     }
     this.flashes = new FlashPool(this, 45);
     this.sparks = this.fx ? new ParticleBursts(this, 46, SPARK_FX.max) : null;
+    this.captureRings = this.fx ? new CaptureRings(this, 44) : null;
+    this.confetti = this.fx
+      ? new ParticleBursts(this, 47, CAPTURE_FX.confettiMax, { gravity: CAPTURE_FX.confettiGravity, spin: CAPTURE_FX.confettiSpin })
+      : null;
+    for (const view of this.nodeViews.values()) view.fx = this.fx;
     if (import.meta.env.DEV) {
       if (DEV_TOOLS.showFps) this.fpsText = this.add.text(0, 0, '', textStyle(13)).setStroke('#1f2937', px(3)).setDepth(400);
       this.stress = this.level.id === STRESS_LEVEL.id ? createStress() : null;
@@ -402,6 +411,11 @@ export class BattleScene extends Phaser.Scene {
           const owner = this.world.nodes[event.nodeId]!.owner;
           if (this.selected === event.nodeId) this.deselect();
           if (this.ownersBefore.get(event.nodeId) === 'player' && owner !== 'player') this.stats.lostOwnNode = true;
+          // The recolor wave starts on the side the capturing unit came from (FX-7).
+          if (owner === 'player') {
+            const from = this.nodeViews.get(event.fromId)!;
+            view.captureAngle = Math.atan2(from.y - view.y, from.x - view.x);
+          }
           // Later arrivals in the same tick compare against the new owner.
           this.ownersBefore.set(event.nodeId, owner);
         } else if (event.outcome === 'destroyedByTower' || event.outcome === 'repelled') {
@@ -668,6 +682,7 @@ export class BattleScene extends Phaser.Scene {
     this.roads.draw(this.world, this.layoutField);
     this.ground.bake(w, h, [this.background, this.roads.graphics]);
     this.units.layout(this.layoutField);
+    this.captureRings?.layout(nodes.map((n) => this.layoutField.nodeRadius(n.size)));
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
     // Bottom-left, above the bottom bar: clear of the top bar and the goal plaque.
     this.fpsText?.setPosition(px(8), h - px(HUD.bottomBar + 22));
@@ -693,6 +708,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.units.render(world, this.layoutField, alpha);
     this.flashes.update(this.time.now);
+    this.captureRings?.update(this.time.now);
     this.updateFps();
 
     this.drawDragLines();
@@ -1033,7 +1049,13 @@ export class BattleScene extends Phaser.Scene {
     const owner = view.shown.owner;
     const before = view.shown.previousOwner;
     pop(this, view);
-    ringBurst(this, view.x, view.y, view.radius, COLORS.faction[owner]);
+    if (owner === 'player' && this.captureRings && this.confetti) {
+      // FX-7: two rings and confetti instead of the plain ring.
+      this.captureRings.play(view.x, view.y, view.radius, FX_COLORS.factionLight.player, this.time.now);
+      this.confetti.burst(view.x, view.y, 0, CAPTURE_FX.confetti, CAPTURE_FX.confettiColors);
+    } else {
+      ringBurst(this, view.x, view.y, view.radius, COLORS.faction[owner]);
+    }
     if (owner === 'player') {
       playSfx('capture');
       this.vibrate(HAPTICS.short);

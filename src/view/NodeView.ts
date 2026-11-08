@@ -1,11 +1,12 @@
 import * as Phaser from 'phaser';
 import { TICK_MS } from '../config/balance';
-import { BROKEN_STREAM_FX, COLORS, NODE_FX, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
+import { BROKEN_STREAM_FX, CAPTURE_FX, COLORS, NODE_FX, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
 import { isAttacked, type NodeState, type Owner, type World } from '../core/sim/World';
 import { BakedGraphics } from './BakedGraphics';
-import { DisplayFilter } from './displayFilter';
+import { easeOutCubic } from './CaptureRings';
+import { DisplayFilter, SHOWN_OWNER_CHANGED } from './displayFilter';
 import { drawBuilding, drawCrown, drawKind } from './icons';
 import { px, textStyle, type ScreenLayout } from './layout';
 
@@ -65,6 +66,18 @@ export class NodeView extends Phaser.GameObjects.Container {
   private streamsSeen = 0;
   private brokenAt = -Infinity;
   private brokenHeld = -Infinity;
+  /** Battle effects on (docs/FX.md; off with the dev flag `?perf=nofx`). */
+  fx = false;
+  /**
+   * Direction from the node towards where the unit that captured it came from, radians (set by the scene on a
+   * capture by the player); the recolor wave starts on that side (FX-7). Used once.
+   */
+  captureAngle: number | null = null;
+  /** The recolor wave (FX-7): the body keeps the old owner until it ends; the new colors are drawn in `waveGfx`. */
+  private waveFrom: Owner | null = null;
+  private waveAt = -Infinity;
+  private waveAngle = 0;
+  private readonly waveGfx: Phaser.GameObjects.Graphics;
   private readonly ring: Phaser.GameObjects.Graphics;
   /** Capacity arc around the circle: how full the node is. Baked at each of its 48 steps (PF-3). */
   private readonly cap: BakedGraphics;
@@ -97,7 +110,8 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.flash = scene.add.image(0, 0, '__WHITE').setVisible(false);
     this.brokenRing = scene.add.image(0, 0, '__WHITE').setVisible(false);
     this.layer = scene.make.container({}, false);
-    this.layer.add([this.cap.image, this.bodyArt.image, this.flash]);
+    this.waveGfx = scene.add.graphics().setVisible(false);
+    this.layer.add([this.cap.image, this.bodyArt.image, this.waveGfx, this.flash]);
     this.add([this.ring, this.layer, this.brokenRing, this.countText, this.capText, this.shieldGfx]);
     scene.add.existing(this);
   }
@@ -138,6 +152,12 @@ export class NodeView extends Phaser.GameObjects.Container {
       this.brokenRing.setVisible(false);
     }
 
+    if (this.waveFrom !== null) {
+      this.drawWave(easeOutCubic(Math.min(1, (now - this.waveAt) / CAPTURE_FX.waveMs)));
+    } else if (this.waveGfx.visible) {
+      this.waveGfx.clear().setVisible(false);
+    }
+
     const pop = fade(now - this.countPopAt, NODE_FX.countPopMs);
     if (pop > 0) {
       this.countText.setScale(1 + NODE_FX.countPop * pop);
@@ -163,6 +183,23 @@ export class NodeView extends Phaser.GameObjects.Container {
     } else if (this.brokenRing.visible && own && isAttacked(world, node)) {
       this.brokenHeld = Math.max(this.brokenHeld, now);
     }
+  }
+
+  /**
+   * The player's colors spreading over the circle (FX-7): the rim and the face, each cut by a circle growing from the
+   * rim on the attacker's side to twice the radius (`e` 0..1), and the outline over them. Icons and the shine wait
+   * under it until the body is re-baked at the end.
+   */
+  private drawWave(e: number): void {
+    const g = this.waveGfx;
+    const r = this.radius;
+    const bx = Math.cos(this.waveAngle) * r;
+    const by = Math.sin(this.waveAngle) * r;
+    const grow = e * 2 * r;
+    g.clear().setVisible(true);
+    fillLens(g, 0, 0, r, bx, by, grow, COLORS.factionDark.player);
+    fillLens(g, 0, -r * NODE_LIP, r * (1 - NODE_LIP), bx, by, grow, COLORS.faction.player);
+    g.lineStyle(Math.max(2, r * 0.09), COLORS.outline, 1).strokeCircle(0, 0, r);
   }
 
   /** A unit left the node (FX-3): squash and white flash; overlapping releases restart them (max, not sum). */
@@ -193,6 +230,8 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.drawnKey = '';
     this.drawnCapKey = '';
     this.drawnShield = false;
+    this.waveFrom = null;
+    this.captureAngle = null;
     this.drawHighlight();
     this.shown.reset(node.owner, visibleTroops(node.troops));
     this.releasedSeen = node.released;
@@ -206,10 +245,19 @@ export class NodeView extends Phaser.GameObjects.Container {
   sync(node: NodeState, now: number): number {
     const changed = this.shown.update(now, node.owner, visibleTroops(node.troops));
     const owner = this.shown.owner;
-    const key = `${owner}|${node.kind}|${node.size}|${node.building?.type ?? '-'}|${node.building?.level ?? 0}|${node.hasGoldVein}|${this.radius}`;
+    // A capture by the player shows as a wave (FX-7): the body keeps the old owner until it has passed.
+    if (changed & SHOWN_OWNER_CHANGED) {
+      this.waveFrom = this.fx && owner === 'player' && this.captureAngle !== null ? this.shown.previousOwner : null;
+      this.waveAt = now;
+      this.waveAngle = this.captureAngle ?? 0;
+      this.captureAngle = null;
+    }
+    if (this.waveFrom !== null && now - this.waveAt >= CAPTURE_FX.waveMs) this.waveFrom = null;
+    const bodyOwner = this.waveFrom ?? owner;
+    const key = `${bodyOwner}|${node.kind}|${node.size}|${node.building?.type ?? '-'}|${node.building?.level ?? 0}|${node.hasGoldVein}|${this.radius}`;
     if (key !== this.drawnKey) {
       this.drawnKey = key;
-      this.drawBody(node, owner);
+      this.drawBody(node, bodyOwner);
     }
     const troops = this.shown.troops;
     if (troops !== this.drawnCount) {
@@ -383,6 +431,32 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.bodyArt.destroy();
     this.cap.destroy();
   }
+}
+
+/** Fills the part of circle A (center ax, ay, radius ra) inside circle B (bx, by, rb): the lens between two arcs. */
+function fillLens(g: Phaser.GameObjects.Graphics, ax: number, ay: number, ra: number, bx: number, by: number, rb: number, color: number): void {
+  if (rb <= 0) return;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const d = Math.hypot(dx, dy);
+  g.fillStyle(color, 1);
+  if (d + ra <= rb) {
+    g.fillCircle(ax, ay, ra);
+    return;
+  }
+  if (d >= ra + rb) return;
+  if (d + rb <= ra) {
+    g.fillCircle(bx, by, rb);
+    return;
+  }
+  const phi = Math.atan2(dy, dx);
+  const alpha = Math.acos((d * d + ra * ra - rb * rb) / (2 * d * ra));
+  const beta = Math.acos((d * d + rb * rb - ra * ra) / (2 * d * rb));
+  g.beginPath();
+  g.arc(ax, ay, ra, phi - alpha, phi + alpha);
+  g.arc(bx, by, rb, phi + Math.PI - beta, phi + Math.PI + beta);
+  g.closePath();
+  g.fillPath();
 }
 
 /** 0..1: 1 when an effect just started, fading linearly to 0 after `ms`. */

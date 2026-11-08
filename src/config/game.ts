@@ -209,6 +209,30 @@ export const BROKEN_STREAM_FX = {
   fadeMs: 200,
 } as const;
 
+/**
+ * A capture by the player (docs/FX.md FX-7): the circle recolors in a wave from the side the capturing unit came
+ * from, two rings of the player's light tone spread out, confetti bursts. CSS px, ms.
+ */
+export const CAPTURE_FX = {
+  /** The recolor wave: a circle growing from the rim on the attacker's side over the node, ease-out cubic. */
+  waveMs: 500,
+  /** Rings: [thickness, how far beyond the node radius it grows, ms, delay]. */
+  rings: [
+    { widthPx: 5, growPx: 70, ms: 600, delayMs: 0 },
+    { widthPx: 3, growPx: 45, ms: 600, delayMs: 120 },
+  ],
+  /** Ring images in the pool (two per capture). */
+  ringPool: 6,
+  /** Confetti: one emitter, at most `max` pieces alive. */
+  confettiMax: 300,
+  confetti: { count: 40, cone: Math.PI, speed: 240, speedMin: 0.4, speedMax: 1.2, lifeMin: 500, lifeMax: 1000, sizeMin: 2, sizeMax: 5 },
+  /** Gravity on the confetti, CSS px/s²; their turn, degrees per second per CSS px/s of sideways speed. */
+  confettiGravity: 320,
+  confettiSpin: 3,
+  /** Blue, light blue, amber, light amber, teal. */
+  confettiColors: [0x3b82f6, 0x93c5fd, 0xf59e0b, 0xfcd34d, 0x2dd4bf],
+} as const;
+
 /** Textures of the battle effects (docs/FX.md), baked in BootScene. */
 export const FX_TEXTURES = {
   /** A white square every particle is drawn with (tinted), game px. */
