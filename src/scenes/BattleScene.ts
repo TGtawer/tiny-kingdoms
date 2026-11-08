@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DRAGON, ECONOMY, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { CAPTURE_FX, COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, FX_COLORS, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, SPARK_FX, UNITS_FX, type JingleId } from '../config/game';
+import { CAPTURE_FX, COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, FX_COLORS, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, SPARK_FX, UNITS_FX, VICTORY_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -49,6 +49,7 @@ import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
 import { ParticleBursts } from '../view/ParticleBursts';
 import { CaptureRings } from '../view/CaptureRings';
+import { VictoryWave } from '../view/VictoryWave';
 import { audioFiles, canPlayJingle, playJingle, playMusic, setMusicDucked, stopMusic } from '../view/music';
 import { SettingsPanel } from '../view/SettingsPanel';
 import { isSoundEnabled, playSfx } from '../view/sound';
@@ -126,6 +127,9 @@ export class BattleScene extends Phaser.Scene {
   private lastHitStopAt = -Infinity;
   private hitStopUntil = -Infinity;
   private readonly feedback: CaptureFeedback = { shake: 'none', hitStop: false };
+  /** FX-9: the victory wave (null with `?perf=nofx`) and the node the player captured last (its fallback origin). */
+  private victoryWave: VictoryWave | null = null;
+  private lastPlayerCapture: string | null = null;
   /** Last time the clash sound played (rate-limited). */
   private lastClashSoundAt = -Infinity;
   /** Dev only: FPS and unit counter. */
@@ -240,6 +244,8 @@ export class BattleScene extends Phaser.Scene {
     this.confetti = this.fx
       ? new ParticleBursts(this, 47, CAPTURE_FX.confettiMax, { gravity: CAPTURE_FX.confettiGravity, spin: CAPTURE_FX.confettiSpin })
       : null;
+    this.victoryWave = this.confetti ? new VictoryWave(this, 43, this.confetti) : null;
+    this.lastPlayerCapture = null;
     for (const view of this.nodeViews.values()) view.fx = this.fx;
     if (import.meta.env.DEV) {
       if (DEV_TOOLS.showFps) this.fpsText = this.add.text(0, 0, '', textStyle(13)).setStroke('#1f2937', px(3)).setDepth(400);
@@ -565,10 +571,25 @@ export class BattleScene extends Phaser.Scene {
     stopMusic(MUSIC.endFadeMs);
     if (!withJingle && !silent) playSfx(won ? 'victory' : 'defeat');
     if (won) this.vibrate(HAPTICS.victory);
-    this.time.delayedCall(RESULT_DELAY_MS, () => {
+    const wave = won && this.startVictoryWave();
+    this.time.delayedCall(wave ? VICTORY_FX.resultDelayMs : RESULT_DELAY_MS, () => {
       if (withJingle) playJingle(jingle);
       this.showResult(winner, reason, reward.crystals, stars);
     });
+  }
+
+  /**
+   * The victory wave (docs/FX.md FX-9) from the player's capital, or from the node the player captured last if the
+   * capital is not theirs. False when there is none (effects off or no origin).
+   */
+  private startVictoryWave(): boolean {
+    if (!this.victoryWave) return false;
+    const capital = this.world.capitals.player;
+    const originId = capital && this.world.nodes[capital]?.owner === 'player' ? capital : this.lastPlayerCapture;
+    const origin = originId ? this.nodeViews.get(originId) : undefined;
+    if (!origin) return false;
+    this.victoryWave.start(origin, [...this.nodeViews.values()], this.time.now);
+    return true;
   }
 
   private showResult(winner: Side, reason: OutcomeReason, crystals: number, checks: StarChecks): void {
@@ -720,6 +741,7 @@ export class BattleScene extends Phaser.Scene {
     this.units.render(world, this.layoutField, alpha);
     this.flashes.update(this.time.now);
     this.captureRings?.update(this.time.now);
+    this.victoryWave?.update(this.time.now);
     this.updateFps();
 
     this.drawDragLines();
@@ -1068,6 +1090,7 @@ export class BattleScene extends Phaser.Scene {
       ringBurst(this, view.x, view.y, view.radius, COLORS.faction[owner]);
     }
     if (owner === 'player') {
+      this.lastPlayerCapture = view.nodeId;
       playSfx('capture');
       this.vibrate(HAPTICS.short);
       const enemyCapital = isRival('player', before) && view.capital;

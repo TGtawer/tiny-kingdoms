@@ -248,6 +248,21 @@ export const CAPTURE_FX = {
   hitStopAfterLossMs: 5000,
 } as const;
 
+/**
+ * The victory wave (docs/FX.md FX-9): from the player's capital a light circle crosses the whole field in waveMs,
+ * before the result panel (which waits resultDelayMs after a win instead of the usual delay). CSS px, ms.
+ */
+export const VICTORY_FX = {
+  waveMs: 1000,
+  resultDelayMs: 1100,
+  fillAlpha: 0.16,
+  lineAlpha: 0.7,
+  lineWidthPx: 4,
+  /** A little confetti from every node the wave reaches (the capture confetti's emitter). */
+  confetti: { ...CAPTURE_FX.confetti, count: 14 },
+  confettiColors: CAPTURE_FX.confettiColors,
+} as const;
+
 /** Textures of the battle effects (docs/FX.md), baked in BootScene. */
 export const FX_TEXTURES = {
   /** A white square every particle is drawn with (tinted), game px. */
