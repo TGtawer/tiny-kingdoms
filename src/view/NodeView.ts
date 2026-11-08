@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { TICK_MS } from '../config/balance';
-import { COLORS, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
+import { COLORS, NODE_FX, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
 import type { NodeState, Owner } from '../core/sim/World';
@@ -38,6 +38,13 @@ export class NodeView extends Phaser.GameObjects.Container {
 
   /** Circle, badges, crown: baked (PF-5). */
   private readonly bodyArt: BakedGraphics;
+  /**
+   * The body and the capacity arc in their own container: the effects of docs/FX.md scale and shift it (FX-1), while
+   * `pop()` tweens the node container itself, so the two never overwrite each other. The count stays outside.
+   */
+  private readonly layer: Phaser.GameObjects.Container;
+  /** Breathing phase, random per node, so the nodes breathe out of step. */
+  private readonly breathPhase = Math.random() * Math.PI * 2;
   private readonly ring: Phaser.GameObjects.Graphics;
   /** Capacity arc around the circle: how full the node is. Baked at each of its 48 steps (PF-3). */
   private readonly cap: BakedGraphics;
@@ -67,8 +74,20 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.countText = scene.add.text(0, 0, '', textStyle(18)).setOrigin(0.5);
     this.capText = scene.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setVisible(false);
     this.shieldGfx = scene.add.graphics();
-    this.add([this.ring, this.cap.image, this.bodyArt.image, this.countText, this.capText, this.shieldGfx]);
+    this.layer = scene.make.container({}, false);
+    this.layer.add([this.cap.image, this.bodyArt.image]);
+    this.add([this.ring, this.layer, this.countText, this.capText, this.shieldGfx]);
     scene.add.existing(this);
+  }
+
+  /**
+   * Per-frame node effects (docs/FX.md), from the scene time `now`, ms. Off (`fx` false: dev `?perf=nofx`) the layer
+   * stays at rest.
+   */
+  animate(now: number, fx: boolean): void {
+    if (!fx) return;
+    const breath = 1 + NODE_FX.breathAmp * Math.sin((NODE_FX.breathSpeed * now) / 1000 + this.breathPhase);
+    this.layer.setScale(breath);
   }
 
   /** Re-positions and resizes after a layout change. */

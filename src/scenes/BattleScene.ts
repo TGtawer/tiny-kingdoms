@@ -142,6 +142,8 @@ export class BattleScene extends Phaser.Scene {
   private uiEvents: UiEvent[] = [];
   /** Simulation speed: 1, or SPEED_UP.multiplier while the speed-up is on. */
   private speed = 1;
+  /** Battle effects of docs/FX.md; off with the dev flag `?perf=nofx` (A/B profiling, FX-0). */
+  private fx = true;
 
   constructor() {
     super('BattleScene');
@@ -167,6 +169,7 @@ export class BattleScene extends Phaser.Scene {
     this.armed = null;
     this.uiEvents = [];
     this.speed = 1;
+    this.fx = !(import.meta.env.DEV && perfFlag('nofx'));
     this.infoLabel = null;
     this.stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
     this.mapReveal = null;
@@ -658,6 +661,7 @@ export class BattleScene extends Phaser.Scene {
       const view = this.nodeViews.get(node.id)!;
       if (view.sync(node, this.time.now) & SHOWN_OWNER_CHANGED) this.showCapture(view);
       view.setHighlight(this.highlightFor(node));
+      view.animate(this.time.now, this.fx);
     }
 
     this.units.render(world, this.layoutField, alpha);

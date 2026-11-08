@@ -124,6 +124,17 @@ export const UNITS_FX = {
   clashSoundEveryMs: 80,
 } as const;
 
+/**
+ * Node effects in battle (docs/FX.md FX-1…FX-3): the node's inner layer (body and capacity arc) breathes, squashes
+ * on a hit or a release and flashes white; the count jumps; an own node trembles when hit. Animated by hand from
+ * the scene time, no tweens. Times ms, sizes CSS px.
+ */
+export const NODE_FX = {
+  /** Breathing: scale 1 + amp · sin(speed · t + phase), t in s, a random phase per node. */
+  breathAmp: 0.035,
+  breathSpeed: 2,
+} as const;
+
 /** Dev-only helpers (never in a production build). */
 export const DEV_TOOLS = {
   /** FPS and unit counter in the battle (dev server only). */
