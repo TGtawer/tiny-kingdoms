@@ -263,6 +263,18 @@ export const VICTORY_FX = {
   confettiColors: CAPTURE_FX.confettiColors,
 } as const;
 
+/**
+ * Tower zones on the roads (docs/TOWER.md TW-3, variant «А · Полоса»): the band is as wide as the road with its edge
+ * (RoadView.roadEdgeWidth) and starts under the node's circle; the zone's length is BUILDINGS.tower.zone.
+ */
+export const TOWER_ZONE = {
+  bandAlpha: 0.5,
+  /** The band starts this share of the node radius from the center (hidden under the circle). */
+  startOfRadius: 0.6,
+  /** The tick across the road at the zone border, CSS px. */
+  tickWidthPx: 3.5,
+} as const;
+
 /** Textures of the battle effects (docs/FX.md), baked in BootScene. */
 export const FX_TEXTURES = {
   /** A white square every particle is drawn with (tinted), game px. */

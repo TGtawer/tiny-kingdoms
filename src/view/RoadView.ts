@@ -3,6 +3,16 @@ import { COLORS } from '../config/game';
 import type { World } from '../core/sim/World';
 import { px, type ScreenLayout } from './layout';
 
+/** Width of a road's sandy surface on screen. */
+export function roadWidth(layout: ScreenLayout): number {
+  return Math.max(px(8), layout.scale * 0.016);
+}
+
+/** Width of a road with its brown edge on both sides: what is drawn first, under the surface. */
+export function roadEdgeWidth(layout: ScreenLayout): number {
+  return roadWidth(layout) + px(5);
+}
+
 /**
  * All roads in a single Graphics object; redrawn only on layout change. It is not on the display list: the battle
  * bakes it with the meadow into one texture (view/BakedLayer.ts, docs/PERF.md PF-G).
@@ -17,7 +27,7 @@ export class RoadView {
   draw(world: World, layout: ScreenLayout): void {
     const g = this.graphics;
     g.clear();
-    const width = Math.max(px(8), layout.scale * 0.016);
+    const width = roadWidth(layout);
     const segments = world.roads.map(([a, b]) => {
       const na = world.nodes[a]!;
       const nb = world.nodes[b]!;
@@ -25,9 +35,10 @@ export class RoadView {
     });
 
     // Edge first, then the sandy surface on top, then dashes down the middle.
-    g.lineStyle(width + px(5), COLORS.roadEdge, 1);
+    const edge = roadEdgeWidth(layout);
+    g.lineStyle(edge, COLORS.roadEdge, 1);
     for (const [p, q] of segments) g.lineBetween(p.x, p.y, q.x, q.y);
-    for (const [p] of segments) g.fillStyle(COLORS.roadEdge, 1).fillCircle(p.x, p.y, (width + px(5)) / 2);
+    for (const [p] of segments) g.fillStyle(COLORS.roadEdge, 1).fillCircle(p.x, p.y, edge / 2);
     g.lineStyle(width, COLORS.road, 1);
     for (const [p, q] of segments) g.lineBetween(p.x, p.y, q.x, q.y);
 

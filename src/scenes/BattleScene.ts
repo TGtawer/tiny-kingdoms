@@ -46,6 +46,7 @@ import { SHOWN_OWNER_CHANGED } from '../view/displayFilter';
 import { PERF_AUTO_END_MS, perfFlag } from '../dev/perfFlags';
 import { BakedLayer } from '../view/BakedLayer';
 import { RoadView } from '../view/RoadView';
+import { TowerZoneView } from '../view/TowerZoneView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
 import { ParticleBursts } from '../view/ParticleBursts';
 import { CaptureRings } from '../view/CaptureRings';
@@ -111,6 +112,9 @@ export class BattleScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
   private ground!: BakedLayer;
   private roads!: RoadView;
+  /** Tower zones on the roads (docs/TOWER.md TW-3), baked with the meadow and the roads; re-baked when dirty. */
+  private towerZones!: TowerZoneView;
+  private groundDirty = false;
   private dragLines!: Phaser.GameObjects.Graphics;
   /** All units on the field, one batch (under the nodes, so a unit leaves and enters a node from its rim). */
   private units!: UnitsView;
@@ -238,6 +242,8 @@ export class BattleScene extends Phaser.Scene {
     this.ground = new BakedLayer(this, 'battle-ground');
     this.background = this.make.graphics({}, false);
     this.roads = new RoadView(this);
+    this.towerZones = new TowerZoneView(this);
+    this.groundDirty = false;
     this.units = new UnitsView(this, this.fx);
     this.capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
     for (const node of Object.values(this.world.nodes)) {
@@ -289,6 +295,7 @@ export class BattleScene extends Phaser.Scene {
       // Off the display list, so the scene doesn't destroy them itself.
       this.background.destroy();
       this.roads.destroy();
+      this.towerZones.destroy();
       this.tutorialView?.destroy();
       this.tutorialView = null;
       setMusicDucked(false);
@@ -399,6 +406,8 @@ export class BattleScene extends Phaser.Scene {
               getStore(this).flush();
             }
           }
+          // A new tower draws its zone on the roads (TW-3).
+          if (cmd.type === 'build' && cmd.building === 'tower') this.groundDirty = true;
           const view = this.nodeViews.get(cmd.nodeId)!;
           pop(this, view);
           ringBurst(this, view.x, view.y, view.radius, COLORS.gold);
@@ -725,14 +734,22 @@ export class BattleScene extends Phaser.Scene {
     this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom, top));
     drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
-    this.ground.bake(w, h, [this.background, this.roads.graphics]);
     this.units.layout(this.layoutField);
     this.captureRings?.layout(nodes.map((n) => this.layoutField.nodeRadius(n.size)));
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
+    // After the nodes: the zones take the owner each node shows.
+    this.drawTowerZones();
+    this.ground.bake(w, h, [this.background, this.roads.graphics], [this.towerZones.graphics]);
     // Bottom-left, above the bottom bar: clear of the top bar and the goal plaque.
     this.fpsText?.setPosition(px(8), h - px(HUD.bottomBar + 22));
     this.hud.layout();
     this.tutorialView?.layout();
+  }
+
+  /** Tower zones in the owner each node shows (docs/TOWER.md TW-3); baked on top of the meadow and the roads. */
+  private drawTowerZones(): void {
+    this.towerZones.draw(this.world, this.layoutField, (id) => this.nodeViews.get(id)?.shown.owner ?? this.world.nodes[id]!.owner);
+    this.groundDirty = false;
   }
 
   private render(alpha: number): void {
@@ -749,6 +766,11 @@ export class BattleScene extends Phaser.Scene {
       }
       if (this.fx) view.syncBrokenStream(world, node, this.time.now);
       view.animate(this.time.now, this.fx);
+    }
+    // A tower built or a node with a tower recolored: only the zones are redrawn over the cached meadow and roads.
+    if (this.groundDirty) {
+      this.drawTowerZones();
+      this.ground.rebakeOverlay([this.towerZones.graphics]);
     }
 
     this.units.render(world, this.layoutField, alpha);
@@ -1101,6 +1123,8 @@ export class BattleScene extends Phaser.Scene {
 
   /** The node just showed a new owner (PLAYTEST-1 F-2): pop, burst, sound and vibration. */
   private showCapture(view: NodeView): void {
+    // A tower's zone takes the new owner's color (TW-3).
+    if (this.world.nodes[view.nodeId]!.building?.type === 'tower') this.groundDirty = true;
     const owner = view.shown.owner;
     const before = view.shown.previousOwner;
     pop(this, view);
