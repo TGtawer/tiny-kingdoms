@@ -135,6 +135,9 @@ export class BattleScene extends Phaser.Scene {
   /** Dev only: FPS and unit counter. */
   private fpsText: Phaser.GameObjects.Text | null = null;
   private fpsShownAt = 0;
+  /** Dev only: frames and the longest frame (ms) since the counter was last shown. */
+  private fpsFrames = 0;
+  private fpsWorstMs = 0;
   /** Dev only: the stress driver on dev_stress (instead of the AIs). */
   private stress: StressState | null = null;
   /** Dev only: the contest driver on dev_contest (instead of the AIs). */
@@ -193,6 +196,9 @@ export class BattleScene extends Phaser.Scene {
     this.lastHitStopAt = -Infinity;
     this.hitStopUntil = -Infinity;
     this.fpsText = null;
+    this.fpsFrames = 0;
+    this.fpsWorstMs = 0;
+    this.fpsShownAt = this.time.now;
     this.queue = [];
     this.accumulator = 0;
     this.paused = false;
@@ -757,9 +763,18 @@ export class BattleScene extends Phaser.Scene {
 
   /** Dev counter, refreshed twice a second (a Text redraw per frame would cost more than the units). */
   private updateFps(): void {
-    if (!this.fpsText || this.time.now - this.fpsShownAt < 500) return;
+    if (!this.fpsText) return;
+    // The real rate over the window, not Phaser's actualFps: that one is a moving average updated once a second
+    // with a weight of 0.25, so a single slow frame keeps it below 60 for ~10 s (docs/PERF.md PF-6).
+    this.fpsFrames++;
+    this.fpsWorstMs = Math.max(this.fpsWorstMs, this.game.loop.rawDelta);
+    const elapsed = this.time.now - this.fpsShownAt;
+    if (elapsed < 500) return;
+    const fps = Math.round((this.fpsFrames * 1000) / elapsed);
+    this.fpsText.setText(`FPS ${fps} · max ${Math.round(this.fpsWorstMs)} ms · units ${this.world.units.length}`);
     this.fpsShownAt = this.time.now;
-    this.fpsText.setText(`FPS ${Math.round(this.game.loop.actualFps)} · units ${this.world.units.length}`);
+    this.fpsFrames = 0;
+    this.fpsWorstMs = 0;
   }
 
   private highlightFor(node: NodeState): Highlight {

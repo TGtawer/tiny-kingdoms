@@ -11,6 +11,8 @@
 //          the first battle after the page loads vs. the same battle restarted in that page (PF-6): long frames with
 //          their time, texture counts first seen (each may compile a shader) and a CPU profile of each window
 //        --perf nofx: extra dev flags for the battle page (?perf=..., src/dev/perfFlags.ts), e.g. A/B of docs/FX.md effects
+//        --dpr 1.5: device pixel ratio of the page (Windows display scaling; the game renders at up to 2×)
+//        --audio: sound on and autoplay allowed (music plays as for a player; by default the browser is muted)
 //        --mobile: an Android user agent, so Phaser renders as on a phone (autoMobileTextures: one texture per batch)
 // Browser: CHROME_PATH, or Chrome / Edge found in the usual places. The page side is src/dev/profiler.ts (?profile).
 import { spawn } from 'node:child_process';
@@ -41,6 +43,8 @@ const { values } = parseArgs({
     record: { type: 'string', default: '10' },
     cpuprofile: { type: 'boolean', default: false },
     mobile: { type: 'boolean', default: false },
+    audio: { type: 'boolean', default: false },
+    dpr: { type: 'string', default: '1' },
     perf: { type: 'string', default: '' },
     first: { type: 'boolean', default: false },
   },
@@ -71,7 +75,7 @@ async function openPage(width, height) {
   const profile = mkdtempSync(join(tmpdir(), 'tk-profile-'));
   const proc = spawn(
     browserPath,
-    ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--hide-scrollbars', '--mute-audio', `--window-size=${width},${height}`, 'about:blank'],
+    ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--hide-scrollbars', ...(values.audio ? ['--autoplay-policy=no-user-gesture-required'] : ['--mute-audio']), `--window-size=${width},${height}`, 'about:blank'],
     { stdio: 'ignore' },
   );
   let target;
@@ -113,7 +117,7 @@ async function openPage(width, height) {
   };
   await send('Runtime.enable');
   await send('Page.enable');
-  await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: Number(values.dpr), mobile: false });
   // Phaser reads the user agent: as Android it batches one texture per draw call (autoMobileTextures), like a phone.
   if (values.mobile) {
     await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36' });
