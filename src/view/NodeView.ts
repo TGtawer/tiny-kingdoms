@@ -8,7 +8,7 @@ import { BakedGraphics } from './BakedGraphics';
 import { easeOutCubic } from './CaptureRings';
 import { DisplayFilter, SHOWN_OWNER_CHANGED } from './displayFilter';
 import { drawBuilding, drawCrown, drawKind } from './icons';
-import { px, textStyle, type ScreenLayout } from './layout';
+import { px, textStyle, type Point, type ScreenLayout } from './layout';
 
 export type Highlight = 'none' | 'selected' | 'target' | 'fireball' | 'reinforcement' | 'shield' | 'hint';
 
@@ -202,6 +202,13 @@ export class NodeView extends Phaser.GameObjects.Container {
     g.lineStyle(Math.max(2, r * 0.09), COLORS.outline, 1).strokeCircle(0, 0, r);
   }
 
+  /** Screen point of the building badge's center (where a tower's arrows leave, docs/TOWER.md TW-4). */
+  badgePoint(out: Point): Point {
+    out.x = this.x + this.radius * BADGE_OFFSET;
+    out.y = this.y - this.radius * BADGE_OFFSET;
+    return out;
+  }
+
   /** A unit left the node (FX-3): squash and white flash; overlapping releases restart them (max, not sum). */
   release(now: number): void {
     this.punchAt = now;
@@ -388,8 +395,8 @@ export class NodeView extends Phaser.GameObjects.Container {
 
     // Building badge at the top right, with level pips.
     if (node.building) {
-      const bx = r * 0.72;
-      const by = -r * 0.72;
+      const bx = r * BADGE_OFFSET;
+      const by = -r * BADGE_OFFSET;
       const br = Math.max(px(13), r * 0.46);
       g.fillStyle(COLORS.panel, 1).fillCircle(bx, by, br);
       g.lineStyle(Math.max(1.5, br * 0.14), COLORS.outline, 1).strokeCircle(bx, by, br);
@@ -458,6 +465,9 @@ function fillLens(g: Phaser.GameObjects.Graphics, ax: number, ay: number, ra: nu
   g.closePath();
   g.fillPath();
 }
+
+/** The building badge sits this share of the radius right of and above the center. */
+const BADGE_OFFSET = 0.72;
 
 /** 0..1: 1 when an effect just started, fading linearly to 0 after `ms`. */
 function fade(elapsed: number, ms: number): number {

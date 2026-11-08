@@ -47,6 +47,7 @@ import { PERF_AUTO_END_MS, perfFlag } from '../dev/perfFlags';
 import { BakedLayer } from '../view/BakedLayer';
 import { RoadView } from '../view/RoadView';
 import { TowerZoneView } from '../view/TowerZoneView';
+import { TowerShotView } from '../view/TowerShotView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
 import { ParticleBursts } from '../view/ParticleBursts';
 import { CaptureRings } from '../view/CaptureRings';
@@ -120,6 +121,9 @@ export class BattleScene extends Phaser.Scene {
   private units!: UnitsView;
   /** Capped flashes of clashes, tower shots and trades at nodes. */
   private flashes!: FlashPool;
+  /** Arrows, ghosts and flashes of tower shots (docs/TOWER.md TW-4). */
+  private towerShots!: TowerShotView;
+  private readonly badge = { x: 0, y: 0 };
   /** Sparks of hits and releases (docs/FX.md FX-2, FX-3); null with `?perf=nofx`. */
   private sparks: ParticleBursts | null = null;
   /** Rings and confetti of a capture by the player (FX-7); null with `?perf=nofx`. */
@@ -251,6 +255,7 @@ export class BattleScene extends Phaser.Scene {
       this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id), mageTower));
     }
     this.flashes = new FlashPool(this, 45);
+    this.towerShots = new TowerShotView(this, 47, this.units);
     this.sparks = this.fx ? new ParticleBursts(this, 46, SPARK_FX.max) : null;
     this.captureRings = this.fx ? new CaptureRings(this, 44) : null;
     this.confetti = this.fx
@@ -466,10 +471,10 @@ export class BattleScene extends Phaser.Scene {
         break;
       }
       case 'towerShot': {
-        // A tower shot a unit on its road (docs/TOWER.md): a fire flash where it died.
-        // TODO(design): TW-4 — the arrow from the tower badge and the "ghost" figure replace this flash.
-        const p = this.units.screenAt(this.world, this.layoutField, event.lane, event.progress, { x: 0, y: 0 });
-        this.flashes.flash(p.x, p.y, COLORS.fireball, this.time.now);
+        // A tower shot a unit on its road (docs/TOWER.md TW-4): an arrow from its badge, a fire flash where it died.
+        // The shot came during the tick before world.tick.
+        const badge = this.nodeViews.get(event.nodeId)!.badgePoint(this.badge);
+        this.towerShots.shoot(badge.x, badge.y, event.owner, event.unitId, event.lane, event.progress, this.world.tick - 1, this.time.now);
         break;
       }
       case 'clash': {
@@ -774,6 +779,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.units.render(world, this.layoutField, alpha);
+    this.towerShots.update(this.time.now);
     this.flashes.update(this.time.now);
     this.captureRings?.update(this.time.now);
     this.victoryWave?.update(this.time.now);
