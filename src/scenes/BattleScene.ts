@@ -71,6 +71,11 @@ const SPARK_COLORS: Record<Owner, readonly number[]> = {
   neutral: [COLORS.faction.neutral, FX_COLORS.factionLight.neutral],
 };
 
+/** Release sparks (FX-3): the player's light tone. */
+const RELEASE_COLORS: readonly number[] = [FX_COLORS.factionLight.player];
+/** How many of the newest units a release looks through for the one that just left (its road gives the direction). */
+const RELEASE_LOOKBACK = 16;
+
 /** Delay before the result panel, so the final capture is visible. */
 const RESULT_DELAY_MS = 700;
 
@@ -677,6 +682,11 @@ export class BattleScene extends Phaser.Scene {
       const view = this.nodeViews.get(node.id)!;
       if (view.sync(node, this.time.now) & SHOWN_OWNER_CHANGED) this.showCapture(view);
       view.setHighlight(this.highlightFor(node));
+      if (node.released !== view.releasedSeen) {
+        view.releasedSeen = node.released;
+        // Only the player's own nodes (docs/FX.md, open question 1).
+        if (this.sparks && node.owner === 'player') this.showRelease(view, node);
+      }
       view.animate(this.time.now, this.fx);
     }
 
@@ -992,6 +1002,29 @@ export class BattleScene extends Phaser.Scene {
     if (now - view.lastSparksAt < SPARK_FX.hitEveryNodeMs) return;
     view.lastSparksAt = now;
     this.sparks!.burst(rimX, rimY, outwards, SPARK_FX.hit, SPARK_COLORS[attacker]);
+  }
+
+  /**
+   * A unit left an own node (docs/FX.md FX-3): the node squashes and flashes, light sparks fly from the rim towards
+   * the road the newest unit took. Several units in one frame show once (the impulses don't add up).
+   */
+  private showRelease(view: NodeView, node: NodeState): void {
+    view.release(this.time.now);
+    // The newest unit from this node: new units are at the end of world.units (swap-remove only moves old ones).
+    const units = this.world.units;
+    let to: NodeView | undefined;
+    for (let i = units.length - 1; i >= 0 && i >= units.length - RELEASE_LOOKBACK; i--) {
+      const route = units[i]!.route;
+      if (route.path[0] === node.id) {
+        to = this.nodeViews.get(route.path[1]!);
+        break;
+      }
+    }
+    if (!to) return;
+    const angle = Math.atan2(to.y - view.y, to.x - view.x);
+    const rimX = view.x + Math.cos(angle) * view.radius;
+    const rimY = view.y + Math.sin(angle) * view.radius;
+    this.sparks!.burst(rimX, rimY, angle, SPARK_FX.release, RELEASE_COLORS);
   }
 
   /** The node just showed a new owner (PLAYTEST-1 F-2): pop, burst, sound and vibration. */

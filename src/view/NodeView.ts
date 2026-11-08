@@ -57,6 +57,8 @@ export class NodeView extends Phaser.GameObjects.Container {
   private trembling = false;
   /** Last spark burst from this node (rate limit, FX-2). */
   lastSparksAt = -Infinity;
+  /** `released` of the node as of the last frame (FX-3): a release shows when it grows. */
+  releasedSeen = 0;
   private readonly ring: Phaser.GameObjects.Graphics;
   /** Capacity arc around the circle: how full the node is. Baked at each of its 48 steps (PF-3). */
   private readonly cap: BakedGraphics;
@@ -127,6 +129,12 @@ export class NodeView extends Phaser.GameObjects.Container {
     }
   }
 
+  /** A unit left the node (FX-3): squash and white flash; overlapping releases restart them (max, not sum). */
+  release(now: number): void {
+    this.punchAt = now;
+    this.flashAt = now;
+  }
+
   /** A unit hit the node (FX-2): squash, white flash, the count jumps; an own node also trembles. */
   hit(now: number, own: boolean): void {
     this.punchAt = now;
@@ -150,6 +158,7 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.drawnShield = false;
     this.drawHighlight();
     this.shown.reset(node.owner, visibleTroops(node.troops));
+    this.releasedSeen = node.released;
     this.sync(node, 0);
   }
 

@@ -176,6 +176,8 @@ export const SPARK_FX = {
   hit: { count: 6, cone: 0.8, speed: 170, speedMin: 0.4, speedMax: 1.2, lifeMin: 350, lifeMax: 600, sizeMin: 2, sizeMax: 4 },
   /** At most one hit burst per node this often (a mass assault must not make hundreds of particles). */
   hitEveryNodeMs: 100,
+  /** A unit leaves an own node (FX-3): light sparks of the player's side from the rim towards its road. */
+  release: { count: 3, cone: 0.5, speed: 100, speedMin: 0.8, speedMax: 1.2, lifeMin: 300, lifeMax: 600, sizeMin: 2, sizeMax: 4 },
 } as const;
 
 /** Dev-only helpers (never in a production build). */

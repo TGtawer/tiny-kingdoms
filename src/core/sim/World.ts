@@ -50,6 +50,11 @@ export interface NodeState {
   towerReadyAtMs: number;
   /** Active streams leaving the node (its own order and transit forwarding; citadel waves not counted). */
   streams: number;
+  /**
+   * Units the node released onto roads this battle (streams of every kind: orders, transit, citadel waves, raids).
+   * View only (docs/FX.md FX-3: the release effect compares it with the last frame); the rules never read it.
+   */
+  released: number;
 }
 
 /**
@@ -224,6 +229,7 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
       attackedUntilMs: 0,
       towerReadyAtMs: 0,
       streams: 0,
+      released: 0,
     };
   }
   const pairs = new Map<string, string[]>();
