@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { BattleScene } from '../scenes/BattleScene';
+import { BOOT_READY, BootScene } from '../scenes/BootScene';
 import { NodeView } from '../view/NodeView';
 import { UnitsView } from '../view/UnitsView';
 
@@ -79,6 +80,8 @@ export function installProfiler(game: Phaser.Game, search: string): void {
   const stopAt = params.has('stopAt') ? Number(params.get('stopAt')) : null;
 
   const interval = new Float64Array(MAX_FRAMES);
+  /** When each recorded frame ended, ms since the window started (long frames are listed with it). */
+  const frameAt = new Float64Array(MAX_FRAMES);
   const work = new Float64Array(MAX_FRAMES);
   const draws = new Float64Array(MAX_FRAMES);
   const updateMs = new Float64Array(MAX_FRAMES);
@@ -185,12 +188,22 @@ export function installProfiler(game: Phaser.Game, search: string): void {
     });
   }
 
+  // The loading screen (PF-6): when BootScene started and when it was done, ms since the page started loading.
+  const boot = { createdAt: 0, readyAt: 0 };
+  wrap(BootScene.prototype, 'create', (call) => {
+    boot.createdAt = Math.round(performance.now());
+    return call();
+  });
+  game.events.once(BOOT_READY, () => (boot.readyAt = Math.round(performance.now())));
+
   // Texture counts of image batches (PF-7): Phaser 4 compiles a shader program per count on first use.
-  const textureCounts = new Set<number>();
+  // Each count with the time it first appeared (performance.now(), ms): a first appearance may compile a shader (PF-6).
+  const textureCounts = new Map<number, number>();
   const quad = (Phaser.Renderer.WebGL.RenderNodes as unknown as Record<string, { prototype: object }>).BatchHandlerQuad;
   if (quad) {
     wrap(quad.prototype, 'finalizeTextureCount', (call, _self, args) => {
-      textureCounts.add(args[0] as number);
+      const n = args[0] as number;
+      if (!textureCounts.has(n)) textureCounts.set(n, performance.now());
       return call();
     });
   }
@@ -219,6 +232,7 @@ export function installProfiler(game: Phaser.Game, search: string): void {
     }
     if (!recording || frame >= MAX_FRAMES) return;
     interval[frame] = gap;
+    frameAt[frame] = now - startedAt;
     work[frame] = now - stepAt;
     draws[frame] = frameDraws;
     updateMs[frame] = frameUpdate;
@@ -299,7 +313,33 @@ export function installProfiler(game: Phaser.Game, search: string): void {
     },
     /** Texture counts image batches have used since the page loaded (each compiles a shader variant once). */
     textureCounts(): number[] {
-      return [...textureCounts].sort((a, b) => a - b);
+      return [...textureCounts.keys()].sort((a, b) => a - b);
+    },
+    /** Texture counts first seen during the last window: [count, ms since the window started] (PF-6). */
+    newTextureCounts(): Array<[number, number]> {
+      return [...textureCounts]
+        .filter(([, at]) => at >= startedAt)
+        .map(([n, at]): [number, number] => [n, Math.round(at - startedAt)])
+        .sort((a, b) => a[1] - b[1]);
+    },
+    /** Frames of the last window longer than `ms`: [ms since the window started, frame interval] (PF-6). */
+    longFrames(ms = 25): Array<[number, number]> {
+      const out: Array<[number, number]> = [];
+      for (let i = 0; i < frame; i++) if (interval[i]! > ms) out.push([Math.round(frameAt[i]!), Math.round(interval[i]! * 10) / 10]);
+      return out;
+    },
+    /** Restarts the battle in the same page (PF-6: the second battle, after everything was used once). */
+    restart(): void {
+      const scene = battle as unknown as { scene: Phaser.Scenes.ScenePlugin; level: { id: string } } | null;
+      if (!scene) return;
+      battle = null;
+      battleFrames = 0;
+      firstFrames.length = 0;
+      scene.scene.restart({ levelId: scene.level.id });
+    },
+    /** The loading screen's start and end, ms since the page started loading (PF-6). */
+    boot(): { createdAt: number; readyAt: number } {
+      return boot;
     },
     /** A battle has rendered at least once. */
     inBattle(): boolean {

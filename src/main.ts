@@ -5,7 +5,7 @@ import { initI18n } from './i18n/i18n';
 import { MockPlatform } from './platform/MockPlatform';
 import type { Platform } from './platform/Platform';
 import { BattleScene } from './scenes/BattleScene';
-import { BootScene } from './scenes/BootScene';
+import { BOOT_READY, BootScene } from './scenes/BootScene';
 import { ChapterMapScene } from './scenes/ChapterMapScene';
 import { MenuScene } from './scenes/MenuScene';
 import { registerServices } from './scenes/registry';
@@ -103,8 +103,9 @@ async function main(): Promise<void> {
     }
   });
 
-  // Signal readiness after the first frame has been rendered; audio files load in the background after that.
-  game.events.once(Phaser.Core.Events.POST_RENDER, () => {
+  // Signal readiness when the loading screen is done (BootScene warms the shaders up, docs/PERF.md PF-6); audio files
+  // load in the background after that.
+  game.events.once(BOOT_READY, () => {
     platform.ready();
     preloadSfx();
     preloadMusic();

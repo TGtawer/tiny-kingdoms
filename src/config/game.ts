@@ -296,6 +296,21 @@ export const SPARK_FX = {
   release: { count: 3, cone: 0.5, speed: 100, speedMin: 0.8, speedMax: 1.2, lifeMin: 300, lifeMax: 600, sizeMin: 2, sizeMax: 4 },
 } as const;
 
+/**
+ * The loading screen (BootScene, docs/PERF.md PF-6): a label and a progress bar while the shaders warm up. CSS px;
+ * `warmTexturePx` is the side of the invisible warm-up textures, game px.
+ */
+export const BOOT = {
+  textSize: 22,
+  /** The label sits this far above the screen center, the bar as far below. */
+  textGap: 18,
+  barWidth: 220,
+  barHeight: 14,
+  /** Side margin on narrow screens. */
+  margin: 24,
+  warmTexturePx: 2,
+} as const;
+
 /** Dev-only helpers (never in a production build). */
 export const DEV_TOOLS = {
   /** FPS and unit counter in the battle (dev server only). */

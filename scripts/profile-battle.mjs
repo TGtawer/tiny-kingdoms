@@ -7,6 +7,9 @@
 //          the battle result screen (PF-7): each variant ends the battle by a dev flag (?perf=win|lose|pause, see
 //          src/dev/perfFlags.ts), waits for the panel to settle, then records frames; medians over the runs.
 //        npm run profile -- --result --cpuprofile --variants victory,nostars   (+ where the frame time goes)
+//        npm run profile -- --first [--level c01_l06 --throttle 1 --record 12 --runs 2]
+//          the first battle after the page loads vs. the same battle restarted in that page (PF-6): long frames with
+//          their time, texture counts first seen (each may compile a shader) and a CPU profile of each window
 //        --perf nofx: extra dev flags for the battle page (?perf=..., src/dev/perfFlags.ts), e.g. A/B of docs/FX.md effects
 //        --mobile: an Android user agent, so Phaser renders as on a phone (autoMobileTextures: one texture per batch)
 // Browser: CHROME_PATH, or Chrome / Edge found in the usual places. The page side is src/dev/profiler.ts (?profile).
@@ -39,6 +42,7 @@ const { values } = parseArgs({
     cpuprofile: { type: 'boolean', default: false },
     mobile: { type: 'boolean', default: false },
     perf: { type: 'string', default: '' },
+    first: { type: 'boolean', default: false },
   },
 });
 
@@ -242,6 +246,40 @@ async function profileResult(base, variant, throttle, cpu) {
   }
 }
 
+/** PF-6: the first battle of a fresh page, then the same battle restarted in it; one CPU-profiled window each. */
+async function profileFirst(base) {
+  const page = await openPage(...values.size.split('x').map(Number));
+  const windows = [];
+  try {
+    const throttle = Number(values.throttle);
+    if (throttle > 1) await page.send('Emulation.setCPUThrottlingRate', { rate: throttle });
+    await page.send('Profiler.enable');
+    await page.send('Profiler.setSamplingInterval', { interval: 200 });
+    const perf = values.perf ? `&perf=${values.perf}` : '';
+    await page.send('Page.navigate', { url: `${base}?level=${values.level}&profile${perf}` });
+    for (const label of ['first battle', 'restarted']) {
+      if (label === 'restarted') await page.evaluate('window.__profile.restart()');
+      for (let i = 0; i < 600 && !(await page.evaluate('!!window.__profile && window.__profile.inBattle()')); i++) await sleep(25);
+      if (label === 'first battle') {
+        const b = await page.evaluate('window.__profile.boot()');
+        console.log(`   loading screen: ${b.readyAt - b.createdAt} ms (from ${b.createdAt} to ${b.readyAt} ms after the page started loading)`);
+      }
+      await page.send('Profiler.start');
+      await page.evaluate('window.__profile.start()');
+      await sleep(Number(values.record) * 1000);
+      const report = await page.evaluate('window.__profile.report()');
+      report.long = await page.evaluate('window.__profile.longFrames(25)');
+      report.newCounts = await page.evaluate('window.__profile.newTextureCounts()');
+      report.cpu = cpuTop((await page.send('Profiler.stop')).result.profile, 12);
+      windows.push({ label, ...report });
+    }
+    if (page.errors.length) console.log('errors:', page.errors.join(' | '));
+  } finally {
+    page.close();
+  }
+  return windows;
+}
+
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   return s.length % 2 ? s[(s.length - 1) / 2] : Math.round(((s[s.length / 2 - 1] + s[s.length / 2]) / 2) * 100) / 100;
@@ -251,7 +289,19 @@ const server = await createServer({ server: { port: 5310, strictPort: false }, l
 await server.listen();
 const base = server.resolvedUrls.local[0];
 try {
-  if (values.result) {
+  if (values.first) {
+    for (let run = 1; run <= Number(values.runs); run++) {
+      console.log(`
+=== run ${run}: ${values.level}, ${values.size}, CPU ×${values.throttle}, ${values.record} s per window${values.mobile ? ', mobile' : ''}`);
+      for (const w of await profileFirst(base)) {
+        const i = w.interval;
+        console.log(`-- ${w.label}: ${w.frames} frames, avg ${i.avg} / p95 ${i.p95} / p99 ${i.p99} / max ${i.max} ms; first frames ${w.firstFrames.slice(0, 5).join(', ')}`);
+        console.log(`   long frames (>25 ms) ${w.long.length}: ${w.long.map(([t, ms]) => `${t}:${ms}`).join(' ')}`);
+        console.log(`   new texture counts [count@ms]: ${w.newCounts.map(([n, t]) => `${n}@${t}`).join(' ') || '-'}`);
+        console.log(`   CPU self time ${w.cpu.totalMs} ms: ${w.cpu.top.map(([k, ms]) => `${ms} ${k}`).join(' | ')}`);
+      }
+    }
+  } else if (values.result) {
     const variants = values.variants.split(',');
     const throttles = values.throttles.split(',').map(Number);
     const runs = values.cpuprofile ? 1 : Number(values.runs);
