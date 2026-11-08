@@ -263,6 +263,41 @@ export const VICTORY_FX = {
   confettiColors: CAPTURE_FX.confettiColors,
 } as const;
 
+/**
+ * Tower zones on the roads (docs/TOWER.md TW-3, variant «А · Полоса»): the band is as wide as the road with its edge
+ * (RoadView.roadEdgeWidth) and starts under the node's circle; the zone's length is BUILDINGS.tower.zone.
+ */
+export const TOWER_ZONE = {
+  bandAlpha: 0.5,
+  /** The band starts this share of the node radius from the center (hidden under the circle). */
+  startOfRadius: 0.6,
+  /** The tick across the road at the zone border, CSS px. */
+  tickWidthPx: 3.5,
+} as const;
+
+/**
+ * A tower's shot (docs/TOWER.md TW-4, effect «Стрела»): an arrow flies from the tower badge to the unit along a low
+ * arc, then a fire flash where it died. Sizes CSS px, times ms.
+ */
+export const TOWER_SHOT = {
+  /** Arrows (and ghosts, and flashes) in flight at once; a shot beyond that shows nothing. */
+  pool: 16,
+  flightMs: 140,
+  /** Rise of the arc in the middle of the path (a sine over the flight). */
+  liftPx: 10,
+  /** The arrow is this share of the path long, tail behind the head. */
+  lengthShare: 0.25,
+  outlinePx: 3.2,
+  corePx: 1.6,
+  /** The arrow's light core. */
+  core: 0xffd28a,
+  /** The flash: radius fromPx → toPx over flashMs, fading; a light core of half the radius. */
+  flashMs: 280,
+  flashFromPx: 4,
+  flashToPx: 11,
+  flashAlpha: 0.85,
+} as const;
+
 /** Textures of the battle effects (docs/FX.md), baked in BootScene. */
 export const FX_TEXTURES = {
   /** A white square every particle is drawn with (tinted), game px. */

@@ -64,7 +64,7 @@
   "battle.speed": "×{mult}",
   "building.mine.desc": "Много золота",
   "building.barracks.desc": "Больше войск",
-  "building.tower.desc": "Бьёт врагов",
+  "building.tower.desc": "Бьёт на дорогах",
   "build.next.mine": "+{gold} золота/с",
   "build.next.barracks": "×{mult} войск, +{cap} мест",
   "build.next.tower": "{shots} выстр./с",

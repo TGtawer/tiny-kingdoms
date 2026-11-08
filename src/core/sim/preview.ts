@@ -1,4 +1,4 @@
-import { STREAM } from '../../config/balance';
+import { ARMY, BUILDINGS, STREAM } from '../../config/balance';
 import { defenseHits, towerRate } from './combat';
 import { sendAmount, visibleTroops, type SendMode } from './commands';
 import { armyPath } from './pathfinding';
@@ -14,19 +14,29 @@ export interface AttackPreview {
 }
 
 /**
- * Roughly how many of `sent` units a tower shoots while a send arrives (GDD 3.6, 6): the shot in reserve plus
- * rate × the time the longest stream takes to leave. Not exact — the streams of a multi-node swipe arrive in waves.
+ * How long a unit walks through the tower zone of `node` before it reaches the node, s (docs/TOWER.md): from the
+ * zone border (BUILDINGS.tower.zone from the center) to where units arrive (STREAM.edgeDist of the node).
+ */
+export function towerZoneSec(node: NodeState): number {
+  return Math.max(0, BUILDINGS.tower.zone - STREAM.edgeDist[node.size]) / ARMY.speed;
+}
+
+/**
+ * Roughly how many of `sent` units a tower shoots while a send arrives (docs/TOWER.md): the shot in reserve, then
+ * rate × (the time the longest stream takes to leave + the time its last unit walks through the zone) — the tower
+ * starts when the head of the column enters the zone and stops when the tail reaches the node. Not exact — the
+ * streams of a multi-node swipe arrive in waves.
  */
 export function towerKillsEstimate(node: NodeState, sent: number, longestStream: number): number {
   const rate = towerRate(node);
   if (rate <= 0 || sent <= 0) return 0;
   const releaseSec = longestStream / (STREAM.releasePerSec * STREAM.width);
-  return Math.min(sent, 1 + Math.floor(rate * releaseSec));
+  return Math.min(sent, 1 + Math.floor(rate * (releaseSec + towerZoneSec(node))));
 }
 
 /**
- * Outcome hint for sending from `sources` to `targetId`, with the rules of an arrival (combat.ts): tower shots
- * (approximately), then 1:1 trades (a fortress defender takes two), and one more unit to capture.
+ * Outcome hint for sending from `sources` to `targetId`: tower shots on the way (approximately, docs/TOWER.md), then
+ * the rules of an arrival (combat.ts): 1:1 trades (a fortress defender takes two), and one more unit to capture.
  * Not a guarantee: production at the target and clashes on the way are ignored.
  */
 export function previewAttack(

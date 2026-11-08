@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS, STREAM, TICK_MS } from '../../../src/config/balance';
+import { STREAM } from '../../../src/config/balance';
 import { arriveUnit, defenseHits } from '../../../src/core/sim/combat';
-import { step } from '../../../src/core/sim/tick';
 import type { Owner, World } from '../../../src/core/sim/World';
-import { drain, eventsOf, freezeEconomy, lineWorld } from '../helpers';
+import { freezeEconomy, lineWorld } from '../helpers';
 
 /** One unit of `owner` arriving at node `id` right now. */
 function arrive(world: World, id: string, owner: Owner = 'player') {
@@ -53,59 +52,6 @@ describe('a unit arriving at a node (GDD 3.6)', () => {
   });
 });
 
-describe('tower (GDD 3.6, BALANCE.md)', () => {
-  it('the first arriving unit always dies (a shot is held in reserve), the next one fights', () => {
-    const world = lineWorld({ E: { troops: 5, building: { type: 'tower', level: 1 } } });
-    expect(arriveMany(world, 'E', 2)).toEqual(['destroyedByTower', 'repelled']);
-    expect(world.nodes.E!.troops).toBe(4);
-  });
-
-  it.each([1, 2, 3] as const)('level %i kills about shotsPerSec units per second of a steady stream', (lvl) => {
-    const rate = BUILDINGS.tower.shotsPerSec[lvl - 1]!;
-    const world = freezeEconomy(lineWorld({ E: { troops: 1000, building: { type: 'tower', level: lvl } } }));
-    // Units arrive 5 per second for 4 seconds, as a stream would.
-    let killed = 0;
-    for (let t = 0; t < 40; t++) {
-      world.tick = t;
-      if (t % 2 === 0) killed += arrive(world, 'E').outcome === 'destroyedByTower' ? 1 : 0;
-    }
-    expect(killed).toBeGreaterThanOrEqual(Math.min(20, rate * 4));
-    expect(killed).toBeLessThanOrEqual(Math.min(20, rate * 4 + 1));
-  });
-
-  it('reloads for 1 / rate seconds after a shot', () => {
-    const world = lineWorld({ E: { troops: 50, building: { type: 'tower', level: 1 } } });
-    expect(arrive(world, 'E').outcome).toBe('destroyedByTower');
-    world.tick = 1000 / TICK_MS - 1;
-    expect(arrive(world, 'E').outcome).toBe('repelled');
-    world.tick = 1000 / TICK_MS;
-    expect(arrive(world, 'E').outcome).toBe('destroyedByTower');
-  });
-
-  it('does not shoot the owner’s own units', () => {
-    const world = lineWorld({ P: { troops: 5, building: { type: 'tower', level: 3 } } });
-    expect(arrive(world, 'P').outcome).toBe('reinforced');
-  });
-
-  it('neutral towers defend too', () => {
-    const world = lineWorld({ N: { troops: 0, building: { type: 'tower', level: 1 } } });
-    expect(arriveMany(world, 'N', 2)).toEqual(['destroyedByTower', 'captured']);
-  });
-
-  it('a stream into a tower loses the shot units', () => {
-    const world = freezeEconomy(lineWorld({ P: { troops: 20 }, N: { troops: 3, building: { type: 'tower', level: 3 } } }));
-    const events = [...step(world, [{ type: 'send', side: 'player', from: 'P', to: 'N' }]), ...drain(world)];
-    const outcomes = eventsOf(events, 'arrived').map((a) => a.outcome);
-    // Units come at 5/s against 3 shots/s: until the capture (~1.6 s) the tower takes the reserve shot + 3 per second.
-    const killed = outcomes.filter((o) => o === 'destroyedByTower').length;
-    expect(killed).toBeGreaterThanOrEqual(4);
-    expect(killed).toBeLessThanOrEqual(6);
-    expect(outcomes.filter((o) => o === 'repelled')).toHaveLength(3);
-    expect(outcomes.indexOf('captured')).toBe(killed + 3);
-    expect(world.nodes.N!.owner).toBe('player');
-  });
-});
-
 describe('capture and buildings', () => {
   it('a building of any type and level passes to the new owner intact (PLAYTEST-1 F-3)', () => {
     for (const type of ['barracks', 'mine'] as const) {
@@ -115,19 +61,5 @@ describe('capture and buildings', () => {
         expect(world.nodes.E).toMatchObject({ owner: 'player', building: { type, level } });
       }
     }
-  });
-
-  it('a captured tower keeps its level and its reload, and shoots at its former owner', () => {
-    const world = lineWorld({ E: { troops: 0, building: { type: 'tower', level: 2 } } });
-    expect(arrive(world, 'E').outcome).toBe('destroyedByTower');
-    const node = world.nodes.E!;
-    const readyAt = node.towerReadyAtMs;
-    expect(arrive(world, 'E').outcome).toBe('captured');
-    expect(node.building).toEqual({ type: 'tower', level: 2 });
-    expect(node.towerReadyAtMs).toBe(readyAt);
-    // The enemy comes back: the tower now kills enemy units.
-    world.nodes.E!.troops = 5;
-    world.tick += 100;
-    expect(arriveMany(world, 'E', 1, 'enemy')).toEqual(['destroyedByTower']);
   });
 });

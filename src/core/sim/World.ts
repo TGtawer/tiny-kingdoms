@@ -163,6 +163,8 @@ export interface World {
   laneIndex: Record<string, number>;
   /** Lanes that end at each node. */
   lanesInto: Record<string, number[]>;
+  /** Lanes of real roads (no portal links) that end at each node: what its tower covers (docs/TOWER.md). */
+  roadsInto: Record<string, number[]>;
   /** Units on the field heading to each node, by owner (AI and previews read this instead of scanning units). */
   incoming: Record<string, Record<Owner, number>>;
   sides: Record<Side, SideState>;
@@ -244,7 +246,7 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
   };
 
   const roads = level.roads.map(([a, b]) => [a, b] as [string, string]);
-  const { lanes, laneIndex, lanesInto } = buildLanes(nodes, roads, portals);
+  const { lanes, laneIndex, lanesInto, roadsInto } = buildLanes(nodes, roads, portals);
   const incoming: Record<string, Record<Owner, number>> = {};
   for (const id of Object.keys(nodes)) incoming[id] = { player: 0, enemy: 0, enemy2: 0, neutral: 0 };
 
@@ -258,6 +260,7 @@ export function createWorld(level: LevelData, options: WorldOptions = {}): World
     lanes,
     laneIndex,
     lanesInto,
+    roadsInto,
     incoming,
     sides: {
       player: {
@@ -296,11 +299,15 @@ function buildLanes(
   nodes: Record<string, NodeState>,
   roads: ReadonlyArray<readonly [string, string]>,
   portals: ReadonlyArray<readonly [string, string]>,
-): Pick<World, 'lanes' | 'laneIndex' | 'lanesInto'> {
+): Pick<World, 'lanes' | 'laneIndex' | 'lanesInto' | 'roadsInto'> {
   const lanes: Lane[] = [];
   const laneIndex: Record<string, number> = {};
   const lanesInto: Record<string, number[]> = {};
-  for (const id of Object.keys(nodes)) lanesInto[id] = [];
+  const roadsInto: Record<string, number[]> = {};
+  for (const id of Object.keys(nodes)) {
+    lanesInto[id] = [];
+    roadsInto[id] = [];
+  }
   const add = (a: string, b: string, portal: boolean): void => {
     const length = portal ? PORTAL_LENGTH : Math.hypot(nodes[a]!.x - nodes[b]!.x, nodes[a]!.y - nodes[b]!.y);
     const i = lanes.length;
@@ -312,10 +319,14 @@ function buildLanes(
     laneIndex[`${b}>${a}`] = i + 1;
     lanesInto[b]!.push(i);
     lanesInto[a]!.push(i + 1);
+    if (!portal) {
+      roadsInto[b]!.push(i);
+      roadsInto[a]!.push(i + 1);
+    }
   };
   for (const [a, b] of roads) add(a, b, false);
   for (const [a, b] of portals) add(a, b, true);
-  return { lanes, laneIndex, lanesInto };
+  return { lanes, laneIndex, lanesInto, roadsInto };
 }
 
 /**

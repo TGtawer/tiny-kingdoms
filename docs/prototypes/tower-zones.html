@@ -1,0 +1,515 @@
+<title>Зона башни</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap">
+<style>
+/* Layout: sticky control bar on top, grid of variant cards; every card renders the same live battle with its own zone style. */
+:root {
+  --bg: #f6f1e7;
+  --card: #fffaf0;
+  --fg: #1f2937;
+  --muted: #6b6258;
+  --line: #e4d9c3;
+  --accent: #b7561a;
+  --accent-fg: #ffffff;
+  --ui: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1814; --card: #25211b; --fg: #f1e9d8; --muted: #a79d8a; --line: #3a3329; --accent: #ffb53d; --accent-fg: #1f2937;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1814; --card: #25211b; --fg: #f1e9d8; --muted: #a79d8a; --line: #3a3329; --accent: #ffb53d; --accent-fg: #1f2937;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 40px;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1240px; margin: 0 auto; }
+.ctl {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--bg); padding-block: 14px 12px; border-bottom: 1px solid var(--line);
+  display: grid; gap: 10px;
+}
+.ctl h1 { margin: 0; font-size: 20px; font-weight: 900; text-wrap: balance; }
+.ctl p { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; max-width: 75ch; }
+.row { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+.grp { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lbl { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.chip {
+  font: 800 13px var(--ui); padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--card); color: var(--fg);
+}
+.chip:hover { border-color: var(--accent); }
+.chip:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.len { display: flex; align-items: center; gap: 10px; flex: 1 1 320px; min-width: 0; }
+#len { flex: 1 1 160px; min-width: 0; accent-color: var(--accent); }
+.len-read { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.len-read small { font-weight: 600; color: var(--muted); }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.grid {
+  display: grid; gap: 16px; margin-top: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+}
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  display: grid; grid-template-rows: auto auto; min-width: 0;
+}
+.card canvas { display: block; width: 100%; max-width: 100%; }
+.cap { padding: 10px 12px 12px; display: grid; gap: 2px; }
+.cap b { font-size: 15px; font-weight: 900; }
+.cap b span { color: var(--accent); margin-right: 6px; }
+.cap div { font-size: 13px; color: var(--muted); font-weight: 600; }
+.notes { margin-top: 22px; font-size: 13px; color: var(--muted); font-weight: 600; max-width: 80ch; display: grid; gap: 6px; }
+.notes b { color: var(--fg); }
+</style>
+
+<div class="wrap">
+  <div class="ctl">
+    <h1>Зона башни на дорогах</h1>
+    <p>Один и тот же бой в шести вариантах отрисовки. Синяя башня в центральном узле игрока, красная — в правом верхнем узле врага. Враг идёт волнами из двух узлов, игрок — из правого нижнего. Башня стреляет только по врагам, идущим к её узлу, когда они в зоне.</p>
+    <div class="row">
+      <div class="grp" role="group" aria-label="Уровень башни">
+        <span class="lbl">Уровень</span>
+        <button class="chip" id="lv1" data-lv="1" aria-pressed="true">1 · 1 выстр./с</button>
+        <button class="chip" id="lv2" data-lv="2" aria-pressed="false">2 · 2 выстр./с</button>
+        <button class="chip" id="lv3" data-lv="3" aria-pressed="false">3 · 3 выстр./с</button>
+      </div>
+      <div class="grp" role="group" aria-label="Выстрел">
+        <span class="lbl">Выстрел</span>
+        <button class="chip" id="fx-arrow" data-fx="arrow" aria-pressed="true">Стрела</button>
+        <button class="chip" id="fx-tracer" data-fx="tracer" aria-pressed="false">Трассер</button>
+        <button class="chip" id="fx-flash" data-fx="flash" aria-pressed="false">Только вспышка</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="len">
+        <span class="lbl">Длина</span>
+        <input type="range" id="len" min="0.10" max="0.16" step="0.005" value="0.13" aria-label="Длина зоны, ширины поля">
+        <span class="len-read" id="lenRead"></span>
+      </div>
+      <label class="check"><input type="checkbox" id="mid" checked> Середины рёбер</label>
+      <label class="check"><input type="checkbox" id="pulse"> Вспышка зоны при выстреле</label>
+      <label class="check"><input type="checkbox" id="pause"> Пауза</label>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="notes">
+    <div><b>Масштаб как в игре:</b> радиусы узлов, ширина дороги, размер фигурок и скорость (0.12 ширины поля в секунду, 5 юнитов в секунду в колонне) взяты из <code>game.ts</code> и <code>balance.ts</code>. Карточка шириной 360 px — это примерно телефон в портрете.</div>
+    <div><b>Белые ромбы</b> — середины рёбер между центрами узлов. Нижнее левое ребро короткое (0.22), и зона длиной 0.13 заходит за его середину: длина фиксированная и от ребра не зависит.</div>
+    <div><b>Рёбра в прототипе</b> близки к средним по главе 1: 0.30, 0.30, 0.33 и короткое 0.22. Среднее по всем 97 рёбрам — 0.295.</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // --- Game constants (game.ts / balance.ts) ---
+  const C = {
+    meadow: '#7cc46a', tuft: '#6db95c', road: '#f0dca0', roadEdge: '#b89a5a', outline: '#1f2937',
+    panel: '#fff6e0', panelEdge: '#8a5a2b', fire: '#ff6a1a', fireLight: '#ffd28a',
+    face: { player: '#3b82f6', enemy: '#ef4444' },
+    dark: { player: '#1e4fb8', enemy: '#a82020' },
+    light: { player: '#93c5fd', enemy: '#fca5a5' },
+  };
+  const R_FIELD = { small: 0.055, medium: 0.068, large: 0.084 };
+  const EDGE = { small: 0.04, medium: 0.05, large: 0.062 };
+  const SPEED = 0.12, RELEASE = 5, MEAN_EDGE = 0.295;
+  const NODE_LIP = 0.08;
+
+  const nodes = {
+    T:  { x: 0.40, y: 0.60, size: 'medium', owner: 'player', base: 18, tower: true },
+    E1: { x: 0.19, y: 0.39, size: 'large',  owner: 'enemy',  base: 22 },
+    E2: { x: 0.66, y: 0.45, size: 'small',  owner: 'enemy',  base: 12, tower: true },
+    P:  { x: 0.28, y: 0.78, size: 'small',  owner: 'player', base: 8 },
+    P2: { x: 0.66, y: 0.80, size: 'small',  owner: 'player', base: 14 },
+  };
+  for (const n of Object.values(nodes)) n.troops = n.base;
+  const roads = [['T', 'E1'], ['T', 'E2'], ['T', 'P'], ['T', 'P2'], ['E1', 'E2'], ['P2', 'E2']];
+  const dist = (a, b) => Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y);
+  const towers = Object.keys(nodes).filter((k) => nodes[k].tower).map((k) => ({ id: k, readyAt: 0, lastShot: -9 }));
+
+  const xs = Object.values(nodes).map((n) => n.x), ys = Object.values(nodes).map((n) => n.y);
+  const PAD = R_FIELD.large * 1.6;
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const BW = Math.max(...xs) - minX + 2 * PAD, BH = Math.max(...ys) - minY + 2 * PAD;
+
+  // --- Settings ---
+  const S = { level: 1, fx: 'arrow', zone: 0.13, mid: true, pulse: false, paused: false };
+
+  // --- Simulation (field units, seconds) ---
+  let t = 0;
+  const units = [];
+  const fx = [];
+  const waves = [
+    { from: 'E1', to: 'T', every: 6, offset: 0.5, count: 8 },
+    { from: 'E2', to: 'T', every: 6, offset: 3.5, count: 6 },
+    { from: 'P2', to: 'E2', every: 7, offset: 2.0, count: 6 },
+  ].map((w) => ({ ...w, nextWave: w.offset, left: 0, nextUnit: 0 }));
+
+  function step(dt) {
+    t += dt;
+    for (const w of waves) {
+      if (t >= w.nextWave) { w.left = w.count; w.nextUnit = t; w.nextWave += w.every; }
+      while (w.left > 0 && t >= w.nextUnit) {
+        const len = dist(w.from, w.to);
+        units.push({ from: w.from, to: w.to, len, d: EDGE[nodes[w.from].size], owner: nodes[w.from].owner, killAt: -1 });
+        nodes[w.from].troops = Math.max(2, nodes[w.from].troops - 1);
+        w.left--; w.nextUnit += 1 / RELEASE;
+      }
+    }
+    for (let i = units.length - 1; i >= 0; i--) {
+      const u = units[i];
+      u.d += SPEED * dt;
+      if (u.killAt >= 0 && t >= u.killAt) {
+        units.splice(i, 1);
+        fx.push({ kind: 'flash', x: posX(u), y: posY(u), t0: t });
+        continue;
+      }
+      if (u.d >= u.len - EDGE[nodes[u.to].size]) {
+        units.splice(i, 1);
+        if (u.killAt >= 0) continue;
+        const n = nodes[u.to];
+        n.troops = n.owner === u.owner ? n.troops + 1 : Math.max(3, n.troops - 1);
+        if (n.owner !== u.owner) fx.push({ kind: 'trade', x: posX(u), y: posY(u), t0: t, owner: u.owner });
+      }
+    }
+    for (const n of Object.values(nodes)) {
+      if (n.troops < n.base) n.troops = Math.min(n.base, n.troops + 1.2 * dt);
+      if (n.troops > n.base + 6) n.troops = n.base + 6;
+    }
+    for (const tw of towers) {
+      const node = nodes[tw.id];
+      if (tw.readyAt > t) continue;
+      let best = null, bestRest = Infinity;
+      for (const u of units) {
+        if (u.to !== tw.id || u.owner === node.owner || u.killAt >= 0) continue;
+        const rest = u.len - u.d;
+        if (rest <= S.zone && rest < bestRest) { best = u; bestRest = rest; }
+      }
+      if (!best) continue;
+      const reload = 1 / S.level;
+      const base = tw.readyAt > t - reload ? tw.readyAt : t;
+      tw.readyAt = Math.max(base + reload, t + 0.001);
+      tw.lastShot = t;
+      const flight = S.fx === 'arrow' ? 0.14 : 0;
+      best.killAt = t + flight;
+      const ahead = { ...best, d: Math.min(best.d + SPEED * flight, best.len - EDGE[node.size]) };
+      fx.push({ kind: S.fx, tower: tw.id, x: posX(ahead), y: posY(ahead), t0: t, flight });
+      if (flight === 0) {
+        units.splice(units.indexOf(best), 1);
+        fx.push({ kind: 'flash', x: posX(best), y: posY(best), t0: t });
+      }
+    }
+    for (let i = fx.length - 1; i >= 0; i--) if (t - fx[i].t0 > 0.6) fx.splice(i, 1);
+  }
+  function posX(u) { const a = nodes[u.from], b = nodes[u.to]; return a.x + (b.x - a.x) * (u.d / u.len); }
+  function posY(u) { const a = nodes[u.from], b = nodes[u.to]; return a.y + (b.y - a.y) * (u.d / u.len); }
+
+  // --- Variants ---
+  const VARIANTS = [
+    { id: 'band',   name: 'Полоса · выбран', desc: 'Полупрозрачная полоса цвета владельца ровно в ширину дороги (с каймой) и засечка той же ширины на границе.' },
+    { id: 'hatch',  name: 'Штриховка',  desc: 'Косая штриховка цвета владельца на дороге и засечка на границе.' },
+    { id: 'rim',    name: 'Кайма',      desc: 'Край дороги в зоне перекрашен в цвет владельца, сама дорога светлая.' },
+    { id: 'gate',   name: 'Столбики',   desc: 'Дорога не меняется, на границе зоны — два столбика цвета владельца.' },
+    { id: 'dashes', name: 'Разметка',   desc: 'Пунктир посередине дороги в зоне становится цветом владельца.' },
+    { id: 'glow',   name: 'Свечение',   desc: 'Цвет владельца от узла плавно гаснет к границе, тонкая засечка в конце.' },
+  ];
+  const letters = 'АБВГДЕ';
+
+  const grid = document.getElementById('grid');
+  const cards = VARIANTS.map((v, i) => {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML = `<canvas aria-label="Вариант ${letters[i]}: ${v.name}"></canvas><div class="cap"><b><span>${letters[i]}</span>${v.name}</b><div>${v.desc}</div></div>`;
+    grid.appendChild(el);
+    const canvas = el.querySelector('canvas');
+    return { v, canvas, ctx: canvas.getContext('2d'), w: 0, h: 0, s: 1, tufts: null };
+  });
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    for (const c of cards) {
+      const w = c.canvas.clientWidth || 340;
+      c.s = w / BW; c.w = w; c.h = BH * c.s;
+      c.canvas.width = Math.round(w * dpr); c.canvas.height = Math.round(c.h * dpr);
+      c.canvas.style.height = c.h + 'px';
+      c.dpr = dpr;
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      c.tufts = Array.from({ length: 40 }, () => [rnd() * w, rnd() * c.h, 2 + rnd() * 3]);
+    }
+  }
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function sx(c, x) { return (x - minX + PAD) * c.s; }
+  function sy(c, y) { return (y - minY + PAD) * c.s; }
+  function nodeR(c, n) { return clamp(R_FIELD[n.size] * c.s, 26, 58); }
+  function roadW(c) { return Math.max(8, c.s * 0.016); }
+  function rgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  function drawRoads(c) {
+    const g = c.ctx, w = roadW(c);
+    const segs = roads.map(([a, b]) => [sx(c, nodes[a].x), sy(c, nodes[a].y), sx(c, nodes[b].x), sy(c, nodes[b].y)]);
+    g.lineCap = 'butt';
+    g.strokeStyle = C.roadEdge; g.lineWidth = w + 5;
+    for (const s of segs) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
+    g.strokeStyle = C.road; g.lineWidth = w;
+    for (const s of segs) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
+    g.strokeStyle = rgba(C.roadEdge, 0.55); g.lineWidth = Math.max(1, w * 0.18);
+    for (const s of segs) dashes(g, s[0], s[1], s[2], s[3], 7, 9, 9);
+  }
+  function dashes(g, x0, y0, x1, y1, dash, gap, start) {
+    const len = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+    g.beginPath();
+    for (let d = start; d + dash < len - gap * 0.5; d += dash + gap) {
+      g.moveTo(x0 + ux * d, y0 + uy * d); g.lineTo(x0 + ux * (d + dash), y0 + uy * (d + dash));
+    }
+    g.stroke();
+  }
+
+  /** Every zone segment of every tower: from under the node circle to S.zone from its center. */
+  function zones(c) {
+    const out = [];
+    for (const tw of towers) {
+      const n = nodes[tw.id];
+      for (const [a, b] of roads) {
+        if (a !== tw.id && b !== tw.id) continue;
+        const m = nodes[a === tw.id ? b : a];
+        const cx = sx(c, n.x), cy = sy(c, n.y), mx = sx(c, m.x), my = sy(c, m.y);
+        const L = Math.hypot(mx - cx, my - cy), ux = (mx - cx) / L, uy = (my - cy) / L;
+        const r0 = nodeR(c, n) * 0.6;
+        const r1 = Math.min(S.zone * c.s, L - nodeR(c, m));
+        if (r1 <= nodeR(c, n)) continue;
+        const k = S.pulse ? Math.max(0, 1 - (t - tw.lastShot) / 0.35) : 0;
+        out.push({ owner: n.owner, cx, cy, ux, uy, r0, r1, rEdge: nodeR(c, n), k,
+          ax: cx + ux * r0, ay: cy + uy * r0, bx: cx + ux * r1, by: cy + uy * r1, px: -uy, py: ux });
+      }
+    }
+    return out;
+  }
+  function seg(g, z, from, to) {
+    g.beginPath(); g.moveTo(z.cx + z.ux * from, z.cy + z.uy * from); g.lineTo(z.cx + z.ux * to, z.cy + z.uy * to); g.stroke();
+  }
+  function tick(g, z, half, width, color) {
+    g.strokeStyle = color; g.lineWidth = width; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(z.bx + z.px * half, z.by + z.py * half); g.lineTo(z.bx - z.px * half, z.by - z.py * half); g.stroke();
+    g.lineCap = 'butt';
+  }
+
+  function drawZones(c) {
+    const g = c.ctx, w = roadW(c), we = w + 5;
+    for (const z of zones(c)) {
+      const oc = C.face[z.owner], od = C.dark[z.owner], ol = C.light[z.owner];
+      g.save();
+      switch (c.v.id) {
+        case 'band':
+          // Chosen: the band and the tick are exactly as wide as the road (edge included).
+          g.strokeStyle = rgba(oc, 0.5 + 0.3 * z.k); g.lineWidth = we; seg(g, z, z.r0, z.r1);
+          g.strokeStyle = od; g.lineWidth = 3.5;
+          g.beginPath(); g.moveTo(z.bx + z.px * we / 2, z.by + z.py * we / 2); g.lineTo(z.bx - z.px * we / 2, z.by - z.py * we / 2); g.stroke();
+          break;
+        case 'hatch': {
+          g.beginPath();
+          const h = w / 2;
+          g.moveTo(z.ax + z.px * h, z.ay + z.py * h); g.lineTo(z.bx + z.px * h, z.by + z.py * h);
+          g.lineTo(z.bx - z.px * h, z.by - z.py * h); g.lineTo(z.ax - z.px * h, z.ay - z.py * h); g.closePath();
+          g.clip();
+          g.strokeStyle = rgba(oc, 0.75 + 0.25 * z.k); g.lineWidth = 2.4;
+          const L = z.r1 - z.r0;
+          g.beginPath();
+          for (let d = -w; d < L + w; d += 6.5) {
+            const x0 = z.ax + z.ux * d + z.px * h, y0 = z.ay + z.uy * d + z.py * h;
+            const x1 = z.ax + z.ux * (d + w) - z.px * h, y1 = z.ay + z.uy * (d + w) - z.py * h;
+            g.moveTo(x0, y0); g.lineTo(x1, y1);
+          }
+          g.stroke();
+          g.restore(); g.save();
+          tick(g, z, we / 2 + 3, 3.5, od);
+          break;
+        }
+        case 'rim':
+          g.strokeStyle = z.k > 0 ? mix(oc, '#ffffff', 0.45 * z.k) : oc; g.lineWidth = we; seg(g, z, z.r0, z.r1);
+          g.strokeStyle = C.road; g.lineWidth = w; seg(g, z, z.r0 - 1, z.r1 + 1);
+          g.strokeStyle = rgba(C.roadEdge, 0.55); g.lineWidth = Math.max(1, w * 0.18);
+          dashes(g, z.cx, z.cy, z.bx, z.by, 7, 9, 9);
+          break;
+        case 'gate': {
+          if (z.k > 0) { g.strokeStyle = rgba(oc, 0.35 * z.k); g.lineWidth = w; seg(g, z, z.r0, z.r1); }
+          g.strokeStyle = rgba(oc, 0.85); g.lineWidth = 2; g.lineCap = 'round';
+          const off = we / 2 + 4;
+          g.beginPath(); g.moveTo(z.bx + z.px * off, z.by + z.py * off); g.lineTo(z.bx - z.px * off, z.by - z.py * off); g.stroke();
+          for (const sgn of [1, -1]) {
+            const x = z.bx + z.px * off * sgn, y = z.by + z.py * off * sgn;
+            g.fillStyle = od; g.beginPath(); g.arc(x, y + 1.2, 5, 0, Math.PI * 2); g.fill();
+            g.fillStyle = oc; g.beginPath(); g.arc(x, y, 4.2, 0, Math.PI * 2); g.fill();
+            g.strokeStyle = C.outline; g.lineWidth = 1.4; g.beginPath(); g.arc(x, y + 0.4, 5, 0, Math.PI * 2); g.stroke();
+          }
+          break;
+        }
+        case 'dashes':
+          g.strokeStyle = C.road; g.lineWidth = w - 1; seg(g, z, z.r0, z.r1);
+          g.strokeStyle = z.k > 0 ? mix(oc, '#ffffff', 0.5 * z.k) : oc; g.lineWidth = Math.max(2.5, w * 0.38); g.lineCap = 'round';
+          dashes(g, z.cx, z.cy, z.bx, z.by, 6, 5, z.rEdge + 2);
+          tick(g, z, w / 2 + 1, 2.5, od);
+          break;
+        case 'glow': {
+          const grad = g.createLinearGradient(z.cx + z.ux * z.rEdge, z.cy + z.uy * z.rEdge, z.bx, z.by);
+          const a = 0.6 + 0.3 * z.k;
+          grad.addColorStop(0, rgba(oc, a)); grad.addColorStop(0.75, rgba(oc, a * 0.45)); grad.addColorStop(1, rgba(oc, 0.12));
+          g.strokeStyle = grad; g.lineWidth = we + 4; seg(g, z, z.r0, z.r1);
+          tick(g, z, we / 2 + 2, 2, rgba(od, 0.9));
+          break;
+        }
+      }
+      g.restore();
+    }
+  }
+  function mix(a, b, k) {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const ch = (s) => Math.round(((pa >> s) & 255) * (1 - k) + ((pb >> s) & 255) * k);
+    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  }
+
+  function drawMidpoints(c) {
+    if (!S.mid) return;
+    const g = c.ctx;
+    for (const [a, b] of roads) {
+      if (!nodes[a].tower && !nodes[b].tower) continue;
+      const x = (sx(c, nodes[a].x) + sx(c, nodes[b].x)) / 2, y = (sy(c, nodes[a].y) + sy(c, nodes[b].y)) / 2;
+      g.fillStyle = '#ffffff'; g.strokeStyle = C.outline; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(x, y - 5); g.lineTo(x + 5, y); g.lineTo(x, y + 5); g.lineTo(x - 5, y); g.closePath(); g.fill(); g.stroke();
+    }
+  }
+
+  function drawUnits(c) {
+    const g = c.ctx;
+    const r = clamp((SPEED / RELEASE) * c.s * 0.36, 2.5, 6);
+    for (const u of units) {
+      const x = sx(c, posX(u)), y = sy(c, posY(u));
+      g.fillStyle = C.dark[u.owner]; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = C.face[u.owner]; g.beginPath(); g.arc(x, y - r * 0.12, r * 0.86, 0, Math.PI * 2); g.fill();
+    }
+  }
+
+  function drawNodes(c) {
+    const g = c.ctx;
+    for (const n of Object.values(nodes)) {
+      const x = sx(c, n.x), y = sy(c, n.y), r = nodeR(c, n);
+      g.fillStyle = 'rgba(31,41,55,0.18)'; g.beginPath(); g.ellipse(x, y + r * 0.18, r * 1.02, r * 0.95, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = C.dark[n.owner]; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = C.face[n.owner]; g.beginPath(); g.arc(x, y - r * NODE_LIP, r * (1 - NODE_LIP), 0, Math.PI * 2); g.fill();
+      g.strokeStyle = C.outline; g.lineWidth = 2.5; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+      g.font = `900 ${Math.round(r * 0.72)}px Nunito, system-ui, sans-serif`;
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineWidth = 3.5; g.strokeStyle = C.outline; g.lineJoin = 'round';
+      const txt = String(Math.floor(n.troops));
+      g.strokeText(txt, x, y - r * 0.06); g.fillStyle = '#ffffff'; g.fillText(txt, x, y - r * 0.06);
+      if (n.tower) drawTowerBadge(g, x + r * 0.74, y - r * 0.74);
+    }
+  }
+  function towerAnchor(c, id) {
+    const n = nodes[id], r = nodeR(c, n);
+    return [sx(c, n.x) + r * 0.74, sy(c, n.y) - r * 0.74 - 4];
+  }
+  function drawTowerBadge(g, x, y) {
+    g.fillStyle = C.panel; g.strokeStyle = C.panelEdge; g.lineWidth = 2;
+    g.beginPath(); g.arc(x, y, 11, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = '#9aa0a8'; g.strokeStyle = C.outline; g.lineWidth = 1.2;
+    g.beginPath();
+    g.moveTo(x - 4.5, y + 6); g.lineTo(x - 4.5, y - 4); g.lineTo(x - 3, y - 4); g.lineTo(x - 3, y - 6);
+    g.lineTo(x - 1, y - 6); g.lineTo(x - 1, y - 4); g.lineTo(x + 1, y - 4); g.lineTo(x + 1, y - 6);
+    g.lineTo(x + 3, y - 6); g.lineTo(x + 3, y - 4); g.lineTo(x + 4.5, y - 4); g.lineTo(x + 4.5, y + 6); g.closePath();
+    g.fill(); g.stroke();
+  }
+
+  function drawFx(c) {
+    const g = c.ctx;
+    for (const f of fx) {
+      const age = t - f.t0;
+      const x = sx(c, f.x), y = sy(c, f.y);
+      if (f.kind === 'arrow' && age < f.flight) {
+        const [ax, ay] = towerAnchor(c, f.tower);
+        const k = age / f.flight;
+        const hx = ax + (x - ax) * k, hy = ay + (y - ay) * k - Math.sin(k * Math.PI) * 10;
+        const k2 = Math.max(0, k - 0.25);
+        const tx = ax + (x - ax) * k2, ty = ay + (y - ay) * k2 - Math.sin(k2 * Math.PI) * 10;
+        g.strokeStyle = C.outline; g.lineWidth = 3.2; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(tx, ty); g.lineTo(hx, hy); g.stroke();
+        g.strokeStyle = C.fireLight; g.lineWidth = 1.6;
+        g.beginPath(); g.moveTo(tx, ty); g.lineTo(hx, hy); g.stroke();
+      } else if (f.kind === 'tracer' && age < 0.18) {
+        const [ax, ay] = towerAnchor(c, f.tower);
+        const a = 1 - age / 0.18;
+        g.strokeStyle = rgba(C.fire, 0.9 * a); g.lineWidth = 2.5; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(ax, ay); g.lineTo(x, y); g.stroke();
+        g.strokeStyle = rgba('#ffffff', 0.8 * a); g.lineWidth = 1;
+        g.beginPath(); g.moveTo(ax, ay); g.lineTo(x, y); g.stroke();
+      } else if (f.kind === 'flash' && age < 0.28) {
+        const a = 1 - age / 0.28, r = 4 + 7 * (age / 0.28);
+        g.fillStyle = rgba(C.fire, 0.85 * a); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+        g.fillStyle = rgba(C.fireLight, a); g.beginPath(); g.arc(x, y, r * 0.5, 0, Math.PI * 2); g.fill();
+      } else if (f.kind === 'trade' && age < 0.28) {
+        const a = 1 - age / 0.28;
+        g.fillStyle = rgba('#ffffff', 0.7 * a); g.beginPath(); g.arc(x, y, 3 + 5 * (age / 0.28), 0, Math.PI * 2); g.fill();
+      }
+    }
+  }
+
+  function render(c) {
+    const g = c.ctx;
+    g.setTransform(c.dpr, 0, 0, c.dpr, 0, 0);
+    g.fillStyle = C.meadow; g.fillRect(0, 0, c.w, c.h);
+    g.fillStyle = C.tuft;
+    for (const [x, y, r] of c.tufts) { g.beginPath(); g.ellipse(x, y, r * 1.6, r, 0, 0, Math.PI * 2); g.fill(); }
+    drawRoads(c);
+    drawZones(c);
+    drawMidpoints(c);
+    drawUnits(c);
+    drawNodes(c);
+    drawFx(c);
+  }
+
+  // --- Controls ---
+  function press(attr, value) {
+    document.querySelectorAll(`[data-${attr}]`).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset[attr] === String(value))));
+  }
+  document.querySelectorAll('[data-lv]').forEach((b) => b.addEventListener('click', () => { S.level = +b.dataset.lv; press('lv', S.level); }));
+  document.querySelectorAll('[data-fx]').forEach((b) => b.addEventListener('click', () => { S.fx = b.dataset.fx; press('fx', S.fx); }));
+  const len = document.getElementById('len'), lenRead = document.getElementById('lenRead');
+  function readLen() {
+    S.zone = +len.value;
+    lenRead.innerHTML = `${S.zone.toFixed(3)} поля <small>· ${Math.round((S.zone / MEAN_EDGE) * 100)}% среднего ребра</small>`;
+  }
+  len.addEventListener('input', readLen); readLen();
+  document.getElementById('mid').addEventListener('change', (e) => { S.mid = e.target.checked; });
+  document.getElementById('pulse').addEventListener('change', (e) => { S.pulse = e.target.checked; });
+  document.getElementById('pause').addEventListener('change', (e) => { S.paused = e.target.checked; });
+
+  resize();
+  window.addEventListener('resize', resize);
+  // Warm up so the first frame already shows columns on the roads.
+  for (let i = 0; i < 60 * 4.2; i++) step(1 / 60);
+  for (const c of cards) render(c);
+
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (!S.paused) { acc += dt; while (acc >= 1 / 60) { step(1 / 60); acc -= 1 / 60; } }
+    for (const c of cards) render(c);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>

@@ -6,7 +6,7 @@ import { defenseMult, nowMs, refreshLaneEnds, type NodeState, type Owner, type W
 /** Below this, a remainder counts as zero (guards against float noise). */
 const EPSILON = 1e-9;
 
-export type ArrivalOutcome = 'reinforced' | 'destroyedByTower' | 'repelled' | 'captured' | 'shielded';
+export type ArrivalOutcome = 'reinforced' | 'repelled' | 'captured' | 'shielded';
 
 export interface ArrivalResult {
   unitId: number;
@@ -27,12 +27,12 @@ export function towerRate(node: NodeState): number {
 }
 
 /**
- * Fires the tower at an arriving hostile unit if a shot is ready (GDD 3.6). One shot is held in reserve: a tower that
- * waited fires at once, then reloads for 1 / rate s. A shot that became ready less than one reload ago keeps its
- * phase, so a steady stream loses `rate` units per second even though units arrive on whole ticks; never two shots
- * in one moment.
+ * Takes the tower's shot if one is ready (docs/TOWER.md; the caller has a target in the zone). One shot is held in
+ * reserve: a tower that waited fires at once, then reloads for 1 / rate s. A shot that became ready less than one
+ * reload ago keeps its phase, so a steady stream loses `rate` units per second even though shots fall on whole
+ * ticks; never two shots in one moment.
  */
-function towerShoots(world: World, node: NodeState): boolean {
+export function towerShoots(world: World, node: NodeState): boolean {
   const rate = towerRate(node);
   if (rate <= 0) return false;
   const now = nowMs(world);
@@ -45,7 +45,7 @@ function towerShoots(world: World, node: NodeState): boolean {
 
 /**
  * How many attackers in a row the garrison stops by 1:1 trades (fortress defenders take two each), after which the
- * next attacker captures. Tower shots are not included.
+ * next attacker captures. Tower shots (on the roads, before the node) are not included.
  */
 export function defenseHits(node: NodeState): number {
   return Math.floor(node.troops * defenseMult(node) + EPSILON);
@@ -58,9 +58,10 @@ export function markAttacked(world: World, node: NodeState): void {
 
 /**
  * One unit of `owner` reaches `node` (GDD 3.6). Own node: it joins the garrison (over capacity is fine).
- * Foreign node: a shield breaks it; else a ready tower shot kills it; else it trades 1:1 with a defender
- * (a fortress defender withstands two); with less than one defender left the node is captured and the unit is its
- * garrison. Every hostile arrival except on a shield marks the node attacked for STREAM.attackWindowMs.
+ * Foreign node: a shield breaks it; else it trades 1:1 with a defender (a fortress defender withstands two); with
+ * less than one defender left the node is captured and the unit is its garrison. Every hostile arrival except on a
+ * shield marks the node attacked for STREAM.attackWindowMs. A tower does not shoot here: it shoots on the roads,
+ * before the node (towers.ts, docs/TOWER.md).
  */
 export function arriveUnit(world: World, unitId: number, owner: Owner, node: NodeState, fromId = node.id): ArrivalResult {
   const base = { unitId, owner, nodeId: node.id, fromId, captureGold: 0 };
@@ -73,7 +74,6 @@ export function arriveUnit(world: World, unitId: number, owner: Owner, node: Nod
   if (node.shieldTicks > 0) return { ...base, outcome: 'shielded' };
 
   markAttacked(world, node);
-  if (towerShoots(world, node)) return { ...base, outcome: 'destroyedByTower' };
 
   const perAttacker = 1 / defenseMult(node);
   if (node.troops + EPSILON >= perAttacker) {

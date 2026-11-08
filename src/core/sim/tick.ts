@@ -8,6 +8,7 @@ import { stepCitadel, type CitadelWave } from './specials/citadel';
 import { stepDragon, type DragonEvent } from './specials/dragon';
 import { stepMage, type MageEvent } from './specials/mage';
 import { enterTransit, releaseStreams } from './stream';
+import { fireTowers, type TowerShot } from './towers';
 import { dropUnit, moveUnits } from './units';
 import { checkOutcome, updateGoal, type OutcomeReason } from './victory';
 import type { Owner, Side, World } from './World';
@@ -21,18 +22,22 @@ export type TickEvent =
   /** A unit entered an own node on its way and will leave it again (GDD 3.6, transit). */
   | { type: 'transit'; unitId: number; owner: Owner; nodeId: string }
   | ({ type: 'clash' } & ClashResult)
+  /** A tower shot a unit on one of its roads (docs/TOWER.md). */
+  | ({ type: 'towerShot' } & TowerShot)
   | ({ type: 'raid' } & BanditRaid)
   | DragonEvent
   | MageEvent
   | CitadelWave
   | { type: 'gameOver'; winner: Side; reason: OutcomeReason };
 
-// Clash results of one tick (reused list; copied into events).
+// Clash results and tower shots of one tick (reused lists; copied into events).
 const clashes: ClashResult[] = [];
+const shots: TowerShot[] = [];
 
 /**
  * One fixed simulation step. Mutates `world`. Order (ARCHITECTURE.md «Порядок тика»):
- * commands → road clashes (swept, before moving) → unit movement, arrivals and transit → stream release →
+ * commands → road clashes (swept, before moving) → tower shots (docs/TOWER.md) → unit movement, arrivals and
+ * transit → stream release →
  * production → bandits and bosses → shields and cooldowns → goal and victory check.
  */
 export function step(world: World, commands: readonly Command[] = []): TickEvent[] {
@@ -53,6 +58,10 @@ export function step(world: World, commands: readonly Command[] = []): TickEvent
   clashes.length = 0;
   resolveClashes(world, stepDistance, clashes);
   for (const clash of clashes) events.push({ type: 'clash', ...clash });
+
+  shots.length = 0;
+  fireTowers(world, shots);
+  for (const shot of shots) events.push({ type: 'towerShot', ...shot });
 
   moveUnits(world, stepDistance, (unit, nodeId) => {
     dropUnit(world, unit);

@@ -66,10 +66,17 @@ export const BUILDINGS = {
   },
   tower: {
     /**
-     * Shots per second; one shot kills one arriving hostile unit (GDD 3.6). At most one shot is held in reserve,
-     * so the first unit always dies and then no more than this many per second.
+     * Shots per second; one shot kills one hostile unit in the tower's zone (docs/TOWER.md). At most one shot is held
+     * in reserve, so the first unit to enter the zone always dies and then no more than this many per second.
      */
     shotsPerSec: [1, 2, 3] as PerLevel<number>,
+    /**
+     * The zone: the stretch of every road of the node, field widths from the node center, the same for all levels
+     * and every road whatever its length. The mean road of chapter 1 is 0.295 between centers (median 0.29, from
+     * 0.21 to 0.40), so the zone is 44% of a mean road, just short of its middle; on roads shorter than 0.26 it
+     * passes the middle, and the zones of two towers at both ends may overlap.
+     */
+    zone: 0.13,
   },
   maxLevel: 3,
 } as const;

@@ -64,7 +64,7 @@
   "battle.speed": "×{mult}",
   "building.mine.desc": "Lots of gold",
   "building.barracks.desc": "More troops",
-  "building.tower.desc": "Hits attackers",
+  "building.tower.desc": "Shoots on roads",
   "build.next.mine": "+{gold} gold/s",
   "build.next.barracks": "×{mult} troops, +{cap} room",
   "build.next.tower": "{shots} shots/s",

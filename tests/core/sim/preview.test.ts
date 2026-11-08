@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { ARMY, BUILDINGS, STREAM } from '../../../src/config/balance';
 import { sendAmount } from '../../../src/core/sim/commands';
 import { blockingNode } from '../../../src/core/sim/pathfinding';
-import { previewAttack } from '../../../src/core/sim/preview';
+import { previewAttack, towerKillsEstimate, towerZoneSec } from '../../../src/core/sim/preview';
 import { step } from '../../../src/core/sim/tick';
 import { createWorld, ownedShare } from '../../../src/core/sim/World';
 import { drain, freezeEconomy, level, lineWorld, node } from '../helpers';
@@ -28,7 +29,7 @@ describe('previewAttack', () => {
     expect(previewAttack(world, 'player', ['P'], 'swipe', 'E')).toEqual({ sent: 0, defenders: 10, wins: false });
   });
 
-  it('counts tower shots roughly: the shot in reserve plus rate × release time of the longest stream', () => {
+  it('counts tower shots roughly: the shot in reserve plus rate × (release time of the longest stream + walk through the zone)', () => {
     const world = createWorld(
       level(
         [
@@ -42,12 +43,24 @@ describe('previewAttack', () => {
         ],
       ),
     );
-    // 14 units, streams of 7 leave in 1.4 s: the tower takes 1 + 1 = 2; 12 > 4 defenders.
+    // T is small: units arrive 0.04 from its center, so a unit walks (0.13 - 0.04) / 0.12 = 0.75 s through the zone.
+    expect(towerZoneSec(world.nodes.T!)).toBeCloseTo((BUILDINGS.tower.zone - STREAM.edgeDist.small) / ARMY.speed, 9);
+    // 14 units, streams of 7 leave in 1.4 s: the tower takes 1 + ⌊1 × (1.4 + 0.75)⌋ = 3; 11 > 4 defenders.
+    expect(towerKillsEstimate(world.nodes.T!, 14, 7)).toBe(3);
     expect(previewAttack(world, 'player', ['A', 'B'], 'swipe', 'T')).toEqual({ sent: 14, defenders: 4, wins: true });
-    // A single stream of 7: 7 - 2 = 5 > 4 still wins; with 5 defenders it does not.
-    expect(previewAttack(world, 'player', ['A'], 'swipe', 'T').wins).toBe(true);
-    world.nodes.T!.troops = 5;
+    // A single stream of 7: 7 - 3 = 4 is not more than 4 defenders; against 3 it wins.
     expect(previewAttack(world, 'player', ['A'], 'swipe', 'T').wins).toBe(false);
+    world.nodes.T!.troops = 3;
+    expect(previewAttack(world, 'player', ['A'], 'swipe', 'T').wins).toBe(true);
+  });
+
+  it('tower estimate: never more than the units sent; level 3 shoots three times as fast', () => {
+    const world = lineWorld({ N: { troops: 0, building: { type: 'tower', level: 3 } } });
+    const n = world.nodes.N!;
+    expect(towerKillsEstimate(n, 2, 2)).toBe(2);
+    // 10 units leave in 2 s, then 0.75 s through the zone: 1 + ⌊3 × 2.75⌋ = 9.
+    expect(towerKillsEstimate(n, 10, 10)).toBe(9);
+    expect(towerKillsEstimate(lineWorld().nodes.N!, 10, 10)).toBe(0);
   });
 
   it('1 unit = 1 unit: the capture takes one more unit than the visible garrison', () => {

@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import { ARMY, STREAM, TICK_MS } from '../config/balance';
-import { COLORS, DUST_FX, STEP_FX, UNITS_FX } from '../config/game';
+import { COLORS, DUST_FX, STEP_FX, TOWER_SHOT, UNITS_FX } from '../config/game';
 import type { Lane, Owner, World } from '../core/sim/World';
 import { px, type FieldLayout, type Point } from './layout';
 
@@ -46,6 +46,19 @@ export class UnitsView {
   /** Puffs under the units (FX-5); null with `?perf=nofx`. */
   private readonly dust: DustPuffs | null;
   private readonly at: Point = { x: 0, y: 0 };
+  /**
+   * "Ghosts" (docs/TOWER.md TW-4): units a tower has shot are gone from the simulation at once, but their figure
+   * walks on until the arrow reaches it. Fixed slots: owner, id (walk phase), lane, progress and tick at the shot,
+   * and the screen point drawn this frame (where the arrow flies).
+   */
+  private readonly ghostOn = new Uint8Array(TOWER_SHOT.pool);
+  private readonly ghostOwner: Owner[] = new Array<Owner>(TOWER_SHOT.pool).fill('neutral');
+  private readonly ghostId = new Float64Array(TOWER_SHOT.pool);
+  private readonly ghostLane = new Int32Array(TOWER_SHOT.pool);
+  private readonly ghostP0 = new Float64Array(TOWER_SHOT.pool);
+  private readonly ghostTick0 = new Float64Array(TOWER_SHOT.pool);
+  private readonly ghostX = new Float64Array(TOWER_SHOT.pool);
+  private readonly ghostY = new Float64Array(TOWER_SHOT.pool);
   /** Per lane: start x, y and end x, y of its visible part on screen. */
   private laneGeo = new Float64Array(0);
 
@@ -173,36 +186,81 @@ export class UnitsView {
       if (lane.portal) continue;
       // One tick ago the unit was one tick of walking behind (never before the road's entry).
       const p = Math.max(lane.startP, unit.progress - (back * TICK_STEP) / lane.length);
-      this.place(lane, l, p, this.at);
-
-      // Walk (FX-4): a hop per step and a frame by its height; no memory, from the distance walked on this road.
-      let lift = 0;
-      let frame = OWNER_INDEX[unit.owner] * STEP_FRAMES;
-      if (this.fx) {
-        lift = Math.abs(Math.sin((p - lane.startP) * lane.length * STEP_PHASE + unit.id));
-        frame += lift < STEP_FX.midFrom ? 0 : lift < STEP_FX.stretchFrom ? 1 : 2;
-      }
-      let bob = this.bobs[n];
-      if (!bob) {
-        bob = this.blitter.create(0, 0, FRAME_NAMES[frame]);
-        this.bobs.push(bob);
-        this.bobFrame.push(frame);
-      } else if (this.bobFrame[n] !== frame) {
-        bob.setFrame(FRAME_NAMES[frame]!);
-        this.bobFrame[n] = frame;
-      }
-      bob.x = this.at.x - this.half;
-      bob.y = this.at.y - this.half - this.hop * lift;
-      n++;
+      this.figure(n++, unit.owner, unit.id, lane, l, p);
       if (dust && dustEvery > 0 && unit.id % dustEvery === 0) this.puffs(lane, l, p, unit.id, dust);
     }
     dust?.end();
+    // Ghosts walk on from where they were shot, as a unit would (never past the road's arrival point).
+    for (let g = 0; g < this.ghostOn.length; g++) {
+      if (!this.ghostOn[g]) continue;
+      const l = this.ghostLane[g]!;
+      const lane = world.lanes[l]!;
+      const walked = (world.tick - this.ghostTick0[g]! - back) * TICK_STEP;
+      const p = Math.min(lane.endP, Math.max(lane.startP, this.ghostP0[g]! + walked / lane.length));
+      this.figure(n++, this.ghostOwner[g]!, this.ghostId[g]!, lane, l, p);
+      this.ghostX[g] = this.at.x;
+      this.ghostY[g] = this.at.y;
+    }
     for (let i = n; i < this.used; i++) {
       const bob = this.bobs[i]!;
       bob.x = PARKED;
       bob.y = PARKED;
     }
     this.used = n;
+  }
+
+  /** Pool figure n as a unit of `owner` (walk phase from `id`) at progress `p` of lane l; leaves its point in `at`. */
+  private figure(n: number, owner: Owner, id: number, lane: Lane, l: number, p: number): void {
+    this.place(lane, l, p, this.at);
+    // Walk (FX-4): a hop per step and a frame by its height; no memory, from the distance walked on this road.
+    let lift = 0;
+    let frame = OWNER_INDEX[owner] * STEP_FRAMES;
+    if (this.fx) {
+      lift = Math.abs(Math.sin((p - lane.startP) * lane.length * STEP_PHASE + id));
+      frame += lift < STEP_FX.midFrom ? 0 : lift < STEP_FX.stretchFrom ? 1 : 2;
+    }
+    let bob = this.bobs[n];
+    if (!bob) {
+      bob = this.blitter.create(0, 0, FRAME_NAMES[frame]);
+      this.bobs.push(bob);
+      this.bobFrame.push(frame);
+    } else if (this.bobFrame[n] !== frame) {
+      bob.setFrame(FRAME_NAMES[frame]!);
+      this.bobFrame[n] = frame;
+    }
+    bob.x = this.at.x - this.half;
+    bob.y = this.at.y - this.half - this.hop * lift;
+  }
+
+  /**
+   * A ghost of a unit a tower shot (TW-4): it walks on from `progress` of lane l, where it was at `tick` (the tick
+   * of the shot, before its movement). Returns its slot, or -1 when all slots are busy (then no ghost is drawn).
+   */
+  addGhost(owner: Owner, id: number, l: number, progress: number, tick: number): number {
+    for (let g = 0; g < this.ghostOn.length; g++) {
+      if (this.ghostOn[g]) continue;
+      this.ghostOn[g] = 1;
+      this.ghostOwner[g] = owner;
+      this.ghostId[g] = id;
+      this.ghostLane[g] = l;
+      this.ghostP0[g] = progress;
+      this.ghostTick0[g] = tick;
+      this.ghostX[g] = NaN;
+      return g;
+    }
+    return -1;
+  }
+
+  removeGhost(g: number): void {
+    if (g >= 0) this.ghostOn[g] = 0;
+  }
+
+  /** Where ghost g was drawn this frame (its figure's center, without the hop); false before its first frame. */
+  ghostPoint(g: number, out: Point): boolean {
+    if (g < 0 || !this.ghostOn[g] || Number.isNaN(this.ghostX[g]!)) return false;
+    out.x = this.ghostX[g]!;
+    out.y = this.ghostY[g]!;
+    return true;
   }
 
   /**
