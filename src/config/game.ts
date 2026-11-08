@@ -133,6 +133,49 @@ export const NODE_FX = {
   /** Breathing: scale 1 + amp · sin(speed · t + phase), t in s, a random phase per node. */
   breathAmp: 0.035,
   breathSpeed: 2,
+  /** Squash on a hit or a release: scale 1 − punch · p, p fading linearly from 1 to 0 over punchMs. */
+  punch: 0.14,
+  punchMs: 200,
+  /** White flash over the circle: alpha flashAlpha · f, f fading over flashMs. */
+  flashAlpha: 0.8,
+  flashMs: 170,
+  /** The count jumps on a hit: scale 1 + countPop · c, c fading over countPopMs. */
+  countPop: 0.45,
+  countPopMs: 250,
+  /** An own node trembles when hit: a random offset up to ±tremblePx each frame, fading over trembleMs. */
+  tremblePx: 3,
+  trembleMs: 300,
+} as const;
+
+/** Textures of the battle effects (docs/FX.md), baked in BootScene. */
+export const FX_TEXTURES = {
+  /** A white square every particle is drawn with (tinted), game px. */
+  dot: 'fx-dot',
+  dotPx: 4,
+} as const;
+
+/** Colors of the battle effects (docs/FX.md). */
+export const FX_COLORS = {
+  /** Light tone of each side (particles next to the faction color). */
+  factionLight: {
+    player: 0x93c5fd,
+    enemy: 0xfca5a5,
+    enemy2: 0x86efac,
+    neutral: 0xd1d5db,
+  },
+} as const;
+
+/**
+ * Sparks (docs/FX.md FX-2, FX-3): one particle emitter for the whole battle. Sizes and speeds CSS px, times ms,
+ * angles radians.
+ */
+export const SPARK_FX = {
+  /** At most this many sparks alive at once. */
+  max: 200,
+  /** A hit on a node: sparks of the attacker's colors from the rim, outwards towards the attacker. */
+  hit: { count: 6, cone: 0.8, speed: 170, speedMin: 0.4, speedMax: 1.2, lifeMin: 350, lifeMax: 600, sizeMin: 2, sizeMax: 4 },
+  /** At most one hit burst per node this often (a mass assault must not make hundreds of particles). */
+  hitEveryNodeMs: 100,
 } as const;
 
 /** Dev-only helpers (never in a production build). */

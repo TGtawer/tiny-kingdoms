@@ -6,7 +6,8 @@
  * - `nojingle` — no victory/defeat jingle or sound;
  * - `win` / `lose` — the battle ends by itself (victory / defeat) after PERF_AUTO_END_MS;
  * - `pause`    — the pause panel opens by itself after PERF_AUTO_END_MS;
- * - `nofx`     — none of the battle effects of docs/FX.md (A/B profiling and side-by-side looks).
+ * - `nofx`     — none of the battle effects of docs/FX.md (A/B profiling and side-by-side looks);
+ * - `norimflash` — no flash on a node's rim when a unit hits it (FX-2: compare with the sparks alone).
  * Callers check `import.meta.env.DEV && perfFlag(...)`, so a production build drops the calls and this module.
  * Works on a phone too: open the dev server over the local network (`npm run dev -- --host`).
  */
@@ -14,7 +15,7 @@
 /** When `win`, `lose` and `pause` act, ms after the battle starts. */
 export const PERF_AUTO_END_MS = 2000;
 
-export type PerfFlag = 'nostars' | 'nofly' | 'notip' | 'nojingle' | 'win' | 'lose' | 'pause' | 'nofx';
+export type PerfFlag = 'nostars' | 'nofly' | 'notip' | 'nojingle' | 'win' | 'lose' | 'pause' | 'nofx' | 'norimflash';
 
 let flags: ReadonlySet<string> | null = null;
 

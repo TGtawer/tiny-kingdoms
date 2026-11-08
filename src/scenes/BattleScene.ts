@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DRAGON, ECONOMY, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
+import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, FX_COLORS, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, SPARK_FX, UNITS_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -46,6 +46,7 @@ import { PERF_AUTO_END_MS, perfFlag } from '../dev/perfFlags';
 import { BakedLayer } from '../view/BakedLayer';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
+import { ParticleBursts } from '../view/ParticleBursts';
 import { audioFiles, canPlayJingle, playJingle, playMusic, setMusicDucked, stopMusic } from '../view/music';
 import { SettingsPanel } from '../view/SettingsPanel';
 import { isSoundEnabled, playSfx } from '../view/sound';
@@ -61,6 +62,14 @@ const STRESS_UNITS = 600;
 
 /** The settings panel opens over the pause panel (the HUD overlay is at 200). */
 const SETTINGS_DEPTH = 210;
+
+/** Spark colors per side: the faction color and its light tone (docs/FX.md FX-2). */
+const SPARK_COLORS: Record<Owner, readonly number[]> = {
+  player: [COLORS.faction.player, FX_COLORS.factionLight.player],
+  enemy: [COLORS.faction.enemy, FX_COLORS.factionLight.enemy],
+  enemy2: [COLORS.faction.enemy2, FX_COLORS.factionLight.enemy2],
+  neutral: [COLORS.faction.neutral, FX_COLORS.factionLight.neutral],
+};
 
 /** Delay before the result panel, so the final capture is visible. */
 const RESULT_DELAY_MS = 700;
@@ -99,6 +108,8 @@ export class BattleScene extends Phaser.Scene {
   private units!: UnitsView;
   /** Capped flashes of clashes, tower shots and trades at nodes. */
   private flashes!: FlashPool;
+  /** Sparks of hits and releases (docs/FX.md FX-2, FX-3); null with `?perf=nofx`. */
+  private sparks: ParticleBursts | null = null;
   /** Last time the clash sound played (rate-limited). */
   private lastClashSoundAt = -Infinity;
   /** Dev only: FPS and unit counter. */
@@ -204,6 +215,7 @@ export class BattleScene extends Phaser.Scene {
       this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id), mageTower));
     }
     this.flashes = new FlashPool(this, 45);
+    this.sparks = this.fx ? new ParticleBursts(this, 46, SPARK_FX.max) : null;
     if (import.meta.env.DEV) {
       if (DEV_TOOLS.showFps) this.fpsText = this.add.text(0, 0, '', textStyle(13)).setStroke('#1f2937', px(3)).setDepth(400);
       this.stress = this.level.id === STRESS_LEVEL.id ? createStress() : null;
@@ -394,7 +406,11 @@ export class BattleScene extends Phaser.Scene {
           const dy = from.y - view.y;
           const len = Math.hypot(dx, dy) || 1;
           const color = event.outcome === 'destroyedByTower' ? COLORS.fireball : COLORS.faction[event.owner];
-          this.flashes.flash(view.x + (dx / len) * view.radius, view.y + (dy / len) * view.radius, color, this.time.now);
+          const rimX = view.x + (dx / len) * view.radius;
+          const rimY = view.y + (dy / len) * view.radius;
+          // TODO(design): FX-2 — keep the rim flash next to the sparks or drop it; compare with `?perf=norimflash`.
+          if (!(import.meta.env.DEV && perfFlag('norimflash'))) this.flashes.flash(rimX, rimY, color, this.time.now);
+          if (this.sparks) this.showHit(view, event.owner, rimX, rimY, Math.atan2(dy, dx));
         }
         break;
       }
@@ -963,6 +979,19 @@ export class BattleScene extends Phaser.Scene {
     if (!isCommandAllowed(this.tutorial, this.world, cmd)) return this.refused();
     this.queue.push(cmd);
     this.deselect();
+  }
+
+  /**
+   * A unit hit a node (docs/FX.md FX-2): the node squashes and flashes, its count jumps, an own node trembles; sparks
+   * of the attacker's colors fly out of the rim towards the attacker, at most one burst per node every
+   * SPARK_FX.hitEveryNodeMs.
+   */
+  private showHit(view: NodeView, attacker: Owner, rimX: number, rimY: number, outwards: number): void {
+    const now = this.time.now;
+    view.hit(now, view.shown.owner === 'player');
+    if (now - view.lastSparksAt < SPARK_FX.hitEveryNodeMs) return;
+    view.lastSparksAt = now;
+    this.sparks!.burst(rimX, rimY, outwards, SPARK_FX.hit, SPARK_COLORS[attacker]);
   }
 
   /** The node just showed a new owner (PLAYTEST-1 F-2): pop, burst, sound and vibration. */

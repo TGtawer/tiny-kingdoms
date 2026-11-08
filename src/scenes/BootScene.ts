@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { COLORS } from '../config/game';
 import { parseMenuFocus } from '../core/meta/menuFocus';
 import { tourScene, tourStep } from '../core/meta/onboarding';
+import { ensureDotTexture } from '../view/ParticleBursts';
 import type { BattleSceneData } from './BattleScene';
 import { getStore, setMenuFocusOverride } from './registry';
 
@@ -16,6 +17,8 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(COLORS.background);
+    // The battle effects' particle texture (docs/FX.md), ready before the first battle.
+    ensureDotTexture(this);
     // ?menuFocus=on|off: compare the menu with and without the focus mode (production builds too).
     setMenuFocusOverride(this, parseMenuFocus(window.location.search));
     // Dev shortcut: http://localhost:5173/?level=c01_l07 opens that level directly (even if locked).

@@ -45,6 +45,18 @@ export class NodeView extends Phaser.GameObjects.Container {
   private readonly layer: Phaser.GameObjects.Container;
   /** Breathing phase, random per node, so the nodes breathe out of step. */
   private readonly breathPhase = Math.random() * Math.PI * 2;
+  /** White circle over the body, shown while it flashes (FX-2); its texture is one per radius. */
+  private readonly flash: Phaser.GameObjects.Image;
+  /** When the last squash, flash, count jump and tremble started (scene ms); a new one restarts it (max, not sum). */
+  private punchAt = -Infinity;
+  private flashAt = -Infinity;
+  private countPopAt = -Infinity;
+  private trembleAt = -Infinity;
+  /** The count is scaled / the layer is shifted right now (reset once when the effect ends). */
+  private countPopped = false;
+  private trembling = false;
+  /** Last spark burst from this node (rate limit, FX-2). */
+  lastSparksAt = -Infinity;
   private readonly ring: Phaser.GameObjects.Graphics;
   /** Capacity arc around the circle: how full the node is. Baked at each of its 48 steps (PF-3). */
   private readonly cap: BakedGraphics;
@@ -74,8 +86,9 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.countText = scene.add.text(0, 0, '', textStyle(18)).setOrigin(0.5);
     this.capText = scene.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setVisible(false);
     this.shieldGfx = scene.add.graphics();
+    this.flash = scene.add.image(0, 0, '__WHITE').setVisible(false);
     this.layer = scene.make.container({}, false);
-    this.layer.add([this.cap.image, this.bodyArt.image]);
+    this.layer.add([this.cap.image, this.bodyArt.image, this.flash]);
     this.add([this.ring, this.layer, this.countText, this.capText, this.shieldGfx]);
     scene.add.existing(this);
   }
@@ -87,7 +100,39 @@ export class NodeView extends Phaser.GameObjects.Container {
   animate(now: number, fx: boolean): void {
     if (!fx) return;
     const breath = 1 + NODE_FX.breathAmp * Math.sin((NODE_FX.breathSpeed * now) / 1000 + this.breathPhase);
-    this.layer.setScale(breath);
+    const punch = fade(now - this.punchAt, NODE_FX.punchMs);
+    this.layer.setScale(breath * (1 - NODE_FX.punch * punch));
+
+    const tremble = fade(now - this.trembleAt, NODE_FX.trembleMs);
+    if (tremble > 0) {
+      const amp = px(NODE_FX.tremblePx) * tremble;
+      this.layer.setPosition((Math.random() * 2 - 1) * amp, (Math.random() * 2 - 1) * amp);
+      this.trembling = true;
+    } else if (this.trembling) {
+      this.layer.setPosition(0, 0);
+      this.trembling = false;
+    }
+
+    const flash = fade(now - this.flashAt, NODE_FX.flashMs);
+    if (flash > 0) this.flash.setVisible(true).setAlpha(NODE_FX.flashAlpha * flash);
+    else if (this.flash.visible) this.flash.setVisible(false);
+
+    const pop = fade(now - this.countPopAt, NODE_FX.countPopMs);
+    if (pop > 0) {
+      this.countText.setScale(1 + NODE_FX.countPop * pop);
+      this.countPopped = true;
+    } else if (this.countPopped) {
+      this.countText.setScale(1);
+      this.countPopped = false;
+    }
+  }
+
+  /** A unit hit the node (FX-2): squash, white flash, the count jumps; an own node also trembles. */
+  hit(now: number, own: boolean): void {
+    this.punchAt = now;
+    this.flashAt = now;
+    this.countPopAt = now;
+    if (own) this.trembleAt = now;
   }
 
   /** Re-positions and resizes after a layout change. */
@@ -99,6 +144,7 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.countText.setFontSize(Math.round(Math.max(px(15), this.radius * 0.66)));
     this.countText.setStroke('#1f2937', Math.max(2, this.radius * 0.14));
     this.capText.setStroke('#1f2937', px(4));
+    this.flash.setTexture(flashTexture(this.scene, this.radius));
     this.drawnKey = '';
     this.drawnCapKey = '';
     this.drawnShield = false;
@@ -291,6 +337,25 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.bodyArt.destroy();
     this.cap.destroy();
   }
+}
+
+/** 0..1: 1 when an effect just started, fading linearly to 0 after `ms`. */
+function fade(elapsed: number, ms: number): number {
+  return elapsed < ms ? 1 - Math.max(0, elapsed) / ms : 0;
+}
+
+/** A white disc of radius r (the node's flash, FX-2), baked once per radius at layout time. */
+function flashTexture(scene: Phaser.Scene, r: number): string {
+  const radius = Math.round(r);
+  const key = `node-flash-${radius}`;
+  if (!scene.textures.exists(key)) {
+    const size = radius * 2 + 2;
+    const g = scene.make.graphics({}, false);
+    g.fillStyle(0xffffff, 1).fillCircle(size / 2, size / 2, radius);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+  return key;
 }
 
 /**
