@@ -1,9 +1,9 @@
 import * as Phaser from 'phaser';
 import { TICK_MS } from '../config/balance';
-import { COLORS, NODE_FX, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
+import { BROKEN_STREAM_FX, COLORS, NODE_FX, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
-import type { NodeState, Owner } from '../core/sim/World';
+import { isAttacked, type NodeState, type Owner, type World } from '../core/sim/World';
 import { BakedGraphics } from './BakedGraphics';
 import { DisplayFilter } from './displayFilter';
 import { drawBuilding, drawCrown, drawKind } from './icons';
@@ -59,6 +59,12 @@ export class NodeView extends Phaser.GameObjects.Container {
   lastSparksAt = -Infinity;
   /** `released` of the node as of the last frame (FX-3): a release shows when it grows. */
   releasedSeen = 0;
+  /** Red dashed ring of a stream cut off by an attack (FX-6), its texture one per radius; hidden otherwise. */
+  private readonly brokenRing: Phaser.GameObjects.Image;
+  /** The node's stream count as of the last frame; when the ring appeared and until when the attack held it. */
+  private streamsSeen = 0;
+  private brokenAt = -Infinity;
+  private brokenHeld = -Infinity;
   private readonly ring: Phaser.GameObjects.Graphics;
   /** Capacity arc around the circle: how full the node is. Baked at each of its 48 steps (PF-3). */
   private readonly cap: BakedGraphics;
@@ -89,9 +95,10 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.capText = scene.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setVisible(false);
     this.shieldGfx = scene.add.graphics();
     this.flash = scene.add.image(0, 0, '__WHITE').setVisible(false);
+    this.brokenRing = scene.add.image(0, 0, '__WHITE').setVisible(false);
     this.layer = scene.make.container({}, false);
     this.layer.add([this.cap.image, this.bodyArt.image, this.flash]);
-    this.add([this.ring, this.layer, this.countText, this.capText, this.shieldGfx]);
+    this.add([this.ring, this.layer, this.brokenRing, this.countText, this.capText, this.shieldGfx]);
     scene.add.existing(this);
   }
 
@@ -119,6 +126,18 @@ export class NodeView extends Phaser.GameObjects.Container {
     if (flash > 0) this.flash.setVisible(true).setAlpha(NODE_FX.flashAlpha * flash);
     else if (this.flash.visible) this.flash.setVisible(false);
 
+    const B = BROKEN_STREAM_FX;
+    const ringFade = now <= this.brokenHeld ? 1 : fade(now - this.brokenHeld, B.fadeMs);
+    if (ringFade > 0 && now >= this.brokenAt) {
+      const t = (now - this.brokenAt) / 1000;
+      this.brokenRing
+        .setVisible(true)
+        .setRotation(((now - this.brokenAt) / B.turnMs) * Math.PI * 2)
+        .setAlpha((B.pulseBase + B.pulseAmp * Math.sin(B.pulseSpeed * t)) * ringFade);
+    } else if (this.brokenRing.visible) {
+      this.brokenRing.setVisible(false);
+    }
+
     const pop = fade(now - this.countPopAt, NODE_FX.countPopMs);
     if (pop > 0) {
       this.countText.setScale(1 + NODE_FX.countPop * pop);
@@ -126,6 +145,23 @@ export class NodeView extends Phaser.GameObjects.Container {
     } else if (this.countPopped) {
       this.countText.setScale(1);
       this.countPopped = false;
+    }
+  }
+
+  /**
+   * The "stream broken" ring of an own node (FX-6), from the world each frame: the node streamed last frame, streams
+   * no more and is attacked — the attack cut the stream off (the rest stayed home). A stream that simply ran out
+   * shows nothing. The ring stays while the node is attacked, at least BROKEN_STREAM_FX.minMs.
+   */
+  syncBrokenStream(world: World, node: NodeState, now: number): void {
+    const before = this.streamsSeen;
+    this.streamsSeen = node.streams;
+    const own = node.owner === 'player';
+    if (own && before > 0 && node.streams === 0 && isAttacked(world, node)) {
+      this.brokenAt = now;
+      this.brokenHeld = now + BROKEN_STREAM_FX.minMs;
+    } else if (this.brokenRing.visible && own && isAttacked(world, node)) {
+      this.brokenHeld = Math.max(this.brokenHeld, now);
     }
   }
 
@@ -153,6 +189,7 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.countText.setStroke('#1f2937', Math.max(2, this.radius * 0.14));
     this.capText.setStroke('#1f2937', px(4));
     this.flash.setTexture(flashTexture(this.scene, this.radius));
+    this.brokenRing.setTexture(brokenRingTexture(this.scene, this.radius));
     this.drawnKey = '';
     this.drawnCapKey = '';
     this.drawnShield = false;
@@ -361,6 +398,32 @@ function flashTexture(scene: Phaser.Scene, r: number): string {
     const size = radius * 2 + 2;
     const g = scene.make.graphics({}, false);
     g.fillStyle(0xffffff, 1).fillCircle(size / 2, size / 2, radius);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+  return key;
+}
+
+/** The red dashed ring of a broken stream (FX-6) around a node of radius r, baked once per radius at layout time. */
+function brokenRingTexture(scene: Phaser.Scene, r: number): string {
+  const B = BROKEN_STREAM_FX;
+  const radius = Math.round(r + px(B.gapPx));
+  const key = `node-broken-${radius}`;
+  if (!scene.textures.exists(key)) {
+    const width = px(B.widthPx);
+    const size = Math.ceil(radius * 2 + width + 4);
+    const c = size / 2;
+    // Whole dashes around the circle: dash and gap stretched a little to close the ring.
+    const dashes = Math.max(4, Math.round((Math.PI * 2 * radius) / px(B.dashPx + B.dashGapPx)));
+    const step = (Math.PI * 2) / dashes;
+    const dash = (step * B.dashPx) / (B.dashPx + B.dashGapPx);
+    const g = scene.make.graphics({}, false);
+    g.lineStyle(width, COLORS.faction.enemy, 1);
+    for (let i = 0; i < dashes; i++) {
+      g.beginPath();
+      g.arc(c, c, radius, i * step, i * step + dash);
+      g.strokePath();
+    }
     g.generateTexture(key, size, size);
     g.destroy();
   }

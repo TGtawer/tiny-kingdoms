@@ -687,6 +687,7 @@ export class BattleScene extends Phaser.Scene {
         // Only the player's own nodes (docs/FX.md, open question 1).
         if (this.sparks && node.owner === 'player') this.showRelease(view, node);
       }
+      if (this.fx) view.syncBrokenStream(world, node, this.time.now);
       view.animate(this.time.now, this.fx);
     }
 

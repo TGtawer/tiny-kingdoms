@@ -190,6 +190,25 @@ export const DUST_FX = {
   offAboveUnits: 400,
 } as const;
 
+/**
+ * "Stream broken" ring (docs/FX.md FX-6): an own node's stream was cut off by an attack. A red dashed ring at
+ * r + gapPx turns and pulses while the node is attacked, at least minMs, then fades. CSS px, ms.
+ */
+export const BROKEN_STREAM_FX = {
+  gapPx: 8,
+  widthPx: 3,
+  dashPx: 8,
+  dashGapPx: 6,
+  /** One turn per turnMs. */
+  turnMs: 1900,
+  /** Alpha pulseBase + pulseAmp · sin(pulseSpeed · t), t in s. */
+  pulseBase: 0.55,
+  pulseAmp: 0.45,
+  pulseSpeed: 16.7,
+  minMs: 600,
+  fadeMs: 200,
+} as const;
+
 /** Textures of the battle effects (docs/FX.md), baked in BootScene. */
 export const FX_TEXTURES = {
   /** A white square every particle is drawn with (tinted), game px. */
