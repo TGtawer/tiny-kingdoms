@@ -40,6 +40,19 @@ describe('stream release (GDD 3.6)', () => {
     expect(world.nodes.P!.streams).toBe(0);
   });
 
+  it('released counts every unit a node put on a road, transit included (docs/FX.md FX-3)', () => {
+    const world = freezeEconomy(lineWorld({ P: { troops: 20 }, N: { owner: 'player', troops: 2 } }));
+    step(world, [swipe('P', 'E')]);
+    const sent = world.streams[0]!.left + 1;
+    expect(world.nodes.P!.released).toBe(1);
+    const events = drain(world);
+    expect(world.nodes.P!.released).toBe(sent);
+    // Every unit passed N in transit and left it again.
+    expect(world.nodes.N!.released).toBe(eventsOf(events, 'transit').filter((e) => e.nodeId === 'N').length);
+    expect(world.nodes.N!.released).toBeGreaterThan(0);
+    expect(world.nodes.E!.released).toBe(0);
+  });
+
   it('a re-swipe cancels the rest of the old stream and sends 75% of the current garrison', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 20 } }));
     run(world, ticksPerSec, [swipe('P', 'N')]);

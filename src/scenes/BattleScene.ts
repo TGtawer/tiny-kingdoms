@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { DRAGON, ECONOMY, MAGE, SPEED_UP, TICK_MS, type BuildingType, type SpellId } from '../config/balance';
-import { COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, UNITS_FX, type JingleId } from '../config/game';
+import { CAPTURE_FX, COLORS, DEV_TOOLS, DRAG_THRESHOLD_PX, FX_COLORS, HAPTICS, HUD, INFO_LABEL_MS, INTRO_CARD, MAGE_FX, MAX_FRAME_DELTA_MS, MUSIC, SHOW_LEADER_INTRO, SPARK_FX, UNITS_FX, VICTORY_FX, type JingleId } from '../config/game';
 import { battleTrack, resultJingle } from '../core/audio/playlist';
 import { aiParamsFromLevel, aiStep, createAi, type AiState } from '../core/ai/EnemyAI';
 import type { LevelData } from '../core/level/schema';
@@ -9,6 +9,7 @@ import { armyPath, blockingNode } from '../core/sim/pathfinding';
 import { contestStep, createContest, type ContestState } from '../core/dev/contest';
 import { createStress, stressStep, type StressState } from '../core/dev/stress';
 import { battleSpeed, runClock } from '../core/sim/clock';
+import { captureFeedback, type CaptureFeedback } from '../core/fx/captureFeedback';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
@@ -46,6 +47,9 @@ import { PERF_AUTO_END_MS, perfFlag } from '../dev/perfFlags';
 import { BakedLayer } from '../view/BakedLayer';
 import { RoadView } from '../view/RoadView';
 import { FlashPool, UnitsView } from '../view/UnitsView';
+import { ParticleBursts } from '../view/ParticleBursts';
+import { CaptureRings } from '../view/CaptureRings';
+import { VictoryWave } from '../view/VictoryWave';
 import { audioFiles, canPlayJingle, playJingle, playMusic, setMusicDucked, stopMusic } from '../view/music';
 import { SettingsPanel } from '../view/SettingsPanel';
 import { isSoundEnabled, playSfx } from '../view/sound';
@@ -61,6 +65,19 @@ const STRESS_UNITS = 600;
 
 /** The settings panel opens over the pause panel (the HUD overlay is at 200). */
 const SETTINGS_DEPTH = 210;
+
+/** Spark colors per side: the faction color and its light tone (docs/FX.md FX-2). */
+const SPARK_COLORS: Record<Owner, readonly number[]> = {
+  player: [COLORS.faction.player, FX_COLORS.factionLight.player],
+  enemy: [COLORS.faction.enemy, FX_COLORS.factionLight.enemy],
+  enemy2: [COLORS.faction.enemy2, FX_COLORS.factionLight.enemy2],
+  neutral: [COLORS.faction.neutral, FX_COLORS.factionLight.neutral],
+};
+
+/** Release sparks (FX-3): the player's light tone. */
+const RELEASE_COLORS: readonly number[] = [FX_COLORS.factionLight.player];
+/** How many of the newest units a release looks through for the one that just left (its road gives the direction). */
+const RELEASE_LOOKBACK = 16;
 
 /** Delay before the result panel, so the final capture is visible. */
 const RESULT_DELAY_MS = 700;
@@ -99,11 +116,28 @@ export class BattleScene extends Phaser.Scene {
   private units!: UnitsView;
   /** Capped flashes of clashes, tower shots and trades at nodes. */
   private flashes!: FlashPool;
+  /** Sparks of hits and releases (docs/FX.md FX-2, FX-3); null with `?perf=nofx`. */
+  private sparks: ParticleBursts | null = null;
+  /** Rings and confetti of a capture by the player (FX-7); null with `?perf=nofx`. */
+  private captureRings: CaptureRings | null = null;
+  private confetti: ParticleBursts | null = null;
+  /** FX-8: when the player last lost each node (scene ms), the last shake and hit-stop, and when the hit-stop ends. */
+  private lostAt = new Map<string, number>();
+  private lastShakeAt = -Infinity;
+  private lastHitStopAt = -Infinity;
+  private hitStopUntil = -Infinity;
+  private readonly feedback: CaptureFeedback = { shake: 'none', hitStop: false };
+  /** FX-9: the victory wave (null with `?perf=nofx`) and the node the player captured last (its fallback origin). */
+  private victoryWave: VictoryWave | null = null;
+  private lastPlayerCapture: string | null = null;
   /** Last time the clash sound played (rate-limited). */
   private lastClashSoundAt = -Infinity;
   /** Dev only: FPS and unit counter. */
   private fpsText: Phaser.GameObjects.Text | null = null;
   private fpsShownAt = 0;
+  /** Dev only: frames and the longest frame (ms) since the counter was last shown. */
+  private fpsFrames = 0;
+  private fpsWorstMs = 0;
   /** Dev only: the stress driver on dev_stress (instead of the AIs). */
   private stress: StressState | null = null;
   /** Dev only: the contest driver on dev_contest (instead of the AIs). */
@@ -142,6 +176,8 @@ export class BattleScene extends Phaser.Scene {
   private uiEvents: UiEvent[] = [];
   /** Simulation speed: 1, or SPEED_UP.multiplier while the speed-up is on. */
   private speed = 1;
+  /** Battle effects of docs/FX.md; off with the dev flag `?perf=nofx` (A/B profiling, FX-0). */
+  private fx = true;
 
   constructor() {
     super('BattleScene');
@@ -155,7 +191,14 @@ export class BattleScene extends Phaser.Scene {
     // The scene instance is reused on restart: reset all state.
     this.nodeViews = new Map();
     this.lastClashSoundAt = -Infinity;
+    this.lostAt = new Map();
+    this.lastShakeAt = -Infinity;
+    this.lastHitStopAt = -Infinity;
+    this.hitStopUntil = -Infinity;
     this.fpsText = null;
+    this.fpsFrames = 0;
+    this.fpsWorstMs = 0;
+    this.fpsShownAt = this.time.now;
     this.queue = [];
     this.accumulator = 0;
     this.paused = false;
@@ -167,6 +210,7 @@ export class BattleScene extends Phaser.Scene {
     this.armed = null;
     this.uiEvents = [];
     this.speed = 1;
+    this.fx = !(import.meta.env.DEV && perfFlag('nofx'));
     this.infoLabel = null;
     this.stats = { lostOwnNode: false, builtBarracks: false, builtMine: false, hadVeinWithoutMine: false };
     this.mapReveal = null;
@@ -194,13 +238,21 @@ export class BattleScene extends Phaser.Scene {
     this.ground = new BakedLayer(this, 'battle-ground');
     this.background = this.make.graphics({}, false);
     this.roads = new RoadView(this);
-    this.units = new UnitsView(this);
+    this.units = new UnitsView(this, this.fx);
     this.capitals = new Set(this.level.nodes.filter((n) => n.capital).map((n) => n.id));
     for (const node of Object.values(this.world.nodes)) {
       const mageTower = this.world.boss?.type === 'mage' && this.world.boss.towerId === node.id;
       this.nodeViews.set(node.id, new NodeView(this, node, this.capitals.has(node.id), mageTower));
     }
     this.flashes = new FlashPool(this, 45);
+    this.sparks = this.fx ? new ParticleBursts(this, 46, SPARK_FX.max) : null;
+    this.captureRings = this.fx ? new CaptureRings(this, 44) : null;
+    this.confetti = this.fx
+      ? new ParticleBursts(this, 47, CAPTURE_FX.confettiMax, { gravity: CAPTURE_FX.confettiGravity, spin: CAPTURE_FX.confettiSpin })
+      : null;
+    this.victoryWave = this.confetti ? new VictoryWave(this, 43, this.confetti) : null;
+    this.lastPlayerCapture = null;
+    for (const view of this.nodeViews.values()) view.fx = this.fx;
     if (import.meta.env.DEV) {
       if (DEV_TOOLS.showFps) this.fpsText = this.add.text(0, 0, '', textStyle(13)).setStroke('#1f2937', px(3)).setDepth(400);
       this.stress = this.level.id === STRESS_LEVEL.id ? createStress() : null;
@@ -284,7 +336,7 @@ export class BattleScene extends Phaser.Scene {
       this.accumulator = runClock(
         this.accumulator,
         Math.min(delta, MAX_FRAME_DELTA_MS),
-        () => battleSpeed(this.speed, this.isChoosing()),
+        () => battleSpeed(this.speed, this.isChoosing(), time < this.hitStopUntil ? CAPTURE_FX.hitStopSpeed : null),
         () => {
           this.tickOnce();
           return !this.ended;
@@ -382,6 +434,11 @@ export class BattleScene extends Phaser.Scene {
           const owner = this.world.nodes[event.nodeId]!.owner;
           if (this.selected === event.nodeId) this.deselect();
           if (this.ownersBefore.get(event.nodeId) === 'player' && owner !== 'player') this.stats.lostOwnNode = true;
+          // The recolor wave starts on the side the capturing unit came from (FX-7).
+          if (owner === 'player') {
+            const from = this.nodeViews.get(event.fromId)!;
+            view.captureAngle = Math.atan2(from.y - view.y, from.x - view.x);
+          }
           // Later arrivals in the same tick compare against the new owner.
           this.ownersBefore.set(event.nodeId, owner);
         } else if (event.outcome === 'destroyedByTower' || event.outcome === 'repelled') {
@@ -391,7 +448,11 @@ export class BattleScene extends Phaser.Scene {
           const dy = from.y - view.y;
           const len = Math.hypot(dx, dy) || 1;
           const color = event.outcome === 'destroyedByTower' ? COLORS.fireball : COLORS.faction[event.owner];
-          this.flashes.flash(view.x + (dx / len) * view.radius, view.y + (dy / len) * view.radius, color, this.time.now);
+          const rimX = view.x + (dx / len) * view.radius;
+          const rimY = view.y + (dy / len) * view.radius;
+          // TODO(design): FX-2 — keep the rim flash next to the sparks or drop it; compare with `?perf=norimflash`.
+          if (!(import.meta.env.DEV && perfFlag('norimflash'))) this.flashes.flash(rimX, rimY, color, this.time.now);
+          if (this.sparks) this.showHit(view, event.owner, rimX, rimY, Math.atan2(dy, dx));
         }
         break;
       }
@@ -516,10 +577,25 @@ export class BattleScene extends Phaser.Scene {
     stopMusic(MUSIC.endFadeMs);
     if (!withJingle && !silent) playSfx(won ? 'victory' : 'defeat');
     if (won) this.vibrate(HAPTICS.victory);
-    this.time.delayedCall(RESULT_DELAY_MS, () => {
+    const wave = won && this.startVictoryWave();
+    this.time.delayedCall(wave ? VICTORY_FX.resultDelayMs : RESULT_DELAY_MS, () => {
       if (withJingle) playJingle(jingle);
       this.showResult(winner, reason, reward.crystals, stars);
     });
+  }
+
+  /**
+   * The victory wave (docs/FX.md FX-9) from the player's capital, or from the node the player captured last if the
+   * capital is not theirs. False when there is none (effects off or no origin).
+   */
+  private startVictoryWave(): boolean {
+    if (!this.victoryWave) return false;
+    const capital = this.world.capitals.player;
+    const originId = capital && this.world.nodes[capital]?.owner === 'player' ? capital : this.lastPlayerCapture;
+    const origin = originId ? this.nodeViews.get(originId) : undefined;
+    if (!origin) return false;
+    this.victoryWave.start(origin, [...this.nodeViews.values()], this.time.now);
+    return true;
   }
 
   private showResult(winner: Side, reason: OutcomeReason, crystals: number, checks: StarChecks): void {
@@ -644,6 +720,7 @@ export class BattleScene extends Phaser.Scene {
     this.roads.draw(this.world, this.layoutField);
     this.ground.bake(w, h, [this.background, this.roads.graphics]);
     this.units.layout(this.layoutField);
+    this.captureRings?.layout(nodes.map((n) => this.layoutField.nodeRadius(n.size)));
     for (const node of nodes) this.nodeViews.get(node.id)!.place(node, this.layoutField);
     // Bottom-left, above the bottom bar: clear of the top bar and the goal plaque.
     this.fpsText?.setPosition(px(8), h - px(HUD.bottomBar + 22));
@@ -658,10 +735,19 @@ export class BattleScene extends Phaser.Scene {
       const view = this.nodeViews.get(node.id)!;
       if (view.sync(node, this.time.now) & SHOWN_OWNER_CHANGED) this.showCapture(view);
       view.setHighlight(this.highlightFor(node));
+      if (node.released !== view.releasedSeen) {
+        view.releasedSeen = node.released;
+        // Only the player's own nodes (docs/FX.md, open question 1).
+        if (this.sparks && node.owner === 'player') this.showRelease(view, node);
+      }
+      if (this.fx) view.syncBrokenStream(world, node, this.time.now);
+      view.animate(this.time.now, this.fx);
     }
 
     this.units.render(world, this.layoutField, alpha);
     this.flashes.update(this.time.now);
+    this.captureRings?.update(this.time.now);
+    this.victoryWave?.update(this.time.now);
     this.updateFps();
 
     this.drawDragLines();
@@ -677,9 +763,18 @@ export class BattleScene extends Phaser.Scene {
 
   /** Dev counter, refreshed twice a second (a Text redraw per frame would cost more than the units). */
   private updateFps(): void {
-    if (!this.fpsText || this.time.now - this.fpsShownAt < 500) return;
+    if (!this.fpsText) return;
+    // The real rate over the window, not Phaser's actualFps: that one is a moving average updated once a second
+    // with a weight of 0.25, so a single slow frame keeps it below 60 for ~10 s (docs/PERF.md PF-6).
+    this.fpsFrames++;
+    this.fpsWorstMs = Math.max(this.fpsWorstMs, this.game.loop.rawDelta);
+    const elapsed = this.time.now - this.fpsShownAt;
+    if (elapsed < 500) return;
+    const fps = Math.round((this.fpsFrames * 1000) / elapsed);
+    this.fpsText.setText(`FPS ${fps} · max ${Math.round(this.fpsWorstMs)} ms · units ${this.world.units.length}`);
     this.fpsShownAt = this.time.now;
-    this.fpsText.setText(`FPS ${Math.round(this.game.loop.actualFps)} · units ${this.world.units.length}`);
+    this.fpsFrames = 0;
+    this.fpsWorstMs = 0;
   }
 
   private highlightFor(node: NodeState): Highlight {
@@ -961,19 +1056,93 @@ export class BattleScene extends Phaser.Scene {
     this.deselect();
   }
 
+  /**
+   * A unit hit a node (docs/FX.md FX-2): the node squashes and flashes, its count jumps, an own node trembles; sparks
+   * of the attacker's colors fly out of the rim towards the attacker, at most one burst per node every
+   * SPARK_FX.hitEveryNodeMs.
+   */
+  private showHit(view: NodeView, attacker: Owner, rimX: number, rimY: number, outwards: number): void {
+    const now = this.time.now;
+    view.hit(now, view.shown.owner === 'player');
+    if (now - view.lastSparksAt < SPARK_FX.hitEveryNodeMs) return;
+    view.lastSparksAt = now;
+    this.sparks!.burst(rimX, rimY, outwards, SPARK_FX.hit, SPARK_COLORS[attacker]);
+  }
+
+  /**
+   * A unit left an own node (docs/FX.md FX-3): the node squashes and flashes, light sparks fly from the rim towards
+   * the road the newest unit took. Several units in one frame show once (the impulses don't add up).
+   */
+  private showRelease(view: NodeView, node: NodeState): void {
+    view.release(this.time.now);
+    // The newest unit from this node: new units are at the end of world.units (swap-remove only moves old ones).
+    const units = this.world.units;
+    let to: NodeView | undefined;
+    for (let i = units.length - 1; i >= 0 && i >= units.length - RELEASE_LOOKBACK; i--) {
+      const route = units[i]!.route;
+      if (route.path[0] === node.id) {
+        to = this.nodeViews.get(route.path[1]!);
+        break;
+      }
+    }
+    if (!to) return;
+    const angle = Math.atan2(to.y - view.y, to.x - view.x);
+    const rimX = view.x + Math.cos(angle) * view.radius;
+    const rimY = view.y + Math.sin(angle) * view.radius;
+    this.sparks!.burst(rimX, rimY, angle, SPARK_FX.release, RELEASE_COLORS);
+  }
+
   /** The node just showed a new owner (PLAYTEST-1 F-2): pop, burst, sound and vibration. */
   private showCapture(view: NodeView): void {
     const owner = view.shown.owner;
     const before = view.shown.previousOwner;
     pop(this, view);
-    ringBurst(this, view.x, view.y, view.radius, COLORS.faction[owner]);
+    if (owner === 'player' && this.captureRings && this.confetti) {
+      // FX-7: two rings and confetti instead of the plain ring.
+      this.captureRings.play(view.x, view.y, view.radius, FX_COLORS.factionLight.player, this.time.now);
+      this.confetti.burst(view.x, view.y, 0, CAPTURE_FX.confetti, CAPTURE_FX.confettiColors);
+    } else {
+      ringBurst(this, view.x, view.y, view.radius, COLORS.faction[owner]);
+    }
     if (owner === 'player') {
+      this.lastPlayerCapture = view.nodeId;
       playSfx('capture');
       this.vibrate(HAPTICS.short);
-      if (isRival('player', before) && view.capital) this.shake();
+      const enemyCapital = isRival('player', before) && view.capital;
+      if (this.fx) this.captureFeedback(view, enemyCapital);
+      else if (enemyCapital) this.shake();
     } else if (before === 'player') {
       playSfx('lost');
       this.vibrate(HAPTICS.short);
+      this.lostAt.set(view.nodeId, this.time.now);
+    }
+  }
+
+  /** Camera shake and hit-stop of a capture by the player (docs/FX.md FX-8); the decision is core/fx/captureFeedback. */
+  private captureFeedback(view: NodeView, enemyCapital: boolean): void {
+    const now = this.time.now;
+    const decision = captureFeedback(
+      {
+        now,
+        enemyCapital,
+        lostAt: this.lostAt.get(view.nodeId) ?? -Infinity,
+        lastShakeAt: this.lastShakeAt,
+        lastHitStopAt: this.lastHitStopAt,
+        choosing: this.isChoosing(),
+        over: this.ended,
+      },
+      CAPTURE_FX,
+      this.feedback,
+    );
+    if (decision.shake !== 'none') {
+      const shake = decision.shake === 'capital' ? CAPTURE_FX.capitalShake : CAPTURE_FX.shake;
+      // A capital's shake overrides one in progress; a normal one doesn't cut a stronger shake short.
+      this.cameras.main.shake(shake.ms, shake.intensity, decision.shake === 'capital');
+      this.lastShakeAt = now;
+    }
+    if (decision.hitStop) {
+      this.hitStopUntil = now + CAPTURE_FX.hitStopMs;
+      this.lastHitStopAt = now;
     }
   }
 

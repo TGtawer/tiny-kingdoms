@@ -1,11 +1,12 @@
 import * as Phaser from 'phaser';
 import { TICK_MS } from '../config/balance';
-import { COLORS, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
+import { BROKEN_STREAM_FX, CAPTURE_FX, COLORS, NODE_FX, NODE_LIP, NODE_VIEW, SHIELD_FX } from '../config/game';
 import { visibleTroops } from '../core/sim/commands';
 import { nodeCapacity } from '../core/sim/economy';
-import type { NodeState, Owner } from '../core/sim/World';
+import { isAttacked, type NodeState, type Owner, type World } from '../core/sim/World';
 import { BakedGraphics } from './BakedGraphics';
-import { DisplayFilter } from './displayFilter';
+import { easeOutCubic } from './CaptureRings';
+import { DisplayFilter, SHOWN_OWNER_CHANGED } from './displayFilter';
 import { drawBuilding, drawCrown, drawKind } from './icons';
 import { px, textStyle, type ScreenLayout } from './layout';
 
@@ -38,6 +39,45 @@ export class NodeView extends Phaser.GameObjects.Container {
 
   /** Circle, badges, crown: baked (PF-5). */
   private readonly bodyArt: BakedGraphics;
+  /**
+   * The body and the capacity arc in their own container: the effects of docs/FX.md scale and shift it (FX-1), while
+   * `pop()` tweens the node container itself, so the two never overwrite each other. The count stays outside.
+   */
+  private readonly layer: Phaser.GameObjects.Container;
+  /** Breathing phase, random per node, so the nodes breathe out of step. */
+  private readonly breathPhase = Math.random() * Math.PI * 2;
+  /** White circle over the body, shown while it flashes (FX-2); its texture is one per radius. */
+  private readonly flash: Phaser.GameObjects.Image;
+  /** When the last squash, flash, count jump and tremble started (scene ms); a new one restarts it (max, not sum). */
+  private punchAt = -Infinity;
+  private flashAt = -Infinity;
+  private countPopAt = -Infinity;
+  private trembleAt = -Infinity;
+  /** The count is scaled / the layer is shifted right now (reset once when the effect ends). */
+  private countPopped = false;
+  private trembling = false;
+  /** Last spark burst from this node (rate limit, FX-2). */
+  lastSparksAt = -Infinity;
+  /** `released` of the node as of the last frame (FX-3): a release shows when it grows. */
+  releasedSeen = 0;
+  /** Red dashed ring of a stream cut off by an attack (FX-6), its texture one per radius; hidden otherwise. */
+  private readonly brokenRing: Phaser.GameObjects.Image;
+  /** The node's stream count as of the last frame; when the ring appeared and until when the attack held it. */
+  private streamsSeen = 0;
+  private brokenAt = -Infinity;
+  private brokenHeld = -Infinity;
+  /** Battle effects on (docs/FX.md; off with the dev flag `?perf=nofx`). */
+  fx = false;
+  /**
+   * Direction from the node towards where the unit that captured it came from, radians (set by the scene on a
+   * capture by the player); the recolor wave starts on that side (FX-7). Used once.
+   */
+  captureAngle: number | null = null;
+  /** The recolor wave (FX-7): the body keeps the old owner until it ends; the new colors are drawn in `waveGfx`. */
+  private waveFrom: Owner | null = null;
+  private waveAt = -Infinity;
+  private waveAngle = 0;
+  private readonly waveGfx: Phaser.GameObjects.Graphics;
   private readonly ring: Phaser.GameObjects.Graphics;
   /** Capacity arc around the circle: how full the node is. Baked at each of its 48 steps (PF-3). */
   private readonly cap: BakedGraphics;
@@ -67,8 +107,113 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.countText = scene.add.text(0, 0, '', textStyle(18)).setOrigin(0.5);
     this.capText = scene.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setVisible(false);
     this.shieldGfx = scene.add.graphics();
-    this.add([this.ring, this.cap.image, this.bodyArt.image, this.countText, this.capText, this.shieldGfx]);
+    this.flash = scene.add.image(0, 0, '__WHITE').setVisible(false);
+    this.brokenRing = scene.add.image(0, 0, '__WHITE').setVisible(false);
+    this.layer = scene.make.container({}, false);
+    this.waveGfx = scene.add.graphics().setVisible(false);
+    this.layer.add([this.cap.image, this.bodyArt.image, this.waveGfx, this.flash]);
+    this.add([this.ring, this.layer, this.brokenRing, this.countText, this.capText, this.shieldGfx]);
     scene.add.existing(this);
+  }
+
+  /**
+   * Per-frame node effects (docs/FX.md), from the scene time `now`, ms. Off (`fx` false: dev `?perf=nofx`) the layer
+   * stays at rest.
+   */
+  animate(now: number, fx: boolean): void {
+    if (!fx) return;
+    const breath = 1 + NODE_FX.breathAmp * Math.sin((NODE_FX.breathSpeed * now) / 1000 + this.breathPhase);
+    const punch = fade(now - this.punchAt, NODE_FX.punchMs);
+    this.layer.setScale(breath * (1 - NODE_FX.punch * punch));
+
+    const tremble = fade(now - this.trembleAt, NODE_FX.trembleMs);
+    if (tremble > 0) {
+      const amp = px(NODE_FX.tremblePx) * tremble;
+      this.layer.setPosition((Math.random() * 2 - 1) * amp, (Math.random() * 2 - 1) * amp);
+      this.trembling = true;
+    } else if (this.trembling) {
+      this.layer.setPosition(0, 0);
+      this.trembling = false;
+    }
+
+    const flash = fade(now - this.flashAt, NODE_FX.flashMs);
+    if (flash > 0) this.flash.setVisible(true).setAlpha(NODE_FX.flashAlpha * flash);
+    else if (this.flash.visible) this.flash.setVisible(false);
+
+    const B = BROKEN_STREAM_FX;
+    const ringFade = now <= this.brokenHeld ? 1 : fade(now - this.brokenHeld, B.fadeMs);
+    if (ringFade > 0 && now >= this.brokenAt) {
+      const t = (now - this.brokenAt) / 1000;
+      this.brokenRing
+        .setVisible(true)
+        .setRotation(((now - this.brokenAt) / B.turnMs) * Math.PI * 2)
+        .setAlpha((B.pulseBase + B.pulseAmp * Math.sin(B.pulseSpeed * t)) * ringFade);
+    } else if (this.brokenRing.visible) {
+      this.brokenRing.setVisible(false);
+    }
+
+    if (this.waveFrom !== null) {
+      this.drawWave(easeOutCubic(Math.min(1, (now - this.waveAt) / CAPTURE_FX.waveMs)));
+    } else if (this.waveGfx.visible) {
+      this.waveGfx.clear().setVisible(false);
+    }
+
+    const pop = fade(now - this.countPopAt, NODE_FX.countPopMs);
+    if (pop > 0) {
+      this.countText.setScale(1 + NODE_FX.countPop * pop);
+      this.countPopped = true;
+    } else if (this.countPopped) {
+      this.countText.setScale(1);
+      this.countPopped = false;
+    }
+  }
+
+  /**
+   * The "stream broken" ring of an own node (FX-6), from the world each frame: the node streamed last frame, streams
+   * no more and is attacked — the attack cut the stream off (the rest stayed home). A stream that simply ran out
+   * shows nothing. The ring stays while the node is attacked, at least BROKEN_STREAM_FX.minMs.
+   */
+  syncBrokenStream(world: World, node: NodeState, now: number): void {
+    const before = this.streamsSeen;
+    this.streamsSeen = node.streams;
+    const own = node.owner === 'player';
+    if (own && before > 0 && node.streams === 0 && isAttacked(world, node)) {
+      this.brokenAt = now;
+      this.brokenHeld = now + BROKEN_STREAM_FX.minMs;
+    } else if (this.brokenRing.visible && own && isAttacked(world, node)) {
+      this.brokenHeld = Math.max(this.brokenHeld, now);
+    }
+  }
+
+  /**
+   * The player's colors spreading over the circle (FX-7): the rim and the face, each cut by a circle growing from the
+   * rim on the attacker's side to twice the radius (`e` 0..1), and the outline over them. Icons and the shine wait
+   * under it until the body is re-baked at the end.
+   */
+  private drawWave(e: number): void {
+    const g = this.waveGfx;
+    const r = this.radius;
+    const bx = Math.cos(this.waveAngle) * r;
+    const by = Math.sin(this.waveAngle) * r;
+    const grow = e * 2 * r;
+    g.clear().setVisible(true);
+    fillLens(g, 0, 0, r, bx, by, grow, COLORS.factionDark.player);
+    fillLens(g, 0, -r * NODE_LIP, r * (1 - NODE_LIP), bx, by, grow, COLORS.faction.player);
+    g.lineStyle(Math.max(2, r * 0.09), COLORS.outline, 1).strokeCircle(0, 0, r);
+  }
+
+  /** A unit left the node (FX-3): squash and white flash; overlapping releases restart them (max, not sum). */
+  release(now: number): void {
+    this.punchAt = now;
+    this.flashAt = now;
+  }
+
+  /** A unit hit the node (FX-2): squash, white flash, the count jumps; an own node also trembles. */
+  hit(now: number, own: boolean): void {
+    this.punchAt = now;
+    this.flashAt = now;
+    this.countPopAt = now;
+    if (own) this.trembleAt = now;
   }
 
   /** Re-positions and resizes after a layout change. */
@@ -80,11 +225,16 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.countText.setFontSize(Math.round(Math.max(px(15), this.radius * 0.66)));
     this.countText.setStroke('#1f2937', Math.max(2, this.radius * 0.14));
     this.capText.setStroke('#1f2937', px(4));
+    this.flash.setTexture(flashTexture(this.scene, this.radius));
+    this.brokenRing.setTexture(brokenRingTexture(this.scene, this.radius));
     this.drawnKey = '';
     this.drawnCapKey = '';
     this.drawnShield = false;
+    this.waveFrom = null;
+    this.captureAngle = null;
     this.drawHighlight();
     this.shown.reset(node.owner, visibleTroops(node.troops));
+    this.releasedSeen = node.released;
     this.sync(node, 0);
   }
 
@@ -95,10 +245,19 @@ export class NodeView extends Phaser.GameObjects.Container {
   sync(node: NodeState, now: number): number {
     const changed = this.shown.update(now, node.owner, visibleTroops(node.troops));
     const owner = this.shown.owner;
-    const key = `${owner}|${node.kind}|${node.size}|${node.building?.type ?? '-'}|${node.building?.level ?? 0}|${node.hasGoldVein}|${this.radius}`;
+    // A capture by the player shows as a wave (FX-7): the body keeps the old owner until it has passed.
+    if (changed & SHOWN_OWNER_CHANGED) {
+      this.waveFrom = this.fx && owner === 'player' && this.captureAngle !== null ? this.shown.previousOwner : null;
+      this.waveAt = now;
+      this.waveAngle = this.captureAngle ?? 0;
+      this.captureAngle = null;
+    }
+    if (this.waveFrom !== null && now - this.waveAt >= CAPTURE_FX.waveMs) this.waveFrom = null;
+    const bodyOwner = this.waveFrom ?? owner;
+    const key = `${bodyOwner}|${node.kind}|${node.size}|${node.building?.type ?? '-'}|${node.building?.level ?? 0}|${node.hasGoldVein}|${this.radius}`;
     if (key !== this.drawnKey) {
       this.drawnKey = key;
-      this.drawBody(node, owner);
+      this.drawBody(node, bodyOwner);
     }
     const troops = this.shown.troops;
     if (troops !== this.drawnCount) {
@@ -272,6 +431,77 @@ export class NodeView extends Phaser.GameObjects.Container {
     this.bodyArt.destroy();
     this.cap.destroy();
   }
+}
+
+/** Fills the part of circle A (center ax, ay, radius ra) inside circle B (bx, by, rb): the lens between two arcs. */
+function fillLens(g: Phaser.GameObjects.Graphics, ax: number, ay: number, ra: number, bx: number, by: number, rb: number, color: number): void {
+  if (rb <= 0) return;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const d = Math.hypot(dx, dy);
+  g.fillStyle(color, 1);
+  if (d + ra <= rb) {
+    g.fillCircle(ax, ay, ra);
+    return;
+  }
+  if (d >= ra + rb) return;
+  if (d + rb <= ra) {
+    g.fillCircle(bx, by, rb);
+    return;
+  }
+  const phi = Math.atan2(dy, dx);
+  const alpha = Math.acos((d * d + ra * ra - rb * rb) / (2 * d * ra));
+  const beta = Math.acos((d * d + rb * rb - ra * ra) / (2 * d * rb));
+  g.beginPath();
+  g.arc(ax, ay, ra, phi - alpha, phi + alpha);
+  g.arc(bx, by, rb, phi + Math.PI - beta, phi + Math.PI + beta);
+  g.closePath();
+  g.fillPath();
+}
+
+/** 0..1: 1 when an effect just started, fading linearly to 0 after `ms`. */
+function fade(elapsed: number, ms: number): number {
+  return elapsed < ms ? 1 - Math.max(0, elapsed) / ms : 0;
+}
+
+/** A white disc of radius r (the node's flash, FX-2), baked once per radius at layout time. */
+function flashTexture(scene: Phaser.Scene, r: number): string {
+  const radius = Math.round(r);
+  const key = `node-flash-${radius}`;
+  if (!scene.textures.exists(key)) {
+    const size = radius * 2 + 2;
+    const g = scene.make.graphics({}, false);
+    g.fillStyle(0xffffff, 1).fillCircle(size / 2, size / 2, radius);
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+  return key;
+}
+
+/** The red dashed ring of a broken stream (FX-6) around a node of radius r, baked once per radius at layout time. */
+function brokenRingTexture(scene: Phaser.Scene, r: number): string {
+  const B = BROKEN_STREAM_FX;
+  const radius = Math.round(r + px(B.gapPx));
+  const key = `node-broken-${radius}`;
+  if (!scene.textures.exists(key)) {
+    const width = px(B.widthPx);
+    const size = Math.ceil(radius * 2 + width + 4);
+    const c = size / 2;
+    // Whole dashes around the circle: dash and gap stretched a little to close the ring.
+    const dashes = Math.max(4, Math.round((Math.PI * 2 * radius) / px(B.dashPx + B.dashGapPx)));
+    const step = (Math.PI * 2) / dashes;
+    const dash = (step * B.dashPx) / (B.dashPx + B.dashGapPx);
+    const g = scene.make.graphics({}, false);
+    g.lineStyle(width, COLORS.faction.enemy, 1);
+    for (let i = 0; i < dashes; i++) {
+      g.beginPath();
+      g.arc(c, c, radius, i * step, i * step + dash);
+      g.strokePath();
+    }
+    g.generateTexture(key, size, size);
+    g.destroy();
+  }
+  return key;
 }
 
 /**

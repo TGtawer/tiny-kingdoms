@@ -153,6 +153,7 @@ export function releaseStreams(world: World): void {
     // Exactly one step behind the tail (it may have passed the step during this tick), else at the entry.
     const at = tail ? Math.min(Math.max(tail.progress - stepP, lane.startP), lane.startP + TICK_STEP / lane.length) : lane.startP;
     spawnUnit(world, s.owner, s.route, at);
+    world.nodes[s.sourceId]!.released += 1;
     s.left -= 1;
     s.lastReleaseTick = world.tick;
   }

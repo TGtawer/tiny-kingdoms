@@ -4,10 +4,12 @@ import { SLOW_MO, TICK_MS } from '../../config/balance';
  * Simulation speed for this moment of the battle. While the player is choosing something (a tutorial step waits
  * for them, the build menu is open, a swipe is being drawn, a spell waits for its target) the whole battle,
  * armies on the road included, runs at SLOW_MO.speed; the speed-up does not apply then. Otherwise the speed-up
- * multiplier (1 = normal).
+ * multiplier (1 = normal). A hit-stop (docs/FX.md FX-8: its speed for a moment after a capture, null otherwise) slows
+ * it further: the slowest of the speeds wins.
  */
-export function battleSpeed(speedUp: number, slowed: boolean): number {
-  return slowed ? SLOW_MO.speed : speedUp;
+export function battleSpeed(speedUp: number, slowed: boolean, hitStop: number | null = null): number {
+  const speed = slowed ? SLOW_MO.speed : speedUp;
+  return hitStop === null ? speed : Math.min(speed, hitStop);
 }
 
 /**

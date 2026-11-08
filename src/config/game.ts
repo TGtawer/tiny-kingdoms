@@ -124,6 +124,193 @@ export const UNITS_FX = {
   clashSoundEveryMs: 80,
 } as const;
 
+/**
+ * Node effects in battle (docs/FX.md FX-1…FX-3): the node's inner layer (body and capacity arc) breathes, squashes
+ * on a hit or a release and flashes white; the count jumps; an own node trembles when hit. Animated by hand from
+ * the scene time, no tweens. Times ms, sizes CSS px.
+ */
+export const NODE_FX = {
+  /** Breathing: scale 1 + amp · sin(speed · t + phase), t in s, a random phase per node. */
+  breathAmp: 0.035,
+  breathSpeed: 2,
+  /** Squash on a hit or a release: scale 1 − punch · p, p fading linearly from 1 to 0 over punchMs. */
+  punch: 0.14,
+  punchMs: 200,
+  /** White flash over the circle: alpha flashAlpha · f, f fading over flashMs. */
+  flashAlpha: 0.8,
+  flashMs: 170,
+  /** The count jumps on a hit: scale 1 + countPop · c, c fading over countPopMs. */
+  countPop: 0.45,
+  countPopMs: 250,
+  /** An own node trembles when hit: a random offset up to ±tremblePx each frame, fading over trembleMs. */
+  tremblePx: 3,
+  trembleMs: 300,
+} as const;
+
+/**
+ * Units walk (docs/FX.md FX-4): each hops |sin φ| high, φ = π · s / stepLen + unit id, s the distance walked; the
+ * figure stretches in the air by switching atlas frames (a Bob neither scales nor rotates).
+ */
+export const STEP_FX = {
+  /** Hop height, share of the figure radius (≈ 2.4 CSS px at the largest figures). */
+  hopOfRadius: 0.4,
+  /** Steps per second at ARMY.speed (one hop per step). */
+  stepsPerSec: 4.5,
+  /** Frames by |sin φ|: below `midFrom` the round figure, below `stretchFrom` the middle one, then the stretched one. */
+  midFrom: 0.33,
+  stretchFrom: 0.66,
+  /** Width and height of the middle and the stretched figure, shares of the round one (they keep its feet). */
+  mid: { w: 0.96, h: 1.06 },
+  stretch: { w: 0.92, h: 1.12 },
+} as const;
+
+/**
+ * Dust from under the units' feet (docs/FX.md FX-5): a separate Blitter under the units with a fixed pool of puffs.
+ * A puff grows by switching frames and fades by alpha. Times ms, speeds CSS px/s.
+ */
+export const DUST_FX = {
+  /** Puffs on the field at most; when all are busy a new puff just doesn't appear. */
+  pool: 120,
+  /** Frames of a growing puff, radius from r0 to r1 (shares of the figure radius: 2 → 4.7 CSS px at the largest). */
+  frames: 4,
+  r0OfRadius: 0.33,
+  r1OfRadius: 0.78,
+  color: 0xb4b2a9,
+  /** Each unit puffs every everyMinMs…everyMaxMs (fixed per unit, from its id). */
+  everyMinMs: 280,
+  everyMaxMs: 580,
+  lifeMs: 450,
+  alpha: 0.6,
+  /** A puff drifts back along the road and up. */
+  driftBack: 14,
+  rise: 6,
+  /** Above this many units only every N-th unit puffs (N = units / fullUntilUnits, rounded up)… */
+  fullUntilUnits: 150,
+  /** …and above this many there is no dust at all. */
+  offAboveUnits: 400,
+} as const;
+
+/**
+ * "Stream broken" ring (docs/FX.md FX-6): an own node's stream was cut off by an attack. A red dashed ring at
+ * r + gapPx turns and pulses while the node is attacked, at least minMs, then fades. CSS px, ms.
+ */
+export const BROKEN_STREAM_FX = {
+  gapPx: 8,
+  widthPx: 3,
+  dashPx: 8,
+  dashGapPx: 6,
+  /** One turn per turnMs. */
+  turnMs: 1900,
+  /** Alpha pulseBase + pulseAmp · sin(pulseSpeed · t), t in s. */
+  pulseBase: 0.55,
+  pulseAmp: 0.45,
+  pulseSpeed: 16.7,
+  minMs: 600,
+  fadeMs: 200,
+} as const;
+
+/**
+ * A capture by the player (docs/FX.md FX-7): the circle recolors in a wave from the side the capturing unit came
+ * from, two rings of the player's light tone spread out, confetti bursts. CSS px, ms.
+ */
+export const CAPTURE_FX = {
+  /** The recolor wave: a circle growing from the rim on the attacker's side over the node, ease-out cubic. */
+  waveMs: 500,
+  /** Rings: [thickness, how far beyond the node radius it grows, ms, delay]. */
+  rings: [
+    { widthPx: 5, growPx: 70, ms: 600, delayMs: 0 },
+    { widthPx: 3, growPx: 45, ms: 600, delayMs: 120 },
+  ],
+  /** Ring images in the pool (two per capture). */
+  ringPool: 6,
+  /** Confetti: one emitter, at most `max` pieces alive. */
+  confettiMax: 300,
+  confetti: { count: 40, cone: Math.PI, speed: 240, speedMin: 0.4, speedMax: 1.2, lifeMin: 500, lifeMax: 1000, sizeMin: 2, sizeMax: 5 },
+  /** Gravity on the confetti, CSS px/s²; their turn, degrees per second per CSS px/s of sideways speed. */
+  confettiGravity: 320,
+  confettiSpin: 3,
+  /** Blue, light blue, amber, light amber, teal. */
+  confettiColors: [0x3b82f6, 0x93c5fd, 0xf59e0b, 0xfcd34d, 0x2dd4bf],
+  /**
+   * Camera shake on every capture by the player (FX-8), stronger for an enemy capital; a normal one waits
+   * shakeCooldownMs after the previous one (a capital doesn't). The fireball and the dragon keep HAPTICS.shake*.
+   */
+  shake: { ms: 300, intensity: 0.006 },
+  capitalShake: { ms: 400, intensity: 0.01 },
+  shakeCooldownMs: 1000,
+  /**
+   * Hit-stop (FX-8): the simulation runs at hitStopSpeed for hitStopMs of real time (effects keep real time). Not
+   * sooner than hitStopEveryMs after the previous one, nor on a node the player lost less than hitStopAfterLossMs ago.
+   */
+  hitStopSpeed: 0.2,
+  hitStopMs: 200,
+  hitStopEveryMs: 3000,
+  hitStopAfterLossMs: 5000,
+} as const;
+
+/**
+ * The victory wave (docs/FX.md FX-9): from the player's capital a light circle crosses the whole field in waveMs,
+ * before the result panel (which waits resultDelayMs after a win instead of the usual delay). CSS px, ms.
+ */
+export const VICTORY_FX = {
+  waveMs: 1000,
+  resultDelayMs: 1100,
+  fillAlpha: 0.16,
+  lineAlpha: 0.7,
+  lineWidthPx: 4,
+  /** A little confetti from every node the wave reaches (the capture confetti's emitter). */
+  confetti: { ...CAPTURE_FX.confetti, count: 14 },
+  confettiColors: CAPTURE_FX.confettiColors,
+} as const;
+
+/** Textures of the battle effects (docs/FX.md), baked in BootScene. */
+export const FX_TEXTURES = {
+  /** A white square every particle is drawn with (tinted), game px. */
+  dot: 'fx-dot',
+  dotPx: 4,
+} as const;
+
+/** Colors of the battle effects (docs/FX.md). */
+export const FX_COLORS = {
+  /** Light tone of each side (particles next to the faction color). */
+  factionLight: {
+    player: 0x93c5fd,
+    enemy: 0xfca5a5,
+    enemy2: 0x86efac,
+    neutral: 0xd1d5db,
+  },
+} as const;
+
+/**
+ * Sparks (docs/FX.md FX-2, FX-3): one particle emitter for the whole battle. Sizes and speeds CSS px, times ms,
+ * angles radians.
+ */
+export const SPARK_FX = {
+  /** At most this many sparks alive at once. */
+  max: 200,
+  /** A hit on a node: sparks of the attacker's colors from the rim, outwards towards the attacker. */
+  hit: { count: 6, cone: 0.8, speed: 170, speedMin: 0.4, speedMax: 1.2, lifeMin: 350, lifeMax: 600, sizeMin: 2, sizeMax: 4 },
+  /** At most one hit burst per node this often (a mass assault must not make hundreds of particles). */
+  hitEveryNodeMs: 100,
+  /** A unit leaves an own node (FX-3): light sparks of the player's side from the rim towards its road. */
+  release: { count: 3, cone: 0.5, speed: 100, speedMin: 0.8, speedMax: 1.2, lifeMin: 300, lifeMax: 600, sizeMin: 2, sizeMax: 4 },
+} as const;
+
+/**
+ * The loading screen (BootScene, docs/PERF.md PF-6): a label and a progress bar while the shaders warm up. CSS px;
+ * `warmTexturePx` is the side of the invisible warm-up textures, game px.
+ */
+export const BOOT = {
+  textSize: 22,
+  /** The label sits this far above the screen center, the bar as far below. */
+  textGap: 18,
+  barWidth: 220,
+  barHeight: 14,
+  /** Side margin on narrow screens. */
+  margin: 24,
+  warmTexturePx: 2,
+} as const;
+
 /** Dev-only helpers (never in a production build). */
 export const DEV_TOOLS = {
   /** FPS and unit counter in the battle (dev server only). */
