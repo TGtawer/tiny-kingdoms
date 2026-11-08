@@ -9,6 +9,7 @@ import { armyPath, blockingNode } from '../core/sim/pathfinding';
 import { contestStep, createContest, type ContestState } from '../core/dev/contest';
 import { createStress, stressStep, type StressState } from '../core/dev/stress';
 import { battleSpeed, runClock } from '../core/sim/clock';
+import { captureFeedback, type CaptureFeedback } from '../core/fx/captureFeedback';
 import { previewAttack } from '../core/sim/preview';
 import { step, type TickEvent } from '../core/sim/tick';
 import { goalProgressSec, type OutcomeReason } from '../core/sim/victory';
@@ -119,6 +120,12 @@ export class BattleScene extends Phaser.Scene {
   /** Rings and confetti of a capture by the player (FX-7); null with `?perf=nofx`. */
   private captureRings: CaptureRings | null = null;
   private confetti: ParticleBursts | null = null;
+  /** FX-8: when the player last lost each node (scene ms), the last shake and hit-stop, and when the hit-stop ends. */
+  private lostAt = new Map<string, number>();
+  private lastShakeAt = -Infinity;
+  private lastHitStopAt = -Infinity;
+  private hitStopUntil = -Infinity;
+  private readonly feedback: CaptureFeedback = { shake: 'none', hitStop: false };
   /** Last time the clash sound played (rate-limited). */
   private lastClashSoundAt = -Infinity;
   /** Dev only: FPS and unit counter. */
@@ -177,6 +184,10 @@ export class BattleScene extends Phaser.Scene {
     // The scene instance is reused on restart: reset all state.
     this.nodeViews = new Map();
     this.lastClashSoundAt = -Infinity;
+    this.lostAt = new Map();
+    this.lastShakeAt = -Infinity;
+    this.lastHitStopAt = -Infinity;
+    this.hitStopUntil = -Infinity;
     this.fpsText = null;
     this.queue = [];
     this.accumulator = 0;
@@ -313,7 +324,7 @@ export class BattleScene extends Phaser.Scene {
       this.accumulator = runClock(
         this.accumulator,
         Math.min(delta, MAX_FRAME_DELTA_MS),
-        () => battleSpeed(this.speed, this.isChoosing()),
+        () => battleSpeed(this.speed, this.isChoosing(), time < this.hitStopUntil ? CAPTURE_FX.hitStopSpeed : null),
         () => {
           this.tickOnce();
           return !this.ended;
@@ -1059,10 +1070,41 @@ export class BattleScene extends Phaser.Scene {
     if (owner === 'player') {
       playSfx('capture');
       this.vibrate(HAPTICS.short);
-      if (isRival('player', before) && view.capital) this.shake();
+      const enemyCapital = isRival('player', before) && view.capital;
+      if (this.fx) this.captureFeedback(view, enemyCapital);
+      else if (enemyCapital) this.shake();
     } else if (before === 'player') {
       playSfx('lost');
       this.vibrate(HAPTICS.short);
+      this.lostAt.set(view.nodeId, this.time.now);
+    }
+  }
+
+  /** Camera shake and hit-stop of a capture by the player (docs/FX.md FX-8); the decision is core/fx/captureFeedback. */
+  private captureFeedback(view: NodeView, enemyCapital: boolean): void {
+    const now = this.time.now;
+    const decision = captureFeedback(
+      {
+        now,
+        enemyCapital,
+        lostAt: this.lostAt.get(view.nodeId) ?? -Infinity,
+        lastShakeAt: this.lastShakeAt,
+        lastHitStopAt: this.lastHitStopAt,
+        choosing: this.isChoosing(),
+        over: this.ended,
+      },
+      CAPTURE_FX,
+      this.feedback,
+    );
+    if (decision.shake !== 'none') {
+      const shake = decision.shake === 'capital' ? CAPTURE_FX.capitalShake : CAPTURE_FX.shake;
+      // A capital's shake overrides one in progress; a normal one doesn't cut a stronger shake short.
+      this.cameras.main.shake(shake.ms, shake.intensity, decision.shake === 'capital');
+      this.lastShakeAt = now;
+    }
+    if (decision.hitStop) {
+      this.hitStopUntil = now + CAPTURE_FX.hitStopMs;
+      this.lastHitStopAt = now;
     }
   }
 

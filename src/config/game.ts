@@ -231,6 +231,21 @@ export const CAPTURE_FX = {
   confettiSpin: 3,
   /** Blue, light blue, amber, light amber, teal. */
   confettiColors: [0x3b82f6, 0x93c5fd, 0xf59e0b, 0xfcd34d, 0x2dd4bf],
+  /**
+   * Camera shake on every capture by the player (FX-8), stronger for an enemy capital; a normal one waits
+   * shakeCooldownMs after the previous one (a capital doesn't). The fireball and the dragon keep HAPTICS.shake*.
+   */
+  shake: { ms: 300, intensity: 0.006 },
+  capitalShake: { ms: 400, intensity: 0.01 },
+  shakeCooldownMs: 1000,
+  /**
+   * Hit-stop (FX-8): the simulation runs at hitStopSpeed for hitStopMs of real time (effects keep real time). Not
+   * sooner than hitStopEveryMs after the previous one, nor on a node the player lost less than hitStopAfterLossMs ago.
+   */
+  hitStopSpeed: 0.2,
+  hitStopMs: 200,
+  hitStopEveryMs: 3000,
+  hitStopAfterLossMs: 5000,
 } as const;
 
 /** Textures of the battle effects (docs/FX.md), baked in BootScene. */

@@ -154,6 +154,13 @@ describe('slow-down (TUTORIAL.md T-4)', () => {
     expect(battleSpeed(2, false)).toBe(2);
   });
 
+  it('a hit-stop slows the battle further; the slowest speed wins (docs/FX.md FX-8)', () => {
+    expect(battleSpeed(1, false, 0.2)).toBe(0.2);
+    expect(battleSpeed(2, false, 0.2)).toBe(0.2);
+    expect(battleSpeed(1, true, 0.2)).toBe(SLOW_MO.speed);
+    expect(battleSpeed(2, false, null)).toBe(2);
+  });
+
   it('fewer ticks per frame while slow', () => {
     const count = (speed: number): number => {
       let ticks = 0;
