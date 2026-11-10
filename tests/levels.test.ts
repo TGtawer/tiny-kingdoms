@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
-import { validateLevel, type LevelData } from '../src/core/level/schema';
+import { BUILDINGS } from '../src/config/balance';
+import { LEVEL_LIMITS, validateLevel, type LevelData } from '../src/core/level/schema';
 import { buildCost } from '../src/core/sim/commands';
 import { previewAttack } from '../src/core/sim/preview';
 import { spellCost } from '../src/core/sim/spells';
@@ -90,6 +91,20 @@ describe('lesson 1 (TUTORIAL.md T-5)', () => {
       expect(previewAttack(world, 'player', ['player'], 'swipe', 'n2').wins, `${sec} s`).toBe(false);
       expect(previewAttack(world, 'player', ['n1'], 'swipe', 'n2').wins, `${sec} s`).toBe(false);
       expect(previewAttack(world, 'player', ['player', 'n1'], 'swipe', 'n2').wins, `${sec} s`).toBe(true);
+    }
+  });
+});
+
+describe('road length (PLAYTEST-2 F2-3)', () => {
+  it('the shortest road holds two tower zones and a gap', () => {
+    expect(LEVEL_LIMITS.minRoadLength).toBeGreaterThan(2 * BUILDINGS.tower.zone);
+  });
+
+  it.each([...CHAPTERS.flat(), ...DEV_LEVELS].map((l) => [l.id, l] as const))('%s: every road is at least minRoadLength', (_id, lvl) => {
+    const at = new Map(lvl.nodes.map((n) => [n.id, n]));
+    for (const [a, b] of lvl.roads) {
+      const len = Math.hypot(at.get(a)!.x - at.get(b)!.x, at.get(a)!.y - at.get(b)!.y);
+      expect(len, `${a}-${b}`).toBeGreaterThanOrEqual(LEVEL_LIMITS.minRoadLength);
     }
   });
 });

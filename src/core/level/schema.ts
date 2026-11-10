@@ -71,6 +71,11 @@ export const LEVEL_LIMITS = {
   minNodeDistance: 0.12,
   /** A road must not pass closer than this to a node it does not connect (field units). */
   roadNodeClearance: 0.05,
+  /**
+   * Shortest road between node centers, field units: 2 × tower zone + gap 0.04 (PLAYTEST-2), so the zones of two
+   * towers at both ends never meet. Checked by tests over the game levels, not by validateLevel: dev_stress is denser.
+   */
+  minRoadLength: 0.3,
 } as const;
 
 const SIZES: readonly NodeSize[] = ['small', 'medium', 'large'];

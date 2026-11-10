@@ -11,8 +11,8 @@
   "nodes": [
     {
       "id": "player",
-      "x": 0.08,
-      "y": 0.5,
+      "x": 0.05,
+      "y": 0.578,
       "size": "large",
       "owner": "player",
       "troops": 13,
@@ -22,8 +22,8 @@
     },
     {
       "id": "pa",
-      "x": 0.25,
-      "y": 0.5,
+      "x": 0.291,
+      "y": 0.391,
       "size": "small",
       "owner": "neutral",
       "troops": 2,
@@ -56,8 +56,8 @@
     },
     {
       "id": "c",
-      "x": 0.5,
-      "y": 0.5,
+      "x": 0.562,
+      "y": 0.531,
       "size": "small",
       "owner": "neutral",
       "troops": 2,
