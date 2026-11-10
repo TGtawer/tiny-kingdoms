@@ -95,11 +95,11 @@ export const NODE_VIEW = {
 
 /** Node radius in field units (fraction of field width), clamped to CSS px bounds. */
 export const NODE_RADIUS: Record<NodeSize, number> = {
-  small: 0.055,
-  medium: 0.068,
-  large: 0.084,
+  small: 0.048,
+  medium: 0.059,
+  large: 0.073,
 };
-export const NODE_RADIUS_MIN_PX = 26;
+export const NODE_RADIUS_MIN_PX = 23;
 export const NODE_RADIUS_MAX_PX = 58;
 /** Extra touch slop around a node, CSS px; hit radius is never below MIN_TOUCH_PX / 2. */
 export const NODE_HIT_SLOP_PX = 8;

@@ -108,9 +108,10 @@ export const STREAM = {
   contactDist: 0.01,
   /**
    * Distance from a node center where units appear and arrive, field widths, by node size: a bit less than the
-   * drawn radius (NODE_RADIUS in game.ts: 0.055 / 0.068 / 0.084), so a unit appears still under the circle.
+   * drawn radius (NODE_RADIUS in game.ts: 0.048 / 0.059 / 0.073), so a unit appears still under the circle.
+   * ×0.87 with the nodes, PLAYTEST-2 (was 0.04 / 0.05 / 0.062).
    */
-  edgeDist: { small: 0.04, medium: 0.05, large: 0.062 } as Record<NodeSize, number>,
+  edgeDist: { small: 0.035, medium: 0.044, large: 0.054 } as Record<NodeSize, number>,
 } as const;
 
 /** Enemy leaders (GDD 3.10, CONTENT.md C-2). */
