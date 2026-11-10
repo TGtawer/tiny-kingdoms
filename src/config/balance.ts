@@ -87,10 +87,10 @@ export const ARMY = {
   /** Field widths per second. */
   speed: 0.12,
   /**
-   * Share of node troops sent per order (rounded down, GDD 3.5): the player only swipes (75%);
-   * `pull` (50%) is the AI's internal mode for moving troops up from the rear.
+   * Share of node troops sent per order (rounded down, GDD 3.5): a swipe sends all the troops but one (100%, was
+   * 75%), for the player and the AI alike; `pull` (50%) is the AI's internal mode for moving troops up from the rear.
    */
-  sendShare: { swipe: 0.75, pull: 0.5 },
+  sendShare: { swipe: 1, pull: 0.5 },
   minSend: 1,
   /** A node with this many troops or fewer cannot send. */
   minTroopsToSend: 2,
@@ -169,7 +169,7 @@ export const SPECIAL_NODES = {
   /** Travel time through a portal pair, ms (no clashes inside). */
   portal: { delayMs: 1000 },
   /** Bandit camp: produces like a small node and raids the nearest non-neutral neighbour. */
-  bandits: { raidEveryMs: 20000 },
+  bandits: { raidEveryMs: 20000, raidShare: 0.75 },
 } as const;
 
 /** Boss of chapter 1 level 10 (GDD 4.1, CONTENT.md C-4.1). */

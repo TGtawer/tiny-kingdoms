@@ -9,7 +9,7 @@ import { isAttacked, isRival, type BuildingLevel, type Side, type StreamState, t
 export { visibleTroops };
 
 /**
- * How many troops an order takes (GDD 3.5): `swipe` sends 75% (the only player gesture);
+ * How many troops an order takes (GDD 3.5): `swipe` sends all but one (the only player gesture);
  * `pull` sends 50% and is used only by the AI to move troops up from the rear.
  */
 export type SendMode = 'swipe' | 'pull';
@@ -65,13 +65,18 @@ export type RejectReason =
   | 'invalidTarget';
 
 /**
- * Troops an order takes from a node: 75% (swipe) or 50% (AI pull) of the visible troops, rounded down,
+ * Troops an order takes from a node: all but one (swipe) or 50% (AI pull) of the visible troops, rounded down,
  * at least minSend; 0 if the node cannot send. At least one troop always stays behind.
  */
 export function sendAmount(troops: number, mode: SendMode = 'swipe'): number {
+  return shareOf(troops, ARMY.sendShare[mode]);
+}
+
+/** `share` of the visible troops by the rules of an order (rounded down, at least minSend, one stays behind). */
+export function shareOf(troops: number, share: number): number {
   const visible = visibleTroops(troops);
   if (visible < ARMY.minTroopsToSend) return 0;
-  return Math.min(visible - 1, Math.max(ARMY.minSend, Math.floor(visible * ARMY.sendShare[mode])));
+  return Math.min(visible - 1, Math.max(ARMY.minSend, Math.floor(visible * share)));
 }
 
 /** Cost to build (no building yet) or to upgrade to the next level; null if already max level. */

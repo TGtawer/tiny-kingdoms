@@ -29,34 +29,34 @@ describe('sendAmount for an AI pull (50%)', () => {
   });
 });
 
-describe('sendAmount for a swipe (75%)', () => {
+describe('sendAmount for a swipe (all but one)', () => {
   it.each([
     [1, 0],
     [2, 1],
     [3, 2],
     [4, 3],
-    [10, 7],
-    [11, 8],
-    [20, 15],
+    [10, 9],
+    [11, 10],
+    [20, 19],
   ])('%f troops -> sends %i, at least one stays', (troops, expected) => {
     expect(sendAmount(troops, 'swipe')).toBe(expected);
     if (troops >= 2) expect(troops - sendAmount(troops, 'swipe')).toBeGreaterThanOrEqual(1);
   });
 
   it('a swipe is the default; only the AI pull sends half', () => {
-    expect(sendAmount(20)).toBe(15);
+    expect(sendAmount(20)).toBe(19);
     expect(sendAmount(20, 'pull')).toBe(10);
   });
 });
 
 describe('send (a stream order)', () => {
-  it('a swipe order takes 75% of the troops', () => {
+  it('a swipe order takes all the troops but one', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 20 } }));
     const events = step(world, [{ ...send('P', 'N'), mode: 'swipe' }]);
     expect(events[0]).toMatchObject({ type: 'applied', streamId: 1 });
     drain(world);
-    expect(world.nodes.P!.troops).toBe(5);
-    expect(world.nodes.N).toMatchObject({ owner: 'player', troops: 15 - 5 });
+    expect(world.nodes.P!.troops).toBe(1);
+    expect(world.nodes.N).toMatchObject({ owner: 'player', troops: 19 - 5 });
   });
 
   it('an AI pull sends half of the node troops and leaves the rest', () => {
