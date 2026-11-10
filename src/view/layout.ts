@@ -35,8 +35,8 @@ export interface Point {
 
 /**
  * Maps normalized level coordinates to screen. The bounding box of the nodes is fitted into the
- * available area with a uniform scale, then stretched along field x (player → enemy) by up to FIELD_STRETCH_MAX
- * where the area is longer than the map, so tall screens are not left half empty.
+ * available area with a uniform scale; a turned field (portrait) is then stretched along field x (player → enemy)
+ * by up to FIELD_STRETCH_MAX where the screen is taller than the map, so tall phones are not left half empty.
  * In portrait the field is rotated 90° when that makes it larger; the left side (player) goes down.
  * `orientArea` (default: `area`) is where that choice is made: the screen without per-level bars (tutorial hints,
  * goal plaque), so the same map on the same screen is never turned one way in a lesson and the other way outside it.
@@ -79,8 +79,8 @@ export class FieldLayout implements ScreenLayout {
     this.rotated = gain > 1.08;
     this.scale = this.rotated ? Math.min(area.width / bh, area.height / bw) : Math.min(area.width / bw, area.height / bh);
 
-    // Stretch along field x into the room left on that screen axis.
-    const room = (this.rotated ? area.height : area.width) / (bw * this.scale);
+    // A turned field (portrait) stretches along field x into the room left below and above it.
+    const room = this.rotated ? area.height / (bw * this.scale) : 1;
     this.scaleAlong = this.scale * clamp(room, 1, FIELD_STRETCH_MAX);
 
     const screenW = this.rotated ? bh * this.scale : bw * this.scaleAlong;
