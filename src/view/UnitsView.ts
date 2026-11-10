@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import { ARMY, STREAM, TICK_MS } from '../config/balance';
-import { COLORS, DUST_FX, STEP_FX, TOWER_SHOT, UNITS_FX } from '../config/game';
+import { COLORS, STEP_FX, TOWER_SHOT, UNITS_FX } from '../config/game';
 import type { Lane, Owner, World } from '../core/sim/World';
 import { px, type FieldLayout, type Point } from './layout';
 
@@ -16,12 +16,6 @@ const STEP_PHASE = (Math.PI * STEP_FX.stepsPerSec) / ARMY.speed;
 const PARKED = -10000;
 /** Distance a unit walks in one tick, field units: the interpolation step. */
 const TICK_STEP = (ARMY.speed * TICK_MS) / 1000;
-/** Field units a unit walks in a millisecond (dust puffs are timed by the distance walked, FX-5). */
-const WALK_PER_MS = ARMY.speed / 1000;
-
-function frac(x: number): number {
-  return x - Math.floor(x);
-}
 
 /**
  * All units on the field in one batch (ARCHITECTURE.md «Производительность»): a Blitter with one baked texture
@@ -41,10 +35,6 @@ export class UnitsView {
   private half = 0;
   /** Hop height for this layout, game px. */
   private hop = 0;
-  /** Figure radius for this layout, game px. */
-  private radius = 0;
-  /** Puffs under the units (FX-5); null with `?perf=nofx`. */
-  private readonly dust: DustPuffs | null;
   private readonly at: Point = { x: 0, y: 0 };
   /**
    * "Ghosts" (docs/TOWER.md TW-4): units a tower has shot are gone from the simulation at once, but their figure
@@ -67,8 +57,6 @@ export class UnitsView {
     private readonly scene: Phaser.Scene,
     private readonly fx = true,
   ) {
-    // The dust first: it is drawn under the figures.
-    this.dust = fx ? new DustPuffs(scene) : null;
     this.blitter = scene.add.blitter(0, 0, '__DEFAULT');
   }
 
@@ -106,15 +94,12 @@ export class UnitsView {
       FRAME_NAMES.forEach((name, i) => texture.add(name, 0, i * cell, 0, cell, cell));
     }
     this.half = cell / 2;
-    this.radius = r;
     this.hop = this.fx ? r * STEP_FX.hopOfRadius : 0;
-    this.dust?.layout(r);
     this.blitter.setTexture(key);
     for (let i = 0; i < this.bobs.length; i++) this.bobs[i]!.setFrame(FRAME_NAMES[this.bobFrame[i]!]!);
   }
 
   setDepth(depth: number): this {
-    this.dust?.setDepth(depth);
     this.blitter.setDepth(depth);
     return this;
   }
@@ -174,10 +159,6 @@ export class UnitsView {
     const back = 1 - alpha;
     let n = 0;
     const units = world.units;
-    // Dust (FX-5): every unit while the field is quiet, every N-th one on a busy field, none on a crowded one.
-    const dust = this.dust;
-    const dustEvery = units.length > DUST_FX.offAboveUnits ? 0 : Math.max(1, Math.ceil(units.length / DUST_FX.fullUntilUnits));
-    dust?.begin();
     for (let i = 0; i < units.length; i++) {
       const unit = units[i]!;
       const l = unit.route.lanes[0]!;
@@ -187,9 +168,7 @@ export class UnitsView {
       // One tick ago the unit was one tick of walking behind (never before the road's entry).
       const p = Math.max(lane.startP, unit.progress - (back * TICK_STEP) / lane.length);
       this.figure(n++, unit.owner, unit.id, lane, l, p);
-      if (dust && dustEvery > 0 && unit.id % dustEvery === 0) this.puffs(lane, l, p, unit.id, dust);
     }
-    dust?.end();
     // Ghosts walk on from where they were shot, as a unit would (never past the road's arrival point).
     for (let g = 0; g < this.ghostOn.length; g++) {
       if (!this.ghostOn[g]) continue;
@@ -263,121 +242,9 @@ export class UnitsView {
     return true;
   }
 
-  /**
-   * The unit's latest puffs (FX-5), without memory: a unit puffs every `d` of road (its own interval from its id,
-   * a phase too), so the puffs still alive and their ages follow from the distance walked. At most two are alive.
-   */
-  private puffs(lane: Lane, l: number, p: number, id: number, dust: DustPuffs): void {
-    const walked = (p - lane.startP) * lane.length;
-    const every = DUST_FX.everyMinMs + frac(id * 0.618034) * (DUST_FX.everyMaxMs - DUST_FX.everyMinMs);
-    const d = every * WALK_PER_MS;
-    const shift = frac(id * 0.754878) * d;
-    const k = Math.floor((walked + shift) / d);
-    const g = this.laneGeo;
-    const dx = g[l * 4 + 2]! - g[l * 4]!;
-    const dy = g[l * 4 + 3]! - g[l * 4 + 1]!;
-    const len = Math.hypot(dx, dy) || 1;
-    for (let j = 0; j < 2; j++) {
-      const at = (k - j) * d - shift;
-      if (at < 0) return;
-      const age = (walked - at) / WALK_PER_MS;
-      if (age >= DUST_FX.lifeMs) return;
-      this.place(lane, l, lane.startP + at / lane.length, this.at);
-      // At the feet of the round figure.
-      if (!dust.add(this.at.x, this.at.y + this.radius * 0.8, dx / len, dy / len, age)) return;
-    }
-  }
-
   /** Pool figures ever created (for the dev counter). */
   get poolSize(): number {
     return this.bobs.length;
-  }
-}
-
-/**
- * Dust puffs under the units (docs/FX.md FX-5): a fixed pool of DUST_FX.pool Bobs in their own Blitter, created with
- * the first layout and never destroyed. A puff grows by switching frames and fades by alpha (a Bob neither scales nor
- * rotates); pool puffs not in use are parked off-screen (an alpha of 0 would rebuild the Blitter's render list).
- */
-class DustPuffs {
-  private readonly blitter: Phaser.GameObjects.Blitter;
-  private readonly bobs: Phaser.GameObjects.Bob[] = [];
-  private readonly bobFrame: number[] = [];
-  private half = 0;
-  private used = 0;
-  private shown = 0;
-
-  constructor(private readonly scene: Phaser.Scene) {
-    this.blitter = scene.add.blitter(0, 0, '__DEFAULT');
-  }
-
-  setDepth(depth: number): void {
-    this.blitter.setDepth(depth);
-  }
-
-  /** Bakes the puff frames for a figure radius (once per size). */
-  layout(figureRadius: number): void {
-    const r1 = figureRadius * DUST_FX.r1OfRadius;
-    const r0 = figureRadius * DUST_FX.r0OfRadius;
-    const cell = Math.ceil(r1 * 2 + 2);
-    const key = `dust-${figureRadius}`;
-    if (!this.scene.textures.exists(key)) {
-      const g = this.scene.make.graphics({}, false);
-      for (let i = 0; i < DUST_FX.frames; i++) {
-        const r = r0 + ((r1 - r0) * i) / (DUST_FX.frames - 1);
-        g.fillStyle(DUST_FX.color, 1).fillCircle(i * cell + cell / 2, cell / 2, r);
-      }
-      g.generateTexture(key, cell * DUST_FX.frames, cell);
-      g.destroy();
-      const texture = this.scene.textures.get(key);
-      for (let i = 0; i < DUST_FX.frames; i++) texture.add(i, 0, i * cell, 0, cell, cell);
-    }
-    this.half = cell / 2;
-    this.blitter.setTexture(key);
-    if (this.bobs.length === 0) {
-      for (let i = 0; i < DUST_FX.pool; i++) {
-        this.bobs.push(this.blitter.create(PARKED, PARKED, 0));
-        this.bobFrame.push(0);
-      }
-    }
-    for (let i = 0; i < this.bobs.length; i++) this.bobs[i]!.setFrame(this.bobFrame[i]!);
-  }
-
-  begin(): void {
-    this.used = 0;
-  }
-
-  /**
-   * A puff born at (x, y) on a road going (ux, uy), `age` ms ago: drifted back along the road and up, grown and faded.
-   * False when the pool is full.
-   */
-  add(x: number, y: number, ux: number, uy: number, age: number): boolean {
-    if (this.used >= this.bobs.length) return false;
-    const i = this.used++;
-    const bob = this.bobs[i]!;
-    const t = age / DUST_FX.lifeMs;
-    const frame = Math.min(DUST_FX.frames - 1, Math.floor(t * DUST_FX.frames));
-    if (this.bobFrame[i] !== frame) {
-      bob.setFrame(frame);
-      this.bobFrame[i] = frame;
-    }
-    const sec = age / 1000;
-    const back = px(DUST_FX.driftBack) * sec;
-    bob.x = x - ux * back - this.half;
-    bob.y = y - uy * back - px(DUST_FX.rise) * sec - this.half;
-    // Never 0: an alpha of 0 rebuilds the Blitter's render list.
-    bob.alpha = Math.max(0.01, DUST_FX.alpha * (1 - t));
-    return true;
-  }
-
-  /** Parks the pool puffs not used this frame. */
-  end(): void {
-    for (let i = this.used; i < this.shown; i++) {
-      const bob = this.bobs[i]!;
-      bob.x = PARKED;
-      bob.y = PARKED;
-    }
-    this.shown = this.used;
   }
 }
 
