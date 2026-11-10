@@ -8,6 +8,7 @@ import {
   NODE_RADIUS_MIN_PX,
   cssColor,
   COLORS,
+  FIELD_STRETCH_MAX,
 } from '../config/game';
 import type { NodeSize } from '../config/balance';
 import type * as Phaser from 'phaser';
@@ -34,7 +35,8 @@ export interface Point {
 
 /**
  * Maps normalized level coordinates to screen. The bounding box of the nodes is fitted into the
- * available area with a uniform scale (so distances stay proportional to the simulation).
+ * available area with a uniform scale, then stretched along field x (player → enemy) by up to FIELD_STRETCH_MAX
+ * where the area is longer than the map, so tall screens are not left half empty.
  * In portrait the field is rotated 90° when that makes it larger; the left side (player) goes down.
  * `orientArea` (default: `area`) is where that choice is made: the screen without per-level bars (tutorial hints,
  * goal plaque), so the same map on the same screen is never turned one way in a lesson and the other way outside it.
@@ -50,8 +52,10 @@ export interface ScreenLayout {
 
 export class FieldLayout implements ScreenLayout {
   readonly rotated: boolean;
-  /** Screen px per field unit. */
+  /** Screen px per field unit across the map (field y); sizes (node radius, road width) follow it. */
   readonly scale: number;
+  /** Screen px per field unit along the map (field x): `scale` times the stretch. */
+  private readonly scaleAlong: number;
   private readonly minX: number;
   private readonly maxX: number;
   private readonly minY: number;
@@ -75,8 +79,12 @@ export class FieldLayout implements ScreenLayout {
     this.rotated = gain > 1.08;
     this.scale = this.rotated ? Math.min(area.width / bh, area.height / bw) : Math.min(area.width / bw, area.height / bh);
 
-    const screenW = (this.rotated ? bh : bw) * this.scale;
-    const screenH = (this.rotated ? bw : bh) * this.scale;
+    // Stretch along field x into the room left on that screen axis.
+    const room = (this.rotated ? area.height : area.width) / (bw * this.scale);
+    this.scaleAlong = this.scale * clamp(room, 1, FIELD_STRETCH_MAX);
+
+    const screenW = this.rotated ? bh * this.scale : bw * this.scaleAlong;
+    const screenH = this.rotated ? bw * this.scaleAlong : bh * this.scale;
     this.originX = area.x + (area.width - screenW) / 2;
     this.originY = area.y + (area.height - screenH) / 2;
   }
@@ -89,9 +97,9 @@ export class FieldLayout implements ScreenLayout {
   toScreenInto(x: number, y: number, out: Point): Point {
     if (this.rotated) {
       out.x = this.originX + (y - this.minY + this.pad) * this.scale;
-      out.y = this.originY + (this.maxX + this.pad - x) * this.scale;
+      out.y = this.originY + (this.maxX + this.pad - x) * this.scaleAlong;
     } else {
-      out.x = this.originX + (x - this.minX + this.pad) * this.scale;
+      out.x = this.originX + (x - this.minX + this.pad) * this.scaleAlong;
       out.y = this.originY + (y - this.minY + this.pad) * this.scale;
     }
     return out;

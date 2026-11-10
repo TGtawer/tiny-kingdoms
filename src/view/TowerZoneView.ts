@@ -8,7 +8,7 @@ import { roadEdgeWidth } from './RoadView';
 /**
  * Tower zones on the roads (docs/TOWER.md TW-3, variant «А · Полоса»): on every road of a node with a tower, a
  * translucent band of the owner's color exactly as wide as the road with its edge, from under the node's circle to
- * BUILDINGS.tower.zone from its center (on a short road, no farther than the neighbour's circle), and a tick across
+ * BUILDINGS.tower.zone from its center (as a share of the road, so it stays exact on a stretched field) (on a short road, no farther than the neighbour's circle), and a tick across
  * the road at the zone border. Portal links are not roads: no zone there.
  * Like the roads, it is drawn off the display list and baked into the ground texture (docs/PERF.md PF-G); the
  * battle re-bakes only when a tower is built, a node with a tower shows a new owner, or the layout changes.
@@ -28,7 +28,6 @@ export class TowerZoneView {
     const g = this.graphics;
     g.clear();
     const band = roadEdgeWidth(layout);
-    const zone = BUILDINGS.tower.zone * layout.scale;
     const tick = px(TOWER_ZONE.tickWidthPx);
     for (const [a, b] of world.roads) {
       for (const [id, other] of [
@@ -45,6 +44,8 @@ export class TowerZoneView {
         if (length <= 0) continue;
         const ux = (m.x - c.x) / length;
         const uy = (m.y - c.y) / length;
+        const fieldLength = Math.hypot(neighbour.x - node.x, neighbour.y - node.y);
+        const zone = fieldLength > 0 ? (BUILDINGS.tower.zone / fieldLength) * length : 0;
         const r = layout.nodeRadius(node.size);
         const from = r * TOWER_ZONE.startOfRadius;
         const to = Math.min(zone, length - layout.nodeRadius(neighbour.size));

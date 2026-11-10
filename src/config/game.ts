@@ -100,6 +100,12 @@ export const NODE_RADIUS: Record<NodeSize, number> = {
   large: 0.073,
 };
 export const NODE_RADIUS_MIN_PX = 23;
+/**
+ * The field may be stretched up to this much along the player → enemy axis (field x) to fill a screen longer than
+ * the map: a tall phone in portrait, a wide one in landscape. View only: the simulation's distances don't change,
+ * node circles stay round, roads and units follow the stretched points.
+ */
+export const FIELD_STRETCH_MAX = 1.3;
 export const NODE_RADIUS_MAX_PX = 58;
 /** Extra touch slop around a node, CSS px; hit radius is never below MIN_TOUCH_PX / 2. */
 export const NODE_HIT_SLOP_PX = 8;
