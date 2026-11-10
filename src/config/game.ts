@@ -93,13 +93,21 @@ export const NODE_VIEW = {
   bakeSupersample: 2,
 } as const;
 
-/** Node radius in field units (fraction of field width), clamped to CSS px bounds. */
+/**
+ * Node radius in field units (fraction of field width), clamped to CSS px bounds. It is measured on a reference map
+ * (FIELD_SIZE_REF), not on the level's own one, so a node of a size looks the same on every level of a screen.
+ */
 export const NODE_RADIUS: Record<NodeSize, number> = {
   small: 0.048,
   medium: 0.059,
   large: 0.073,
 };
 export const NODE_RADIUS_MIN_PX = 23;
+/**
+ * The reference map for node and road sizes: the node spread (field units) of the largest map of chapter 1 (level 8
+ * is the tallest, level 1 the widest). Every level fits it, so nodes never get bigger next to each other than there.
+ */
+export const FIELD_SIZE_REF = { x: 0.915, y: 0.778 } as const;
 /**
  * A turned field (portrait) may be stretched up to this much along the player → enemy axis (field x) to fill a
  * phone taller than the map; landscape is never stretched. View only: the simulation's distances don't change,
