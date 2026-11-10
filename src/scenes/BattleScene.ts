@@ -736,7 +736,8 @@ export class BattleScene extends Phaser.Scene {
     // reserved for the whole level, so the field does not jump when the tutorial ends.
     const bottom = HUD.bottomBar + (this.tutorial ? HUD.hintBar : 0);
     const top = this.world.goal.type === 'conquer' && !this.world.boss ? 0 : HUD.goalBar;
-    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom, top));
+    // Turned or not as on a level without hints and goal plaque: the bars only shrink the field.
+    this.layoutField = new FieldLayout(nodes, fieldArea(w, h, bottom, top), fieldArea(w, h, HUD.bottomBar));
     drawMeadow(this.background, w, h);
     this.roads.draw(this.world, this.layoutField);
     this.units.layout(this.layoutField);

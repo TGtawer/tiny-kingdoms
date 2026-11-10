@@ -36,6 +36,8 @@ export interface Point {
  * Maps normalized level coordinates to screen. The bounding box of the nodes is fitted into the
  * available area with a uniform scale (so distances stay proportional to the simulation).
  * In portrait the field is rotated 90° when that makes it larger; the left side (player) goes down.
+ * `orientArea` (default: `area`) is where that choice is made: the screen without per-level bars (tutorial hints,
+ * goal plaque), so the same map on the same screen is never turned one way in a lesson and the other way outside it.
  */
 /** Maps field units to screen px and sizes nodes; what node and road views need from a layout. */
 export interface ScreenLayout {
@@ -57,7 +59,7 @@ export class FieldLayout implements ScreenLayout {
   private readonly originY: number;
   private readonly pad: number;
 
-  constructor(points: readonly Point[], area: Rect) {
+  constructor(points: readonly Point[], area: Rect, orientArea: Rect = area) {
     const xs = points.map((p) => p.x);
     const ys = points.map((p) => p.y);
     this.minX = Math.min(...xs);
@@ -68,11 +70,10 @@ export class FieldLayout implements ScreenLayout {
 
     const bw = this.maxX - this.minX + 2 * this.pad;
     const bh = maxY - this.minY + 2 * this.pad;
-    const straight = Math.min(area.width / bw, area.height / bh);
-    const rotated = Math.min(area.width / bh, area.height / bw);
     // Rotate only for a clear gain, so near-square screens don't flip back and forth.
-    this.rotated = rotated > straight * 1.08;
-    this.scale = this.rotated ? rotated : straight;
+    const gain = Math.min(orientArea.width / bh, orientArea.height / bw) / Math.min(orientArea.width / bw, orientArea.height / bh);
+    this.rotated = gain > 1.08;
+    this.scale = this.rotated ? Math.min(area.width / bh, area.height / bw) : Math.min(area.width / bw, area.height / bh);
 
     const screenW = (this.rotated ? bh : bw) * this.scale;
     const screenH = (this.rotated ? bw : bh) * this.scale;
