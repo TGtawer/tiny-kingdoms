@@ -5,7 +5,7 @@
   "playerStartGold": 20,
   "enemy": {
     "productionMult": 0.7,
-    "startGold": 40,
+    "startGold": 50,
     "leader": "baron"
   },
   "tutorial": "c01_l08",
@@ -27,7 +27,7 @@
       "y": 0.426,
       "size": "large",
       "owner": "enemy",
-      "troops": 36,
+      "troops": 51,
       "hasGoldVein": false,
       "building": null,
       "capital": true

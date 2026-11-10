@@ -81,13 +81,15 @@ describe('chapter 1', () => {
 });
 
 describe('lesson 1 (TUTORIAL.md T-5)', () => {
-  it('n2 is not taken by one node, but is by a swipe through both (1–6 s after n1 falls)', () => {
+  // 2–6 s since PLAYTEST-2 (units ×1.3): in the first second even a swipe through both falls short of n2.
+  it('n2 is not taken by one node, but is by a swipe through both (2–6 s after n1 falls)', () => {
     const world = createWorld(getLevel('c01_l01')!, { seed: 1 });
     step(world, [{ type: 'send', side: 'player', from: 'player', to: 'n1' }]);
     for (let i = 0; i < 300 && world.nodes.n1!.owner !== 'player'; i++) step(world);
     expect(world.nodes.n1!.owner).toBe('player');
     for (let sec = 1; sec <= 6; sec++) {
       for (let i = 0; i < 10; i++) step(world);
+      if (sec < 2) continue;
       expect(previewAttack(world, 'player', ['player'], 'swipe', 'n2').wins, `${sec} s`).toBe(false);
       expect(previewAttack(world, 'player', ['n1'], 'swipe', 'n2').wins, `${sec} s`).toBe(false);
       expect(previewAttack(world, 'player', ['player', 'n1'], 'swipe', 'n2').wins, `${sec} s`).toBe(true);
