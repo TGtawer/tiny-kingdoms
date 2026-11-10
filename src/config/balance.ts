@@ -38,9 +38,10 @@ export const TICK_MS = 100;
 export const NODES: Record<NodeSize, { capacity: number; troopsPerSec: number; goldPerSec: number }> = {
   // Troop numbers halved for stream armies (BALANCE.md, stage 9); gold unchanged.
   // Gold ×1.5 after the playtest (PLAYTEST-1 F-4; was 0.3 / 0.4 / 0.5).
-  small: { capacity: 10, troopsPerSec: 0.25, goldPerSec: 0.45 },
-  medium: { capacity: 18, troopsPerSec: 0.4, goldPerSec: 0.6 },
-  large: { capacity: 25, troopsPerSec: 0.6, goldPerSec: 0.75 },
+  // Capacity and production ×1.3, PLAYTEST-2 (was 10 / 18 / 25 and 0.25 / 0.4 / 0.6); gold unchanged.
+  small: { capacity: 13, troopsPerSec: 0.325, goldPerSec: 0.45 },
+  medium: { capacity: 23, troopsPerSec: 0.52, goldPerSec: 0.6 },
+  large: { capacity: 33, troopsPerSec: 0.78, goldPerSec: 0.75 },
 };
 
 /** Index 0 = level 1, index 1 = level 2, index 2 = level 3. */
@@ -62,7 +63,8 @@ export const BUILDINGS = {
   },
   barracks: {
     productionMult: [1.5, 2.0, 2.6] as PerLevel<number>,
-    extraCapacity: [8, 15, 25] as PerLevel<number>,
+    /** ×1.3, PLAYTEST-2 (was 8 / 15 / 25). */
+    extraCapacity: [10, 20, 33] as PerLevel<number>,
   },
   tower: {
     /**
@@ -187,14 +189,16 @@ export const MAGE = {
   everyMs: 20000,
   warnMs: 3000,
   damageShare: 0.4,
-  damageMin: 3,
+  /** ×1.3, PLAYTEST-2 (was 3). */
+  damageMin: 4,
 } as const;
 
 /** Boss of chapter 2 level 10 (CONTENT.md C-4.2). */
 export const CITADEL = {
   waveEveryMs: 15000,
   /** Extra troops per wave, on top of the garrison. */
-  waveSize: 10,
+  /** ×1.3, PLAYTEST-2 (was 10). */
+  waveSize: 13,
 } as const;
 
 /** Battle speed-up button (GDD 3.11): offered while the player owns more than `unlockShare` of all nodes. */
@@ -223,8 +227,9 @@ export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
   reinforcement: { troops: number };
   shield: { durationSec: number };
 } = {
-  fireball: { cost: 40, cooldownSec: 20, killShare: 0.4, minKill: 3 },
-  reinforcement: { cost: 30, cooldownSec: 25, troops: 5 },
+  // minKill and troops ×1.3, PLAYTEST-2 (was 3 and 5).
+  fireball: { cost: 40, cooldownSec: 20, killShare: 0.4, minKill: 4 },
+  reinforcement: { cost: 30, cooldownSec: 25, troops: 7 },
   /** Own node can't be attacked for durationSec: hostile units that arrive break on it. */
   shield: { cost: 30, cooldownSec: 30, durationSec: 8 },
 };
@@ -269,7 +274,8 @@ export const AI = {
   weakenedWindowSec: 6,
   /** A node counts as weakened after losing this share of its recent maximum (and at least weakenedMinDrop troops). */
   weakenedShare: 0.4,
-  weakenedMinDrop: 2,
+  /** ×1.3, PLAYTEST-2 (was 2). */
+  weakenedMinDrop: 3,
   /** Extra target value of goal nodes: the node to hold (deny it) and the player's capital. */
   goalTargetValue: 3,
   /** Extra target value of special nodes. */
@@ -299,6 +305,7 @@ export const BONUSES = {
   costBase: 50,
   costGrowth: 1.35,
   perLevel: {
+    /** ×1.3 rounds back to 1, PLAYTEST-2 (was 1). */
     startArmy: 1,
     troopProduction: 0.04,
     goldIncome: 0.05,
@@ -317,7 +324,8 @@ export const SPELL_UPGRADES = {
   starCosts: [2, 3, 4, 5, 6],
   perLevel: {
     fireball: { damageShare: 0.05, cooldownSec: -1 },
-    reinforcement: { troops: 2, cooldownSec: -1 },
+    /** troops ×1.3, PLAYTEST-2 (was 2). */
+    reinforcement: { troops: 3, cooldownSec: -1 },
     shield: { durationSec: 1, cooldownSec: -1 },
   },
 } as const;

@@ -16,7 +16,7 @@
       "y": 0.574,
       "size": "large",
       "owner": "player",
-      "troops": 10,
+      "troops": 13,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -27,7 +27,7 @@
       "y": 0.426,
       "size": "large",
       "owner": "enemy",
-      "troops": 28,
+      "troops": 36,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -38,7 +38,7 @@
       "y": 0.608,
       "size": "medium",
       "owner": "neutral",
-      "troops": 6,
+      "troops": 8,
       "hasGoldVein": false,
       "building": null
     },
@@ -48,7 +48,7 @@
       "y": 0.392,
       "size": "medium",
       "owner": "neutral",
-      "troops": 6,
+      "troops": 8,
       "hasGoldVein": false,
       "building": null
     },
@@ -58,7 +58,7 @@
       "y": 0.289,
       "size": "small",
       "owner": "neutral",
-      "troops": 4,
+      "troops": 5,
       "hasGoldVein": false,
       "building": null
     },
@@ -68,7 +68,7 @@
       "y": 0.711,
       "size": "small",
       "owner": "neutral",
-      "troops": 4,
+      "troops": 5,
       "hasGoldVein": false,
       "building": null
     },
@@ -78,7 +78,7 @@
       "y": 0.889,
       "size": "small",
       "owner": "neutral",
-      "troops": 4,
+      "troops": 5,
       "hasGoldVein": false,
       "building": null,
       "kind": "chest"
@@ -89,7 +89,7 @@
       "y": 0.111,
       "size": "small",
       "owner": "neutral",
-      "troops": 3,
+      "troops": 4,
       "hasGoldVein": false,
       "building": null
     }

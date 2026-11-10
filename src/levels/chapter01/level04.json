@@ -17,7 +17,7 @@
       "y": 0.54,
       "size": "large",
       "owner": "player",
-      "troops": 8,
+      "troops": 10,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -28,7 +28,7 @@
       "y": 0.296,
       "size": "medium",
       "owner": "neutral",
-      "troops": 3,
+      "troops": 4,
       "hasGoldVein": false,
       "building": null
     },
@@ -38,7 +38,7 @@
       "y": 0.72,
       "size": "small",
       "owner": "neutral",
-      "troops": 3,
+      "troops": 4,
       "hasGoldVein": false,
       "building": null
     },
@@ -48,7 +48,7 @@
       "y": 0.15,
       "size": "small",
       "owner": "neutral",
-      "troops": 3,
+      "troops": 4,
       "hasGoldVein": false,
       "building": null
     },
@@ -58,7 +58,7 @@
       "y": 0.493,
       "size": "medium",
       "owner": "neutral",
-      "troops": 6,
+      "troops": 8,
       "hasGoldVein": false,
       "building": null
     },
@@ -68,7 +68,7 @@
       "y": 0.277,
       "size": "small",
       "owner": "neutral",
-      "troops": 3,
+      "troops": 4,
       "hasGoldVein": false,
       "building": null
     },
@@ -78,7 +78,7 @@
       "y": 0.717,
       "size": "medium",
       "owner": "neutral",
-      "troops": 4,
+      "troops": 5,
       "hasGoldVein": false,
       "building": null
     },
@@ -88,7 +88,7 @@
       "y": 0.531,
       "size": "large",
       "owner": "enemy",
-      "troops": 17,
+      "troops": 22,
       "hasGoldVein": false,
       "building": null,
       "capital": true
