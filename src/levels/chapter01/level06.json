@@ -11,8 +11,8 @@
   "nodes": [
     {
       "id": "player",
-      "x": 0.05,
-      "y": 0.446,
+      "x": 0.043,
+      "y": 0.412,
       "size": "large",
       "owner": "player",
       "troops": 13,
@@ -22,8 +22,8 @@
     },
     {
       "id": "enemy",
-      "x": 0.95,
-      "y": 0.554,
+      "x": 0.958,
+      "y": 0.588,
       "size": "large",
       "owner": "enemy",
       "troops": 29,
@@ -43,8 +43,8 @@
     },
     {
       "id": "a1",
-      "x": 0.311,
-      "y": 0.739,
+      "x": 0.308,
+      "y": 0.889,
       "size": "small",
       "owner": "neutral",
       "troops": 4,
@@ -53,8 +53,8 @@
     },
     {
       "id": "b1",
-      "x": 0.689,
-      "y": 0.261,
+      "x": 0.692,
+      "y": 0.111,
       "size": "small",
       "owner": "neutral",
       "troops": 4,
@@ -63,8 +63,8 @@
     },
     {
       "id": "a2",
-      "x": 0.299,
-      "y": 0.27,
+      "x": 0.296,
+      "y": 0.126,
       "size": "medium",
       "owner": "neutral",
       "troops": 9,
@@ -73,8 +73,8 @@
     },
     {
       "id": "b2",
-      "x": 0.701,
-      "y": 0.73,
+      "x": 0.704,
+      "y": 0.874,
       "size": "medium",
       "owner": "neutral",
       "troops": 9,

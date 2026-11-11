@@ -35,8 +35,9 @@ export interface Point {
 }
 
 /**
- * Maps normalized level coordinates to screen. The bounding box of the nodes is fitted into the
- * available area with a uniform scale; a turned field (portrait) is then stretched along field x (player → enemy)
+ * Maps normalized level coordinates to screen. The reference map (FIELD_SIZE_REF) around the level's center is fitted
+ * into the available area with a uniform scale, the same on every level (a level fills it by its node layout, not by
+ * zoom, so the gaps between units look the same everywhere); a turned field (portrait) is then stretched along field x (player → enemy)
  * by up to FIELD_STRETCH_MAX where the screen is taller than the map, so tall phones are not left half empty.
  * In portrait the field is rotated 90° when that makes it larger; the left side (player) goes down.
  * `orientArea` (default: `area`) is where that choice is made: the screen without per-level bars (tutorial hints,
@@ -44,7 +45,7 @@ export interface Point {
  */
 /** Maps field units to screen px and sizes nodes; what node and road views need from a layout. */
 export interface ScreenLayout {
-  /** Screen px per field unit of this level's map. */
+  /** Screen px per field unit of the map: the same on every level that fits the reference map. */
   readonly scale: number;
   /** Screen px per field unit for sizes (node radius, road width): the same on every level of a screen. */
   readonly sizeScale: number;
@@ -71,10 +72,18 @@ export class FieldLayout implements ScreenLayout {
   constructor(points: readonly Point[], area: Rect, orientArea: Rect = area) {
     const xs = points.map((p) => p.x);
     const ys = points.map((p) => p.y);
-    this.minX = Math.min(...xs);
-    this.maxX = Math.max(...xs);
-    this.minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
+    // The framed box is the reference map around this level's center (no zoom per level: levels spread their nodes
+    // to fill it); only a level larger than the reference is framed by its own spread, so it still fits.
+    const loX = Math.min(...xs);
+    const hiX = Math.max(...xs);
+    const loY = Math.min(...ys);
+    const hiY = Math.max(...ys);
+    const spanX = Math.max(FIELD_SIZE_REF.x, hiX - loX);
+    const spanY = Math.max(FIELD_SIZE_REF.y, hiY - loY);
+    this.minX = (loX + hiX - spanX) / 2;
+    this.maxX = this.minX + spanX;
+    this.minY = (loY + hiY - spanY) / 2;
+    const maxY = this.minY + spanY;
     this.pad = NODE_RADIUS.large * 1.6;
 
     const bw = this.maxX - this.minX + 2 * this.pad;
