@@ -28,12 +28,12 @@ const sendBoth = [
 
 describe('road clashes 1:1 (GDD 3.6)', () => {
   it('equal columns destroy each other unit by unit; nobody reaches a node', () => {
-    const world = duel(20, 20); // 15 vs 15
+    const world = duel(20, 20); // 19 vs 19
     const events = [...step(world, [...sendBoth]), ...drain(world)];
-    expect(eventsOf(events, 'clash')).toHaveLength(15);
+    expect(eventsOf(events, 'clash')).toHaveLength(19);
     expect(eventsOf(events, 'arrived')).toHaveLength(0);
-    expect(world.nodes.P!.troops).toBe(5);
-    expect(world.nodes.E!.troops).toBe(5);
+    expect(world.nodes.P!.troops).toBe(1);
+    expect(world.nodes.E!.troops).toBe(1);
   });
 
   it('the columns "stand": every pair meets at the same point', () => {
@@ -44,14 +44,14 @@ describe('road clashes 1:1 (GDD 3.6)', () => {
   });
 
   it('different lengths: the rest of the longer column marches on and attacks', () => {
-    const world = duel(20, 12); // 15 vs 9
+    const world = duel(20, 12); // 19 vs 11
     const events = [...step(world, [...sendBoth]), ...drain(world)];
-    expect(eventsOf(events, 'clash')).toHaveLength(9);
+    expect(eventsOf(events, 'clash')).toHaveLength(11);
     const arrived = eventsOf(events, 'arrived');
-    expect(arrived).toHaveLength(6);
+    expect(arrived).toHaveLength(8);
     expect(arrived.every((a) => a.owner === 'player' && a.nodeId === 'E')).toBe(true);
-    // E kept 3 at home: 3 trades, the 4th captures, 2 reinforce.
-    expect(world.nodes.E).toMatchObject({ owner: 'player', troops: 3 });
+    // E kept 1 at home: 1 trade, the 2nd captures, 6 reinforce.
+    expect(world.nodes.E).toMatchObject({ owner: 'player', troops: 7 });
   });
 
   it('a clash reports both sides and the meeting point', () => {
@@ -72,7 +72,7 @@ describe('road clashes 1:1 (GDD 3.6)', () => {
     ]);
     const events = drain(world);
     expect(eventsOf(events, 'clash')).toHaveLength(0);
-    expect(eventsOf(events, 'arrived')).toHaveLength(30);
+    expect(eventsOf(events, 'arrived')).toHaveLength(38);
   });
 
   it('a large step does not skip the touch: units closer than 2 × step + contact meet this tick', () => {
@@ -154,8 +154,8 @@ describe('clash at the fork by a node', () => {
     const events = [...step(world, [{ type: 'send', side: 'enemy', from: 'E', to: 'N' }]), ...drain(world)];
     const clashes = eventsOf(events, 'clash').length;
     const enemyAtN = eventsOf(events, 'arrived').filter((a) => a.owner === 'enemy').length;
-    // 15 player units vs 15 enemy units: every enemy unit is met on the road or fights at N; none slips past.
-    expect(clashes + enemyAtN).toBe(15);
+    // 19 player units vs 19 enemy units: every enemy unit is met on the road or fights at N; none slips past.
+    expect(clashes + enemyAtN).toBe(19);
     expect(unitsOf(world, 'enemy')).toHaveLength(0);
   });
 });

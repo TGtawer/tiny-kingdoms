@@ -120,7 +120,8 @@ describe('king (defender)', () => {
   });
 
   it('counter-attacks right after being attacked', () => {
-    const world = lineWorld({ P: { troops: 8 }, N: { owner: 'player', troops: 8 }, E: { troops: 24 } });
+    // E (19 troops) swipes 18.
+    const world = lineWorld({ P: { troops: 8 }, N: { owner: 'player', troops: 8 }, E: { troops: 19 } });
     world.tick = 10;
     const ai = leaderAi('king');
     expect(decide(structuredClone(world), ai).some((c) => c.type === 'send' && c.to === 'N')).toBe(false);

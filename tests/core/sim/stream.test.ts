@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ARMY, STREAM, TICK_MS } from '../../../src/config/balance';
-import { validate } from '../../../src/core/sim/commands';
+import { sendAmount, validate } from '../../../src/core/sim/commands';
 import { step } from '../../../src/core/sim/tick';
 import { unitPosition } from '../../../src/core/sim/units';
 import { createWorld, isAttacked } from '../../../src/core/sim/World';
@@ -31,11 +31,12 @@ describe('stream release (GDD 3.6)', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 20 } }));
     step(world, [swipe('P', 'N')]);
     expect(world.nodes.P!.troops).toBe(19);
-    expect(world.streams[0]).toMatchObject({ sourceId: 'P', left: 14 });
+    // 19 sent (all but one), the first already out.
+    expect(world.streams[0]).toMatchObject({ sourceId: 'P', left: 18 });
     run(world, ticksPerSec);
     expect(world.nodes.P!.troops).toBe(20 - world.units.length);
     drain(world);
-    expect(world.nodes.P!.troops).toBe(5);
+    expect(world.nodes.P!.troops).toBe(1);
     expect(world.streams).toHaveLength(0);
     expect(world.nodes.P!.streams).toBe(0);
   });
@@ -53,23 +54,24 @@ describe('stream release (GDD 3.6)', () => {
     expect(world.nodes.E!.released).toBe(0);
   });
 
-  it('a re-swipe cancels the rest of the old stream and sends 75% of the current garrison', () => {
+  it('a re-swipe cancels the rest of the old stream and sends the current garrison but one', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 20 } }));
     run(world, ticksPerSec, [swipe('P', 'N')]);
     const out = world.units.length;
     expect(world.nodes.P!.troops).toBe(20 - out);
     step(world, [swipe('P', 'N')]);
     expect(world.streams).toHaveLength(1);
-    // 75% of 20 - out, one of them already released this tick.
-    expect(world.streams[0]!.left).toBe(Math.floor((20 - out) * 0.75) - 1);
+    // All of 20 - out but one, one of them already released this tick.
+    expect(world.streams[0]!.left).toBe(sendAmount(20 - out) - 1);
+    expect(sendAmount(20 - out)).toBe(20 - out - 1);
   });
 
   it('a multi-node swipe: every source releases its own stream at the same time', () => {
     const world = freezeEconomy(lineWorld({ P: { troops: 10 }, N: { owner: 'player', troops: 8 } }));
     step(world, [swipe('P', 'E'), swipe('N', 'E')]);
     expect(world.streams.map((s) => [s.sourceId, s.left + 1])).toEqual([
-      ['P', 7],
-      ['N', 6],
+      ['P', 9],
+      ['N', 7],
     ]);
     expect(world.units).toHaveLength(2);
   });

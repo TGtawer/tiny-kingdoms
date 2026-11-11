@@ -1,5 +1,5 @@
 import { SPECIAL_NODES, TICK_MS } from '../../config/balance';
-import { sendAmount } from './commands';
+import { shareOf } from './commands';
 import { distance } from './pathfinding';
 import { startStream } from './stream';
 import { isAttacked, random, type NodeState, type World } from './World';
@@ -26,7 +26,8 @@ export function stepBandits(world: World): BanditRaid[] {
     camp.raidTick += RAID_TICKS;
 
     const target = raidTarget(world, camp);
-    const count = sendAmount(camp.troops, 'swipe');
+    // Raids keep their own share (GDD 3.12), not the swipe's.
+    const count = shareOf(camp.troops, SPECIAL_NODES.bandits.raidShare);
     if (!target || count <= 0 || isAttacked(world, camp)) continue;
     const stream = startStream(world, 'neutral', camp.id, [camp.id, target.id], count);
     raids.push({ from: camp.id, to: target.id, streamId: stream.id, count });

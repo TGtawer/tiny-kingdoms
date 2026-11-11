@@ -71,15 +71,15 @@ describe('lane density (GDD 3.6): a column is never denser than one stream', () 
     // P's column passes N; N sends its own order to E while the transit goes on.
     const events = runChecked(world, 200, (t) => (t === 0 ? [send('P', 'E')] : t === 25 ? [send('N', 'E')] : []));
     const transit = eventsOf(events, 'transit').length;
-    expect(transit).toBe(30);
-    // Everything that left P and N reached E (30 from P, 22 from N): nothing was lost to the queue.
-    expect(eventsOf(events, 'arrived').filter((a) => a.nodeId === 'E')).toHaveLength(30 + 22);
+    expect(transit).toBe(39);
+    // Everything that left P and N reached E (39 from P, 29 from N): nothing was lost to the queue.
+    expect(eventsOf(events, 'arrived').filter((a) => a.nodeId === 'E')).toHaveLength(39 + 29);
   });
 
   it('a multi-node swipe whose columns merge on one road', () => {
     const world = cross();
     const events = runChecked(world, 250, (t) => (t === 0 ? [send('P', 'E'), send('Q', 'E'), send('N', 'E')] : []));
-    expect(eventsOf(events, 'arrived').filter((a) => a.nodeId === 'E')).toHaveLength(30 + 30 + 22);
+    expect(eventsOf(events, 'arrived').filter((a) => a.nodeId === 'E')).toHaveLength(39 + 39 + 29);
   });
 
   it('a citadel wave and the citadel’s own order on the same road', () => {
@@ -107,8 +107,8 @@ describe('transit through own nodes (GDD 3.6)', () => {
     const world = cross();
     const events = [...step(world, [send('P', 'E')])];
     for (let t = 0; t < 200; t++) events.push(...step(world));
-    expect(eventsOf(events, 'transit').filter((e) => e.nodeId === 'N')).toHaveLength(30);
-    expect(eventsOf(events, 'arrived').filter((a) => a.nodeId === 'E')).toHaveLength(30);
+    expect(eventsOf(events, 'transit').filter((e) => e.nodeId === 'N')).toHaveLength(39);
+    expect(eventsOf(events, 'arrived').filter((a) => a.nodeId === 'E')).toHaveLength(39);
     expect(world.nodes.N!.troops).toBe(30);
   });
 
@@ -126,8 +126,8 @@ describe('transit through own nodes (GDD 3.6)', () => {
     step(world, [send('N', 'Q')]);
     const fromN = world.streams.filter((s) => s.sourceId === 'N');
     expect(fromN.map((s) => s.route.path)).toEqual([['N', 'Q']]);
-    // 75% of the garrison with the transit in it; the rest of the transit stays home.
-    expect(fromN[0]!.left + 1).toBe(Math.floor(troops * 0.75));
+    // The garrison with the transit in it, all but one; that one stays home.
+    expect(fromN[0]!.left + 1).toBe(troops - 1);
   });
 
   it('an attacked stop keeps the transit; nothing goes on by itself afterwards', () => {

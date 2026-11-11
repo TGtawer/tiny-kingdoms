@@ -13,22 +13,22 @@
   "nodes": [
     {
       "id": "player",
-      "x": 0.068,
-      "y": 0.436,
+      "x": 0.05,
+      "y": 0.251,
       "size": "large",
       "owner": "player",
-      "troops": 10,
+      "troops": 13,
       "hasGoldVein": false,
       "building": null,
       "capital": true
     },
     {
       "id": "enemy",
-      "x": 0.932,
-      "y": 0.564,
+      "x": 0.95,
+      "y": 0.749,
       "size": "large",
       "owner": "enemy",
-      "troops": 29,
+      "troops": 32,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -39,44 +39,54 @@
       "y": 0.5,
       "size": "medium",
       "owner": "neutral",
-      "troops": 4,
+      "troops": 5,
       "hasGoldVein": false,
       "building": null
     },
     {
       "id": "a1",
-      "x": 0.39,
-      "y": 0.277,
+      "x": 0.365,
+      "y": 0.226,
       "size": "small",
       "owner": "neutral",
-      "troops": 4,
+      "troops": 5,
       "hasGoldVein": false,
       "building": null
     },
     {
       "id": "b1",
-      "x": 0.61,
-      "y": 0.723,
+      "x": 0.635,
+      "y": 0.774,
       "size": "small",
       "owner": "neutral",
-      "troops": 4,
+      "troops": 5,
       "hasGoldVein": false,
       "building": null
     },
     {
       "id": "a2",
-      "x": 0.184,
+      "x": 0.05,
       "y": 0.787,
       "size": "medium",
       "owner": "neutral",
-      "troops": 5,
+      "troops": 7,
       "hasGoldVein": false,
       "building": null
     },
     {
       "id": "b2",
-      "x": 0.816,
+      "x": 0.95,
       "y": 0.213,
+      "size": "small",
+      "owner": "neutral",
+      "troops": 7,
+      "hasGoldVein": false,
+      "building": null
+    },
+    {
+      "id": "a3",
+      "x": 0.196,
+      "y": 0.519,
       "size": "small",
       "owner": "neutral",
       "troops": 5,
@@ -84,22 +94,12 @@
       "building": null
     },
     {
-      "id": "a3",
-      "x": 0.237,
-      "y": 0.563,
-      "size": "small",
-      "owner": "neutral",
-      "troops": 4,
-      "hasGoldVein": false,
-      "building": null
-    },
-    {
       "id": "b3",
-      "x": 0.763,
-      "y": 0.437,
+      "x": 0.804,
+      "y": 0.481,
       "size": "small",
       "owner": "neutral",
-      "troops": 4,
+      "troops": 5,
       "hasGoldVein": false,
       "building": null
     }

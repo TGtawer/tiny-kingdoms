@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { aiParamsFromLevel, aiStep, createAi } from '../src/core/ai/EnemyAI';
-import { validateLevel, type LevelData } from '../src/core/level/schema';
+import { BUILDINGS } from '../src/config/balance';
+import { LEVEL_LIMITS, validateLevel, type LevelData } from '../src/core/level/schema';
 import { buildCost } from '../src/core/sim/commands';
 import { previewAttack } from '../src/core/sim/preview';
 import { spellCost } from '../src/core/sim/spells';
@@ -80,16 +81,32 @@ describe('chapter 1', () => {
 });
 
 describe('lesson 1 (TUTORIAL.md T-5)', () => {
-  it('n2 is not taken by one node, but is by a swipe through both (1–6 s after n1 falls)', () => {
+  // 2–6 s since PLAYTEST-2 (units ×1.3): in the first second even a swipe through both falls short of n2.
+  it('n2 is not taken by one node, but is by a swipe through both (2–6 s after n1 falls)', () => {
     const world = createWorld(getLevel('c01_l01')!, { seed: 1 });
     step(world, [{ type: 'send', side: 'player', from: 'player', to: 'n1' }]);
     for (let i = 0; i < 300 && world.nodes.n1!.owner !== 'player'; i++) step(world);
     expect(world.nodes.n1!.owner).toBe('player');
     for (let sec = 1; sec <= 6; sec++) {
       for (let i = 0; i < 10; i++) step(world);
+      if (sec < 2) continue;
       expect(previewAttack(world, 'player', ['player'], 'swipe', 'n2').wins, `${sec} s`).toBe(false);
       expect(previewAttack(world, 'player', ['n1'], 'swipe', 'n2').wins, `${sec} s`).toBe(false);
       expect(previewAttack(world, 'player', ['player', 'n1'], 'swipe', 'n2').wins, `${sec} s`).toBe(true);
+    }
+  });
+});
+
+describe('road length (PLAYTEST-2 F2-3)', () => {
+  it('the shortest road holds two tower zones and a gap', () => {
+    expect(LEVEL_LIMITS.minRoadLength).toBeGreaterThan(2 * BUILDINGS.tower.zone);
+  });
+
+  it.each([...CHAPTERS.flat(), ...DEV_LEVELS].map((l) => [l.id, l] as const))('%s: every road is at least minRoadLength', (_id, lvl) => {
+    const at = new Map(lvl.nodes.map((n) => [n.id, n]));
+    for (const [a, b] of lvl.roads) {
+      const len = Math.hypot(at.get(a)!.x - at.get(b)!.x, at.get(a)!.y - at.get(b)!.y);
+      expect(len, `${a}-${b}`).toBeGreaterThanOrEqual(LEVEL_LIMITS.minRoadLength);
     }
   });
 });

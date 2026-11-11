@@ -93,13 +93,27 @@ export const NODE_VIEW = {
   bakeSupersample: 2,
 } as const;
 
-/** Node radius in field units (fraction of field width), clamped to CSS px bounds. */
+/**
+ * Node radius in field units (fraction of field width), clamped to CSS px bounds. It is measured on a reference map
+ * (FIELD_SIZE_REF), not on the level's own one, so a node of a size looks the same on every level of a screen.
+ */
 export const NODE_RADIUS: Record<NodeSize, number> = {
-  small: 0.055,
-  medium: 0.068,
-  large: 0.084,
+  small: 0.048,
+  medium: 0.059,
+  large: 0.073,
 };
-export const NODE_RADIUS_MIN_PX = 26;
+export const NODE_RADIUS_MIN_PX = 23;
+/**
+ * The reference map for node and road sizes: the node spread (field units) of the largest map of chapter 1 (level 8
+ * is the tallest, level 1 the widest). Every level fits it, so nodes never get bigger next to each other than there.
+ */
+export const FIELD_SIZE_REF = { x: 0.915, y: 0.778 } as const;
+/**
+ * A turned field (portrait) may be stretched up to this much along the player → enemy axis (field x) to fill a
+ * phone taller than the map; landscape is never stretched. View only: the simulation's distances don't change,
+ * node circles stay round, roads and units follow the stretched points.
+ */
+export const FIELD_STRETCH_MAX = 1.3;
 export const NODE_RADIUS_MAX_PX = 58;
 /** Extra touch slop around a node, CSS px; hit radius is never below MIN_TOUCH_PX / 2. */
 export const NODE_HIT_SLOP_PX = 8;
@@ -162,32 +176,6 @@ export const STEP_FX = {
   /** Width and height of the middle and the stretched figure, shares of the round one (they keep its feet). */
   mid: { w: 0.96, h: 1.06 },
   stretch: { w: 0.92, h: 1.12 },
-} as const;
-
-/**
- * Dust from under the units' feet (docs/FX.md FX-5): a separate Blitter under the units with a fixed pool of puffs.
- * A puff grows by switching frames and fades by alpha. Times ms, speeds CSS px/s.
- */
-export const DUST_FX = {
-  /** Puffs on the field at most; when all are busy a new puff just doesn't appear. */
-  pool: 120,
-  /** Frames of a growing puff, radius from r0 to r1 (shares of the figure radius: 2 → 4.7 CSS px at the largest). */
-  frames: 4,
-  r0OfRadius: 0.33,
-  r1OfRadius: 0.78,
-  color: 0xb4b2a9,
-  /** Each unit puffs every everyMinMs…everyMaxMs (fixed per unit, from its id). */
-  everyMinMs: 280,
-  everyMaxMs: 580,
-  lifeMs: 450,
-  alpha: 0.6,
-  /** A puff drifts back along the road and up. */
-  driftBack: 14,
-  rise: 6,
-  /** Above this many units only every N-th unit puffs (N = units / fullUntilUnits, rounded up)… */
-  fullUntilUnits: 150,
-  /** …and above this many there is no dust at all. */
-  offAboveUnits: 400,
 } as const;
 
 /**

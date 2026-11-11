@@ -60,7 +60,7 @@ describe('fortress', () => {
   });
 
   it('is in the attack preview', () => {
-    const world = lineWorld({ P: { troops: 15 }, N: { troops: 5, kind: 'fortress' } });
+    const world = lineWorld({ P: { troops: 12 }, N: { troops: 5, kind: 'fortress' } });
     // 11 attackers: 10 trades with 5 double defenders, the 11th captures.
     expect(previewAttack(world, 'player', ['P'], 'swipe', 'N')).toMatchObject({ sent: 11, wins: true });
     world.nodes.N!.troops = 5.5;

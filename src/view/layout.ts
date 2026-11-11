@@ -8,6 +8,8 @@ import {
   NODE_RADIUS_MIN_PX,
   cssColor,
   COLORS,
+  FIELD_SIZE_REF,
+  FIELD_STRETCH_MAX,
 } from '../config/game';
 import type { NodeSize } from '../config/balance';
 import type * as Phaser from 'phaser';
@@ -34,13 +36,18 @@ export interface Point {
 
 /**
  * Maps normalized level coordinates to screen. The bounding box of the nodes is fitted into the
- * available area with a uniform scale (so distances stay proportional to the simulation).
+ * available area with a uniform scale; a turned field (portrait) is then stretched along field x (player → enemy)
+ * by up to FIELD_STRETCH_MAX where the screen is taller than the map, so tall phones are not left half empty.
  * In portrait the field is rotated 90° when that makes it larger; the left side (player) goes down.
+ * `orientArea` (default: `area`) is where that choice is made: the screen without per-level bars (tutorial hints,
+ * goal plaque), so the same map on the same screen is never turned one way in a lesson and the other way outside it.
  */
 /** Maps field units to screen px and sizes nodes; what node and road views need from a layout. */
 export interface ScreenLayout {
-  /** Screen px per field unit (road width follows it). */
+  /** Screen px per field unit of this level's map. */
   readonly scale: number;
+  /** Screen px per field unit for sizes (node radius, road width): the same on every level of a screen. */
+  readonly sizeScale: number;
   toScreen(x: number, y: number): Point;
   nodeRadius(size: NodeSize): number;
   hitRadius(size: NodeSize): number;
@@ -48,8 +55,12 @@ export interface ScreenLayout {
 
 export class FieldLayout implements ScreenLayout {
   readonly rotated: boolean;
-  /** Screen px per field unit. */
+  /** Screen px per field unit across the map (field y). */
   readonly scale: number;
+  /** Screen px per field unit for sizes: the reference map (FIELD_SIZE_REF) fitted into `orientArea`. */
+  readonly sizeScale: number;
+  /** Screen px per field unit along the map (field x): `scale` times the stretch. */
+  private readonly scaleAlong: number;
   private readonly minX: number;
   private readonly maxX: number;
   private readonly minY: number;
@@ -57,7 +68,7 @@ export class FieldLayout implements ScreenLayout {
   private readonly originY: number;
   private readonly pad: number;
 
-  constructor(points: readonly Point[], area: Rect) {
+  constructor(points: readonly Point[], area: Rect, orientArea: Rect = area) {
     const xs = points.map((p) => p.x);
     const ys = points.map((p) => p.y);
     this.minX = Math.min(...xs);
@@ -68,16 +79,28 @@ export class FieldLayout implements ScreenLayout {
 
     const bw = this.maxX - this.minX + 2 * this.pad;
     const bh = maxY - this.minY + 2 * this.pad;
-    const straight = Math.min(area.width / bw, area.height / bh);
-    const rotated = Math.min(area.width / bh, area.height / bw);
-    // Rotate only for a clear gain, so near-square screens don't flip back and forth.
-    this.rotated = rotated > straight * 1.08;
-    this.scale = this.rotated ? rotated : straight;
+    this.rotated = FieldLayout.turns(bw, bh, orientArea);
+    // Sizes from the reference map on this screen, whatever this level's spread.
+    const rw = FIELD_SIZE_REF.x + 2 * this.pad;
+    const rh = FIELD_SIZE_REF.y + 2 * this.pad;
+    this.sizeScale = FieldLayout.turns(rw, rh, orientArea)
+      ? Math.min(orientArea.width / rh, orientArea.height / rw)
+      : Math.min(orientArea.width / rw, orientArea.height / rh);
+    this.scale = this.rotated ? Math.min(area.width / bh, area.height / bw) : Math.min(area.width / bw, area.height / bh);
 
-    const screenW = (this.rotated ? bh : bw) * this.scale;
-    const screenH = (this.rotated ? bw : bh) * this.scale;
+    // A turned field (portrait) stretches along field x into the room left below and above it.
+    const room = this.rotated ? area.height / (bw * this.scale) : 1;
+    this.scaleAlong = this.scale * clamp(room, 1, FIELD_STRETCH_MAX);
+
+    const screenW = this.rotated ? bh * this.scale : bw * this.scaleAlong;
+    const screenH = this.rotated ? bw * this.scaleAlong : bh * this.scale;
     this.originX = area.x + (area.width - screenW) / 2;
     this.originY = area.y + (area.height - screenH) / 2;
+  }
+
+  /** Whether a bw × bh box turned 90° fits `area` clearly larger (only for a clear gain: no flipping on near-square screens). */
+  private static turns(bw: number, bh: number, area: Rect): boolean {
+    return Math.min(area.width / bh, area.height / bw) > Math.min(area.width / bw, area.height / bh) * 1.08;
   }
 
   toScreen(x: number, y: number): Point {
@@ -88,16 +111,16 @@ export class FieldLayout implements ScreenLayout {
   toScreenInto(x: number, y: number, out: Point): Point {
     if (this.rotated) {
       out.x = this.originX + (y - this.minY + this.pad) * this.scale;
-      out.y = this.originY + (this.maxX + this.pad - x) * this.scale;
+      out.y = this.originY + (this.maxX + this.pad - x) * this.scaleAlong;
     } else {
-      out.x = this.originX + (x - this.minX + this.pad) * this.scale;
+      out.x = this.originX + (x - this.minX + this.pad) * this.scaleAlong;
       out.y = this.originY + (y - this.minY + this.pad) * this.scale;
     }
     return out;
   }
 
   nodeRadius(size: NodeSize): number {
-    return clamp(NODE_RADIUS[size] * this.scale, px(NODE_RADIUS_MIN_PX), px(NODE_RADIUS_MAX_PX));
+    return clamp(NODE_RADIUS[size] * this.sizeScale, px(NODE_RADIUS_MIN_PX), px(NODE_RADIUS_MAX_PX));
   }
 
   hitRadius(size: NodeSize): number {

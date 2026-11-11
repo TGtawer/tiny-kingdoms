@@ -16,7 +16,8 @@ const params = (seed: number, nodeCount: number): GeneratorParams => ({
 });
 
 describe('generateLevel', () => {
-  it.each([6, 7, 8, 9, 12, 16, 20])('produces valid levels with %i nodes for many seeds', (count) => {
+  // Up to 12 nodes: with roads of at least LEVEL_LIMITS.minRoadLength (PLAYTEST-2) bigger maps don't fit in 0..1.
+  it.each([6, 7, 8, 9, 10, 12])('produces valid levels with %i nodes for many seeds', (count) => {
     for (let seed = 1; seed <= 15; seed++) {
       const level = generateLevel(params(seed, count));
       const result = validateLevel(level);

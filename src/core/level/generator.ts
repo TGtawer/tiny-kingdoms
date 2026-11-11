@@ -203,7 +203,7 @@ function buildRoads(drafts: Draft[], target: number): Array<[string, string]> | 
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const len = Math.hypot(pos[i]!.x - pos[j]!.x, pos[i]!.y - pos[j]!.y);
-      if (len <= GEN.maxRoadLength) candidates.push([i, j, len]);
+      if (len >= LEVEL_LIMITS.minRoadLength && len <= GEN.maxRoadLength) candidates.push([i, j, len]);
     }
   }
   candidates.sort((a, b) => a[2] - b[2]);

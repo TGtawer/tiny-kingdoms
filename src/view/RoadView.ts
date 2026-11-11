@@ -5,7 +5,7 @@ import { px, type ScreenLayout } from './layout';
 
 /** Width of a road's sandy surface on screen. */
 export function roadWidth(layout: ScreenLayout): number {
-  return Math.max(px(8), layout.scale * 0.016);
+  return Math.max(px(8), layout.sizeScale * 0.016);
 }
 
 /** Width of a road with its brown edge on both sides: what is drawn first, under the surface. */

@@ -10,7 +10,7 @@ import { drain, freezeEconomy, level, lineWorld, node } from '../helpers';
 describe('previewAttack', () => {
   it('sums swipe amounts and predicts a win against a weaker garrison', () => {
     const world = lineWorld({ P: { troops: 20 }, N: { troops: 5 } });
-    expect(previewAttack(world, 'player', ['P'], 'swipe', 'N')).toEqual({ sent: 15, defenders: 5, wins: true });
+    expect(previewAttack(world, 'player', ['P'], 'swipe', 'N')).toEqual({ sent: 19, defenders: 5, wins: true });
   });
 
   it('predicts a loss when the garrison is too strong', () => {
@@ -43,14 +43,15 @@ describe('previewAttack', () => {
         ],
       ),
     );
-    // T is small: units arrive 0.04 from its center, so a unit walks (0.13 - 0.04) / 0.12 = 0.75 s through the zone.
+    // T is small: units arrive 0.035 from its center, so a unit walks (0.13 - 0.035) / 0.12 ≈ 0.79 s through the zone.
     expect(towerZoneSec(world.nodes.T!)).toBeCloseTo((BUILDINGS.tower.zone - STREAM.edgeDist.small) / ARMY.speed, 9);
-    // 14 units, streams of 7 leave in 1.4 s: the tower takes 1 + ⌊1 × (1.4 + 0.75)⌋ = 3; 11 > 4 defenders.
-    expect(towerKillsEstimate(world.nodes.T!, 14, 7)).toBe(3);
-    expect(previewAttack(world, 'player', ['A', 'B'], 'swipe', 'T')).toEqual({ sent: 14, defenders: 4, wins: true });
-    // A single stream of 7: 7 - 3 = 4 is not more than 4 defenders; against 3 it wins.
+    // 18 units, streams of 9 leave in 1.8 s: the tower takes 1 + ⌊1 × (1.8 + 0.79)⌋ = 3; 15 > 4 defenders.
+    expect(towerKillsEstimate(world.nodes.T!, 18, 9)).toBe(3);
+    expect(previewAttack(world, 'player', ['A', 'B'], 'swipe', 'T')).toEqual({ sent: 18, defenders: 4, wins: true });
+    // A single stream of 9: 9 - 3 = 6 is not more than 6 defenders; against 5 it wins.
+    world.nodes.T!.troops = 6;
     expect(previewAttack(world, 'player', ['A'], 'swipe', 'T').wins).toBe(false);
-    world.nodes.T!.troops = 3;
+    world.nodes.T!.troops = 5;
     expect(previewAttack(world, 'player', ['A'], 'swipe', 'T').wins).toBe(true);
   });
 
@@ -64,15 +65,15 @@ describe('previewAttack', () => {
   });
 
   it('1 unit = 1 unit: the capture takes one more unit than the visible garrison', () => {
-    const world = lineWorld({ P: { troops: 10 }, N: { troops: 6.9 } });
+    const world = lineWorld({ P: { troops: 10 }, N: { troops: 8.9 } });
     expect(previewAttack(world, 'player', ['P'], 'swipe', 'N').wins).toBe(true);
-    world.nodes.N!.troops = 7;
+    world.nodes.N!.troops = 9;
     expect(previewAttack(world, 'player', ['P'], 'swipe', 'N').wins).toBe(false);
   });
 
   it('an own target is a reinforcement', () => {
     const world = lineWorld({ N: { owner: 'player', troops: 3 } });
-    expect(previewAttack(world, 'player', ['P'], 'swipe', 'N')).toEqual({ sent: 7, defenders: 0, wins: true });
+    expect(previewAttack(world, 'player', ['P'], 'swipe', 'N')).toEqual({ sent: 9, defenders: 0, wins: true });
   });
 
   it('matches the size of the stream that actually leaves', () => {

@@ -55,14 +55,15 @@ describe('attack', () => {
   });
 
   it('does not attack when it cannot win', () => {
-    const world = freezeEconomy(lineWorld({ E: { troops: 30 }, N: { troops: 20 } }));
+    // E (23 troops) swipes 22: not enough against 20 with the margin.
+    const world = freezeEconomy(lineWorld({ E: { troops: 23 }, N: { troops: 20 } }));
     expect(sends(decide(world))).toEqual([]);
   });
 
   it('cautious AI needs a bigger advantage than an aggressive one', () => {
-    // E (20 troops) swipes 15. N = 9: cautious needs 9 × 1.6 + 2 = 16.4, aggressive 9 × 1.1 + 2 = 11.9.
-    const cautious = freezeEconomy(lineWorld({ E: { troops: 20 }, N: { troops: 9 } }));
-    const aggressive = freezeEconomy(lineWorld({ E: { troops: 20 }, N: { troops: 9 } }));
+    // E (16 troops) swipes 15. N = 9: cautious needs 9 × 1.6 + 2 = 16.4, aggressive 9 × 1.1 + 2 = 11.9.
+    const cautious = freezeEconomy(lineWorld({ E: { troops: 16 }, N: { troops: 9 } }));
+    const aggressive = freezeEconomy(lineWorld({ E: { troops: 16 }, N: { troops: 9 } }));
     expect(sends(decide(cautious, params(0)))).toEqual([]);
     expect(sends(decide(aggressive, params(1)))).toHaveLength(1);
   });

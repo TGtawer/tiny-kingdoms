@@ -38,9 +38,10 @@ export const TICK_MS = 100;
 export const NODES: Record<NodeSize, { capacity: number; troopsPerSec: number; goldPerSec: number }> = {
   // Troop numbers halved for stream armies (BALANCE.md, stage 9); gold unchanged.
   // Gold ×1.5 after the playtest (PLAYTEST-1 F-4; was 0.3 / 0.4 / 0.5).
-  small: { capacity: 10, troopsPerSec: 0.25, goldPerSec: 0.45 },
-  medium: { capacity: 18, troopsPerSec: 0.4, goldPerSec: 0.6 },
-  large: { capacity: 25, troopsPerSec: 0.6, goldPerSec: 0.75 },
+  // Capacity and production ×1.3, PLAYTEST-2 (was 10 / 18 / 25 and 0.25 / 0.4 / 0.6); gold unchanged.
+  small: { capacity: 13, troopsPerSec: 0.325, goldPerSec: 0.45 },
+  medium: { capacity: 23, troopsPerSec: 0.52, goldPerSec: 0.6 },
+  large: { capacity: 33, troopsPerSec: 0.78, goldPerSec: 0.75 },
 };
 
 /** Index 0 = level 1, index 1 = level 2, index 2 = level 3. */
@@ -62,7 +63,8 @@ export const BUILDINGS = {
   },
   barracks: {
     productionMult: [1.5, 2.0, 2.6] as PerLevel<number>,
-    extraCapacity: [8, 15, 25] as PerLevel<number>,
+    /** ×1.3, PLAYTEST-2 (was 8 / 15 / 25). */
+    extraCapacity: [10, 20, 33] as PerLevel<number>,
   },
   tower: {
     /**
@@ -72,9 +74,9 @@ export const BUILDINGS = {
     shotsPerSec: [1, 2, 3] as PerLevel<number>,
     /**
      * The zone: the stretch of every road of the node, field widths from the node center, the same for all levels
-     * and every road whatever its length. The mean road of chapter 1 is 0.295 between centers (median 0.29, from
-     * 0.21 to 0.40), so the zone is 44% of a mean road, just short of its middle; on roads shorter than 0.26 it
-     * passes the middle, and the zones of two towers at both ends may overlap.
+     * and every road whatever its length. The mean road of chapter 1 is 0.323 between centers (median 0.305, from
+     * 0.30 to 0.47), so the zone is 40% of a mean road. Every road is at least LEVEL_LIMITS.minRoadLength (0.30), so
+     * the zones of two towers at both ends never meet: at least 0.04 between them.
      */
     zone: 0.13,
   },
@@ -85,10 +87,10 @@ export const ARMY = {
   /** Field widths per second. */
   speed: 0.12,
   /**
-   * Share of node troops sent per order (rounded down, GDD 3.5): the player only swipes (75%);
-   * `pull` (50%) is the AI's internal mode for moving troops up from the rear.
+   * Share of node troops sent per order (rounded down, GDD 3.5): a swipe sends all the troops but one (100%, was
+   * 75%), for the player and the AI alike; `pull` (50%) is the AI's internal mode for moving troops up from the rear.
    */
-  sendShare: { swipe: 0.75, pull: 0.5 },
+  sendShare: { swipe: 1, pull: 0.5 },
   minSend: 1,
   /** A node with this many troops or fewer cannot send. */
   minTroopsToSend: 2,
@@ -108,9 +110,10 @@ export const STREAM = {
   contactDist: 0.01,
   /**
    * Distance from a node center where units appear and arrive, field widths, by node size: a bit less than the
-   * drawn radius (NODE_RADIUS in game.ts: 0.055 / 0.068 / 0.084), so a unit appears still under the circle.
+   * drawn radius (NODE_RADIUS in game.ts: 0.048 / 0.059 / 0.073), so a unit appears still under the circle.
+   * ×0.87 with the nodes, PLAYTEST-2 (was 0.04 / 0.05 / 0.062).
    */
-  edgeDist: { small: 0.04, medium: 0.05, large: 0.062 } as Record<NodeSize, number>,
+  edgeDist: { small: 0.035, medium: 0.044, large: 0.054 } as Record<NodeSize, number>,
 } as const;
 
 /** Enemy leaders (GDD 3.10, CONTENT.md C-2). */
@@ -166,7 +169,7 @@ export const SPECIAL_NODES = {
   /** Travel time through a portal pair, ms (no clashes inside). */
   portal: { delayMs: 1000 },
   /** Bandit camp: produces like a small node and raids the nearest non-neutral neighbour. */
-  bandits: { raidEveryMs: 20000 },
+  bandits: { raidEveryMs: 20000, raidShare: 0.75 },
 } as const;
 
 /** Boss of chapter 1 level 10 (GDD 4.1, CONTENT.md C-4.1). */
@@ -186,14 +189,16 @@ export const MAGE = {
   everyMs: 20000,
   warnMs: 3000,
   damageShare: 0.4,
-  damageMin: 3,
+  /** ×1.3, PLAYTEST-2 (was 3). */
+  damageMin: 4,
 } as const;
 
 /** Boss of chapter 2 level 10 (CONTENT.md C-4.2). */
 export const CITADEL = {
   waveEveryMs: 15000,
   /** Extra troops per wave, on top of the garrison. */
-  waveSize: 10,
+  /** ×1.3, PLAYTEST-2 (was 10). */
+  waveSize: 13,
 } as const;
 
 /** Battle speed-up button (GDD 3.11): offered while the player owns more than `unlockShare` of all nodes. */
@@ -222,8 +227,9 @@ export const SPELLS: Record<SpellId, { cost: number; cooldownSec: number }> & {
   reinforcement: { troops: number };
   shield: { durationSec: number };
 } = {
-  fireball: { cost: 40, cooldownSec: 20, killShare: 0.4, minKill: 3 },
-  reinforcement: { cost: 30, cooldownSec: 25, troops: 5 },
+  // minKill and troops ×1.3, PLAYTEST-2 (was 3 and 5).
+  fireball: { cost: 40, cooldownSec: 20, killShare: 0.4, minKill: 4 },
+  reinforcement: { cost: 30, cooldownSec: 25, troops: 7 },
   /** Own node can't be attacked for durationSec: hostile units that arrive break on it. */
   shield: { cost: 30, cooldownSec: 30, durationSec: 8 },
 };
@@ -268,7 +274,8 @@ export const AI = {
   weakenedWindowSec: 6,
   /** A node counts as weakened after losing this share of its recent maximum (and at least weakenedMinDrop troops). */
   weakenedShare: 0.4,
-  weakenedMinDrop: 2,
+  /** ×1.3, PLAYTEST-2 (was 2). */
+  weakenedMinDrop: 3,
   /** Extra target value of goal nodes: the node to hold (deny it) and the player's capital. */
   goalTargetValue: 3,
   /** Extra target value of special nodes. */
@@ -298,6 +305,7 @@ export const BONUSES = {
   costBase: 50,
   costGrowth: 1.35,
   perLevel: {
+    /** ×1.3 rounds back to 1, PLAYTEST-2 (was 1). */
     startArmy: 1,
     troopProduction: 0.04,
     goldIncome: 0.05,
@@ -316,7 +324,8 @@ export const SPELL_UPGRADES = {
   starCosts: [2, 3, 4, 5, 6],
   perLevel: {
     fireball: { damageShare: 0.05, cooldownSec: -1 },
-    reinforcement: { troops: 2, cooldownSec: -1 },
+    /** troops ×1.3, PLAYTEST-2 (was 2). */
+    reinforcement: { troops: 3, cooldownSec: -1 },
     shield: { durationSec: 1, cooldownSec: -1 },
   },
 } as const;
