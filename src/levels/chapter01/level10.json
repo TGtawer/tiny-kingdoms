@@ -16,8 +16,8 @@
   "nodes": [
     {
       "id": "player",
-      "x": 0.063,
-      "y": 0.561,
+      "x": 0.043,
+      "y": 0.574,
       "size": "large",
       "owner": "player",
       "troops": 13,
@@ -27,11 +27,11 @@
     },
     {
       "id": "enemy",
-      "x": 0.937,
-      "y": 0.439,
+      "x": 0.958,
+      "y": 0.426,
       "size": "large",
       "owner": "enemy",
-      "troops": 27,
+      "troops": 25,
       "hasGoldVein": false,
       "building": null,
       "capital": true
@@ -48,8 +48,8 @@
     },
     {
       "id": "a1",
-      "x": 0.396,
-      "y": 0.179,
+      "x": 0.391,
+      "y": 0.111,
       "size": "small",
       "owner": "neutral",
       "troops": 4,
@@ -58,8 +58,8 @@
     },
     {
       "id": "b1",
-      "x": 0.604,
-      "y": 0.821,
+      "x": 0.609,
+      "y": 0.889,
       "size": "small",
       "owner": "neutral",
       "troops": 4,
@@ -68,8 +68,8 @@
     },
     {
       "id": "a2",
-      "x": 0.31,
-      "y": 0.739,
+      "x": 0.301,
+      "y": 0.79,
       "size": "small",
       "owner": "neutral",
       "troops": 5,
@@ -78,8 +78,8 @@
     },
     {
       "id": "b2",
-      "x": 0.69,
-      "y": 0.261,
+      "x": 0.699,
+      "y": 0.21,
       "size": "small",
       "owner": "neutral",
       "troops": 5,
@@ -88,8 +88,8 @@
     },
     {
       "id": "a3",
-      "x": 0.102,
-      "y": 0.258,
+      "x": 0.083,
+      "y": 0.207,
       "size": "small",
       "owner": "neutral",
       "troops": 4,
@@ -98,8 +98,8 @@
     },
     {
       "id": "b3",
-      "x": 0.898,
-      "y": 0.742,
+      "x": 0.917,
+      "y": 0.793,
       "size": "small",
       "owner": "neutral",
       "troops": 4,

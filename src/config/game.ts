@@ -104,8 +104,8 @@ export const NODE_RADIUS: Record<NodeSize, number> = {
 };
 export const NODE_RADIUS_MIN_PX = 23;
 /**
- * The reference map for node and road sizes: the node spread (field units) of the largest map of chapter 1 (level 8
- * is the tallest, level 1 the widest). Every level fits it, so nodes never get bigger next to each other than there.
+ * The reference map: the node spread (field units) every chapter 1 level fills with its layout. The field is framed by
+ * it on every level (no zoom per level), and node and road sizes come from it. A larger level (dev) is zoomed out.
  */
 export const FIELD_SIZE_REF = { x: 0.915, y: 0.778 } as const;
 /**
